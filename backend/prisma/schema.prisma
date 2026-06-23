@@ -1,0 +1,205 @@
+// Skema database Populi WA Survey. Lihat docs/ARCHITECTURE.md §5.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  superadmin
+  admin
+  viewer
+}
+
+enum SurveyStatus {
+  draft
+  active
+  closed
+}
+
+enum BlastStatus {
+  pending
+  scheduled
+  running
+  completed
+  failed
+}
+
+enum RecipientStatus {
+  queued
+  sent
+  delivered
+  read
+  failed
+}
+
+enum Direction {
+  in
+  out
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  username     String   @unique
+  email        String?
+  passwordHash String
+  role         Role     @default(admin)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model Survey {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  status      SurveyStatus @default(draft)
+  createdAt   DateTime     @default(now())
+  questions   Question[]
+  blasts      Blast[]
+  responses   SurveyResponse[]
+}
+
+model Question {
+  id       String  @id @default(cuid())
+  surveyId String
+  survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  type     String  @default("text") // text | radio | number | ...
+  text     String
+  order    Int     @default(0)
+  options  Json?
+  answers  Answer[]
+}
+
+model Segment {
+  id        String           @id @default(cuid())
+  name      String
+  createdAt DateTime         @default(now())
+  contacts  SegmentContact[]
+  blasts    Blast[]
+}
+
+model Contact {
+  id         String           @id @default(cuid())
+  phone      String           @unique // E.164, mis. 628xxxxxxxxx
+  name       String?
+  attributes Json?
+  createdAt  DateTime         @default(now())
+  segments   SegmentContact[]
+  messages   Message[]
+  recipients BlastRecipient[]
+  responses  SurveyResponse[]
+}
+
+model SegmentContact {
+  segmentId String
+  contactId String
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, contactId])
+}
+
+model Blast {
+  id             String           @id @default(cuid())
+  surveyId       String?
+  survey         Survey?          @relation(fields: [surveyId], references: [id], onDelete: SetNull)
+  segmentId      String?
+  segment        Segment?         @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  vendor         String // "meta" | "qontak"
+  templateName   String?
+  templateLang   String           @default("id")
+  messageText    String? // teks/preview pesan (untuk audit)
+  status         BlastStatus      @default(pending)
+  scheduledAt    DateTime?
+  sentCount      Int              @default(0)
+  deliveredCount Int              @default(0)
+  readCount      Int              @default(0)
+  failedCount    Int              @default(0)
+  createdAt      DateTime         @default(now())
+  recipients     BlastRecipient[]
+  responses      SurveyResponse[]
+}
+
+model BlastRecipient {
+  id              String          @id @default(cuid())
+  blastId         String
+  blast           Blast           @relation(fields: [blastId], references: [id], onDelete: Cascade)
+  contactId       String
+  contact         Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  vendor          String
+  vendorMessageId String?         @unique
+  status          RecipientStatus @default(queued)
+  error           String?
+  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime        @default(now())
+
+  @@index([blastId])
+  @@index([vendorMessageId])
+}
+
+model Message {
+  id              String    @id @default(cuid())
+  contactId       String?
+  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  direction       Direction
+  vendor          String
+  vendorMessageId String?
+  text            String?
+  payload         Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([contactId])
+  @@index([vendorMessageId])
+}
+
+model SurveyResponse {
+  id          String    @id @default(cuid())
+  surveyId    String
+  survey      Survey    @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  blastId     String?
+  blast       Blast?    @relation(fields: [blastId], references: [id], onDelete: SetNull)
+  currentStep Int       @default(0) // indeks pertanyaan berikutnya (untuk alur chat)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  answers     Answer[]
+
+  @@index([contactId])
+}
+
+model Answer {
+  id         String         @id @default(cuid())
+  responseId String
+  response   SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value      String
+  createdAt  DateTime       @default(now())
+}
+
+model VendorConfig {
+  id          String   @id @default(cuid())
+  vendor      String   @unique // "meta" | "qontak"
+  isDefault   Boolean  @default(false)
+  active      Boolean  @default(true)
+  credentials String? // JSON terenkripsi (AES-256-GCM)
+  updatedAt   DateTime @updatedAt
+}
+
+model WebhookLog {
+  id        String   @id @default(cuid())
+  vendor    String
+  event     String
+  status    String // success | failed | ignored
+  payload   Json?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([vendor])
+  @@index([createdAt])
+}
