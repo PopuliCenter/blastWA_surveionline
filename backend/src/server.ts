@@ -9,6 +9,7 @@ import { segmentRoutes } from "./routes/segments.js";
 import { blastRoutes } from "./routes/blasts.js";
 import { vendorRoutes } from "./routes/vendors.js";
 import { reportRoutes } from "./routes/reports.js";
+import { userRoutes } from "./routes/users.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 
 async function main() {
@@ -38,6 +39,7 @@ async function main() {
   await app.register(blastRoutes);
   await app.register(vendorRoutes);
   await app.register(reportRoutes);
+  await app.register(userRoutes);
   await app.register(webhookRoutes);
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });

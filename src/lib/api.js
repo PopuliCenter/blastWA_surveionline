@@ -4,6 +4,8 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const TOKEN_KEY = "populi.token";
 
+export const apiBase = BASE;
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -25,6 +27,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   });
   if (res.status === 401) {
     setToken(null);
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("populi:logout"));
     throw new Error("Sesi berakhir, silakan login ulang.");
   }
   const data = await res.json().catch(() => ({}));
@@ -64,4 +67,10 @@ export const api = {
   // Reports
   stats: () => request("/api/stats"),
   webhookLogs: (limit = 100) => request(`/api/webhook-logs?limit=${limit}`),
+
+  // Users (superadmin)
+  listUsers: () => request("/api/users"),
+  createUser: (data) => request("/api/users", { method: "POST", body: data }),
+  updateUser: (id, data) => request(`/api/users/${id}`, { method: "PUT", body: data }),
+  deleteUser: (id) => request(`/api/users/${id}`, { method: "DELETE" }),
 };
