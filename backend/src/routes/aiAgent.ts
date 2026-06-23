@@ -6,7 +6,9 @@ import { env } from "../env.js";
 
 const DEFAULTS = {
   enabled: false,
+  provider: "anthropic",
   model: "claude-haiku-4-5-20251001",
+  baseUrl: null as string | null,
   systemPrompt: "Anda asisten layanan pelanggan via WhatsApp. Jawab singkat, ramah, dan jelas dalam Bahasa Indonesia.",
 };
 
@@ -18,7 +20,9 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
     const cfg = await prisma.aiConfig.findUnique({ where: { id: "default" } });
     return {
       enabled: cfg?.enabled ?? DEFAULTS.enabled,
+      provider: cfg?.provider ?? DEFAULTS.provider,
       model: cfg?.model ?? DEFAULTS.model,
+      baseUrl: cfg?.baseUrl ?? "",
       systemPrompt: cfg?.systemPrompt ?? DEFAULTS.systemPrompt,
       hasApiKey: Boolean(cfg?.apiKey) || Boolean(env.ANTHROPIC_API_KEY),
     };
@@ -29,7 +33,9 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z
       .object({
         enabled: z.boolean().optional(),
+        provider: z.enum(["anthropic", "openai", "gemini", "custom"]).optional(),
         model: z.string().optional(),
+        baseUrl: z.string().optional(),
         systemPrompt: z.string().optional(),
         apiKey: z.string().optional(), // bila diisi, simpan terenkripsi
       })
@@ -38,7 +44,9 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
 
     const data: Record<string, unknown> = {};
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
+    if (parsed.data.provider) data.provider = parsed.data.provider;
     if (parsed.data.model) data.model = parsed.data.model;
+    if (parsed.data.baseUrl !== undefined) data.baseUrl = parsed.data.baseUrl || null;
     if (parsed.data.systemPrompt !== undefined) data.systemPrompt = parsed.data.systemPrompt;
     if (parsed.data.apiKey) data.apiKey = encryptJson(parsed.data.apiKey);
 

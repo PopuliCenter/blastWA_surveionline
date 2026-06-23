@@ -78,6 +78,7 @@ export const api = {
   // Contacts
   listContacts: (search = "") => request(`/api/contacts${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   createContact: (data) => request("/api/contacts", { method: "POST", body: data }),
+  bulkContacts: (contacts) => request("/api/contacts/bulk", { method: "POST", body: { contacts } }),
   updateContact: (id, data) => request(`/api/contacts/${id}`, { method: "PUT", body: data }),
   deleteContact: (id) => request(`/api/contacts/${id}`, { method: "DELETE" }),
 

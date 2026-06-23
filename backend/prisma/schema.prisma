@@ -67,10 +67,11 @@ model Question {
   id       String  @id @default(cuid())
   surveyId String
   survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  type     String  @default("text") // text | radio | number | ...
+  type     String  @default("text") // text | rating | number | choice | boolean | image
   text     String
   order    Int     @default(0)
-  options  Json?
+  required Boolean @default(true)
+  options  Json? // konfig per tipe: rating {min,max}, choice {choices:[...]}
   answers  Answer[]
 }
 
@@ -207,7 +208,9 @@ model AutoReplyRule {
 model AiConfig {
   id           String   @id // singleton: "default"
   enabled      Boolean  @default(false)
+  provider     String   @default("anthropic") // anthropic | openai | gemini | custom
   model        String   @default("claude-haiku-4-5-20251001")
+  baseUrl      String? // untuk provider custom (OpenAI-compatible)
   systemPrompt String   @default("Anda asisten layanan pelanggan via WhatsApp. Jawab singkat, ramah, dan jelas dalam Bahasa Indonesia.")
   apiKey       String? // terenkripsi (AES-256-GCM)
   updatedAt    DateTime @updatedAt

@@ -29,6 +29,31 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(c);
   });
 
+  // Impor massal: array {phone, name?}. Nomor dinormalisasi & di-upsert (lewati yang sudah ada).
+  app.post("/api/contacts/bulk", async (req, reply) => {
+    const parsed = z
+      .object({ contacts: z.array(z.object({ phone: z.string().min(5), name: z.string().optional() })).min(1).max(5000) })
+      .safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "format tidak valid" });
+
+    let created = 0, updated = 0, skipped = 0;
+    const seen = new Set<string>();
+    for (const item of parsed.data.contacts) {
+      const phone = normalizePhone(item.phone);
+      if (!phone || phone.length < 8 || seen.has(phone)) { skipped++; continue; }
+      seen.add(phone);
+      const existing = await prisma.contact.findUnique({ where: { phone } });
+      if (existing) {
+        if (item.name && item.name !== existing.name) { await prisma.contact.update({ where: { phone }, data: { name: item.name } }); updated++; }
+        else skipped++;
+      } else {
+        await prisma.contact.create({ data: { phone, name: item.name } });
+        created++;
+      }
+    }
+    return reply.code(201).send({ created, updated, skipped, total: parsed.data.contacts.length });
+  });
+
   app.put("/api/contacts/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const parsed = z.object({ name: z.string().optional(), phone: z.string().optional() }).safeParse(req.body);

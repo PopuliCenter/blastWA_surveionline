@@ -14,6 +14,8 @@ export type NormalizedInbound = {
   kind: "message" | "status";
   from?: string; // E.164 (tanpa +)
   text?: string;
+  mediaType?: "image" | "audio" | "video" | "document" | "sticker";
+  mediaId?: string;
   messageId?: string;
   refMessageId?: string; // id pesan outbound yang statusnya diupdate
   deliveryStatus?: DeliveryStatus;

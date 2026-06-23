@@ -1,7 +1,7 @@
 import { prisma } from "../db.js";
 import { decryptJson } from "../lib/crypto.js";
 import { env } from "../env.js";
-import { generateAiReply, type AiMessage } from "../lib/ai.js";
+import { generateReply, type AiMessage } from "../lib/ai.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
 // Urutan: aturan Auto Reply (cocok kata kunci) → Agen AI (bila aktif).
@@ -46,7 +46,14 @@ export async function findAutoResponse(contactId: string, text: string): Promise
   }
 
   try {
-    return await generateAiReply({ apiKey, model: ai.model, systemPrompt: ai.systemPrompt, messages });
+    return await generateReply({
+      provider: ai.provider,
+      apiKey,
+      model: ai.model,
+      baseUrl: ai.baseUrl ?? undefined,
+      systemPrompt: ai.systemPrompt,
+      messages,
+    });
   } catch (err) {
     console.error("AI reply gagal:", err);
     return null;

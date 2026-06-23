@@ -111,11 +111,31 @@ export class MetaCloudAdapter implements MessagingProvider {
         const value = change?.value ?? {};
 
         for (const msg of value?.messages ?? []) {
+          const media =
+            msg?.image ?? msg?.audio ?? msg?.video ?? msg?.document ?? msg?.sticker;
+          const mediaType = msg?.image
+            ? "image"
+            : msg?.audio
+              ? "audio"
+              : msg?.video
+                ? "video"
+                : msg?.document
+                  ? "document"
+                  : msg?.sticker
+                    ? "sticker"
+                    : undefined;
           out.push({
             vendor: this.name,
             kind: "message",
             from: msg?.from,
-            text: msg?.text?.body ?? msg?.button?.text ?? msg?.interactive?.list_reply?.title,
+            text:
+              msg?.text?.body ??
+              msg?.button?.text ??
+              msg?.interactive?.list_reply?.title ??
+              msg?.interactive?.button_reply?.title ??
+              media?.caption,
+            mediaType: mediaType as NormalizedInbound["mediaType"],
+            mediaId: media?.id,
             messageId: msg?.id,
             timestamp: tsFromUnix(msg?.timestamp),
             raw: msg,

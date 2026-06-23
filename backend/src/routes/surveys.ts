@@ -4,8 +4,9 @@ import { prisma } from "../db.js";
 
 const questionSchema = z.object({
   text: z.string().min(1),
-  type: z.string().default("text"),
-  options: z.any().optional(),
+  type: z.enum(["text", "rating", "number", "choice", "boolean", "image"]).default("text"),
+  required: z.boolean().default(true),
+  options: z.any().optional(), // rating {min,max} | choice {choices:[...]}
 });
 
 const surveySchema = z.object({
@@ -33,7 +34,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     const survey = await prisma.survey.create({
       data: {
         ...data,
-        questions: { create: questions.map((q, i) => ({ text: q.text, type: q.type, order: i, options: q.options })) },
+        questions: { create: questions.map((q, i) => ({ text: q.text, type: q.type, required: q.required, order: i, options: q.options ?? undefined })) },
       },
       include: { questions: true },
     });
@@ -50,7 +51,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     if (questions) {
       await prisma.question.deleteMany({ where: { surveyId: id } });
       await prisma.question.createMany({
-        data: questions.map((q, i) => ({ surveyId: id, text: q.text, type: q.type, order: i, options: q.options })),
+        data: questions.map((q, i) => ({ surveyId: id, text: q.text, type: q.type, required: q.required, order: i, options: q.options ?? undefined })),
       });
     }
     const survey = await prisma.survey.update({

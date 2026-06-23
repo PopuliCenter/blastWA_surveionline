@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Input, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Input, Textarea, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 
 export default function Contacts() {
   const [search, setSearch] = useState("");
   const loader = useLoader(useCallback(() => api.listContacts(), []));
   const [modal, setModal] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [actionError, setActionError] = useState("");
   const contacts = (loader.data || []).filter((c) => `${c.phone} ${c.name || ""}`.toLowerCase().includes(search.toLowerCase()));
 
@@ -15,6 +16,7 @@ export default function Contacts() {
     <div>
       <PageHeader title="Kontak" subtitle="Daftar kontak WhatsApp Anda." actions={[
         <Button key="r" variant="ghost" icon="refresh" onClick={loader.reload}>Refresh</Button>,
+        <Button key="b" variant="secondary" icon="upload" onClick={() => setBulkOpen(true)}>Impor Massal</Button>,
         <Button key="n" icon="plus" onClick={() => setModal({})}>Tambah Kontak</Button>,
       ]} />
       <Notice>{loader.error || actionError}</Notice>
@@ -44,7 +46,48 @@ export default function Contacts() {
         ) : <Empty icon="contacts" title="Belum ada kontak" note="Tambah kontak atau impor lewat segmen." />}
       </Card>
       {modal !== null ? <ContactModal contact={modal.id ? modal : null} onClose={() => setModal(null)} onSave={(d) => run(async () => { if (modal.id) await api.updateContact(modal.id, d); else await api.createContact(d); setModal(null); })} /> : null}
+      {bulkOpen ? <BulkModal onClose={() => setBulkOpen(false)} onDone={() => { setBulkOpen(false); loader.reload(); }} /> : null}
     </div>
+  );
+}
+
+function BulkModal({ onClose, onDone }) {
+  const [raw, setRaw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState("");
+
+  // Tiap baris: "Nama, 08xxxx" atau "08xxxx" (pemisah koma/titik koma/tab)
+  const parse = () => raw.split("\n").map((line) => {
+    const parts = line.split(/[,;\t]/).map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    if (parts.length === 1) return { phone: parts[0] };
+    // tebak: bagian yang banyak digit = nomor
+    const phoneIdx = parts.findIndex((p) => (p.replace(/\D/g, "").length >= 8));
+    if (phoneIdx === -1) return null;
+    const phone = parts[phoneIdx];
+    const name = parts.filter((_, i) => i !== phoneIdx).join(" ") || undefined;
+    return { phone, name };
+  }).filter(Boolean);
+
+  const contacts = parse();
+
+  const submit = async () => {
+    setBusy(true); setErr(""); setResult(null);
+    try { const r = await api.bulkContacts(contacts); setResult(r); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title="Impor Kontak Massal" onClose={onClose} width={520}>
+      <Notice>{err}</Notice>
+      {result ? <Notice kind="success">Selesai: {result.created} baru, {result.updated} diperbarui, {result.skipped} dilewati (dari {result.total}).</Notice> : null}
+      <Textarea label="Daftar kontak (satu per baris)" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"Andi, 081234567890\nBudi, 081298765432\n081200001111"} style={{ minHeight: 160 }} hint="Format: Nama, Nomor  — atau nomor saja. Nomor otomatis dinormalisasi ke 62…" />
+      <div style={{ color: theme.textMuted, fontSize: 12.5, marginBottom: 14 }}>Terdeteksi {contacts.length} kontak valid.</div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <Button variant="ghost" onClick={onClose}>{result ? "Tutup" : "Batal"}</Button>
+        {result ? <Button onClick={onDone}>Selesai & Muat Ulang</Button> : <Button onClick={submit} disabled={!contacts.length || busy}>{busy ? "Mengimpor..." : `Impor ${contacts.length} Kontak`}</Button>}
+      </div>
+    </Modal>
   );
 }
 
