@@ -66,4 +66,28 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     await prisma.survey.delete({ where: { id } });
     return { ok: true };
   });
+
+  // Ambil data jawaban survei (per responden).
+  app.get("/api/surveys/:id/responses", async (req) => {
+    const id = (req.params as { id: string }).id;
+    const responses = await prisma.surveyResponse.findMany({
+      where: { surveyId: id },
+      orderBy: { startedAt: "desc" },
+      include: {
+        contact: { select: { phone: true, name: true } },
+        answers: { include: { question: { select: { text: true, order: true } } } },
+      },
+    });
+    return responses.map((r) => ({
+      id: r.id,
+      phone: r.contact.phone,
+      name: r.contact.name,
+      startedAt: r.startedAt,
+      completedAt: r.completedAt,
+      answers: r.answers
+        .slice()
+        .sort((a, b) => (a.question.order ?? 0) - (b.question.order ?? 0))
+        .map((a) => ({ question: a.question.text, value: a.value })),
+    }));
+  });
 }

@@ -2,6 +2,7 @@ import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
+import { findAutoResponse } from "./autoResponder.js";
 
 // Mesin survei berbasis chat:
 // - balasan user dipetakan ke pertanyaan survei aktif yang sedang berjalan
@@ -95,8 +96,12 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     const first = recipient.blast.survey.questions[0]!;
     await reply(ev.vendor, phone, first.text);
     void response;
+    return;
   }
-  // 3) Tidak ada konteks → diamkan (atau bisa kirim pesan default di sini)
+
+  // 3) Tidak ada konteks survei → coba Auto Reply / Agen AI
+  const auto = await findAutoResponse(contact.id, text);
+  if (auto) await reply(ev.vendor, phone, auto);
 }
 
 async function advanceSurvey(

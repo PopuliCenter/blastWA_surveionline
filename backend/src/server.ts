@@ -10,6 +10,9 @@ import { blastRoutes } from "./routes/blasts.js";
 import { vendorRoutes } from "./routes/vendors.js";
 import { reportRoutes } from "./routes/reports.js";
 import { userRoutes } from "./routes/users.js";
+import { contactRoutes } from "./routes/contacts.js";
+import { autoReplyRoutes } from "./routes/autoReply.js";
+import { aiAgentRoutes } from "./routes/aiAgent.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 
 async function main() {
@@ -40,6 +43,9 @@ async function main() {
   await app.register(vendorRoutes);
   await app.register(reportRoutes);
   await app.register(userRoutes);
+  await app.register(contactRoutes);
+  await app.register(autoReplyRoutes);
+  await app.register(aiAgentRoutes);
   await app.register(webhookRoutes);
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });

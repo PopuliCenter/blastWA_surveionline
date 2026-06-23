@@ -46,6 +46,7 @@ export const api = {
   createSurvey: (data) => request("/api/surveys", { method: "POST", body: data }),
   updateSurvey: (id, data) => request(`/api/surveys/${id}`, { method: "PUT", body: data }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),
+  surveyResponses: (id) => request(`/api/surveys/${id}/responses`),
 
   // Segments
   listSegments: () => request("/api/segments"),
@@ -73,4 +74,25 @@ export const api = {
   createUser: (data) => request("/api/users", { method: "POST", body: data }),
   updateUser: (id, data) => request(`/api/users/${id}`, { method: "PUT", body: data }),
   deleteUser: (id) => request(`/api/users/${id}`, { method: "DELETE" }),
+
+  // Contacts
+  listContacts: (search = "") => request(`/api/contacts${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  createContact: (data) => request("/api/contacts", { method: "POST", body: data }),
+  updateContact: (id, data) => request(`/api/contacts/${id}`, { method: "PUT", body: data }),
+  deleteContact: (id) => request(`/api/contacts/${id}`, { method: "DELETE" }),
+
+  // Chat
+  conversations: () => request("/api/conversations"),
+  contactMessages: (id) => request(`/api/contacts/${id}/messages`),
+  sendMessage: (id, text) => request(`/api/contacts/${id}/messages`, { method: "POST", body: { text } }),
+
+  // Auto Reply
+  listAutoReplies: () => request("/api/auto-replies"),
+  createAutoReply: (data) => request("/api/auto-replies", { method: "POST", body: data }),
+  updateAutoReply: (id, data) => request(`/api/auto-replies/${id}`, { method: "PUT", body: data }),
+  deleteAutoReply: (id) => request(`/api/auto-replies/${id}`, { method: "DELETE" }),
+
+  // AI Agent
+  getAiAgent: () => request("/api/ai-agent"),
+  updateAiAgent: (data) => request("/api/ai-agent", { method: "PUT", body: data }),
 };

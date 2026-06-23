@@ -33,6 +33,9 @@ const schema = z.object({
   QONTAK_WEBHOOK_SECRET: z.string().optional(),
 
   DEFAULT_VENDOR: z.enum(["meta", "qontak"]).default("qontak"),
+
+  // Agen AI (opsional; bisa juga diisi via UI, tersimpan terenkripsi)
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
