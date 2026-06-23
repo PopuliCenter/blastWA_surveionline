@@ -102,9 +102,9 @@ function Sidebar({ active, setActive, currentUser, onLogout }) {
         })}
       </nav>
       <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{currentUser.name.slice(0, 1).toUpperCase()}</div>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{(currentUser.name || currentUser.username || "?").slice(0, 1).toUpperCase()}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name || currentUser.username}</div>
           <div style={{ fontSize: 11.5, color: theme.textMuted }}>{currentUser.role}</div>
         </div>
         <button onClick={onLogout} title="Keluar" style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="logout" size={18} /></button>

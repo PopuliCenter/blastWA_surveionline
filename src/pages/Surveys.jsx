@@ -1,11 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 
 export default function Surveys() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
   const [modal, setModal] = useState(null);
   const [responsesFor, setResponsesFor] = useState(null);
+  const [previewFor, setPreviewFor] = useState(null);
   const [err, setErr] = useState("");
   const surveys = data || [];
 
@@ -31,6 +32,7 @@ export default function Surveys() {
               <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 10 }}>{s.questions.length} pertanyaan • {s.responses} respons</div>
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                 <Button variant="secondary" size="sm" icon="survey" onClick={() => setResponsesFor(s)}>Respons ({s.responses})</Button>
+                <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>Preview</Button>
                 <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>Edit</Button>
                 <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSurvey(s.id))} />
               </div>
@@ -41,6 +43,7 @@ export default function Surveys() {
 
       {modal !== null ? <SurveyModal survey={modal.id ? modal : null} onClose={() => setModal(null)} onSave={(d) => save(d, modal.id)} /> : null}
       {responsesFor ? <ResponsesModal survey={responsesFor} onClose={() => setResponsesFor(null)} /> : null}
+      {previewFor ? <SurveyPreviewModal survey={previewFor} onClose={() => setPreviewFor(null)} /> : null}
     </div>
   );
 }
@@ -53,6 +56,260 @@ function qSummary(q) {
   return "";
 }
 
+// ── Preview: replicate surveyEngine logic client-side ──────────────────────
+
+function previewFormatQuestion(q, idx, total) {
+  const min = q.options?.min ?? 1;
+  const max = q.options?.max ?? 10;
+  const choices = q.options?.choices || [];
+  let text = `*Pertanyaan ${idx + 1} dari ${total}*\n${q.text}`;
+  if (q.type === "rating") text += `\n\n_Balas dengan angka ${min}–${max}_`;
+  else if (q.type === "choice") text += "\n\n" + choices.map((c, i) => `${i + 1}. ${c}`).join("\n") + "\n\n_Balas nomor atau teks pilihan_";
+  else if (q.type === "boolean") text += "\n\n_Balas: Ya / Tidak_";
+  else if (q.type === "number") text += "\n\n_Balas dengan angka_";
+  else if (q.type === "image") text += "\n\n_Kirim foto sebagai simulasi (ketik nama file)_";
+  if (!q.required) text += "\n\n_Opsional — ketik *lewati* untuk melewati_";
+  return text;
+}
+
+function previewValidate(q, answer) {
+  const a = answer.trim();
+  if (!q.required && /^(lewati|skip|lewat|-)$/i.test(a)) return { ok: true, saved: "[dilewati]" };
+  switch (q.type) {
+    case "text":
+      if (!a) return { ok: false, err: "Jawaban tidak boleh kosong." };
+      return { ok: true, saved: a };
+    case "number": {
+      const n = parseFloat(a);
+      if (isNaN(n)) return { ok: false, err: "Masukkan angka yang valid." };
+      return { ok: true, saved: String(n) };
+    }
+    case "rating": {
+      const n = parseInt(a);
+      const min = q.options?.min ?? 1;
+      const max = q.options?.max ?? 10;
+      if (isNaN(n) || n < min || n > max) return { ok: false, err: `Masukkan angka ${min}–${max}.` };
+      return { ok: true, saved: String(n) };
+    }
+    case "choice": {
+      const choices = q.options?.choices || [];
+      const idx = parseInt(a) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < choices.length) return { ok: true, saved: choices[idx] };
+      const match = choices.find((c) => c.toLowerCase() === a.toLowerCase());
+      if (match) return { ok: true, saved: match };
+      return { ok: false, err: `Pilih: ${choices.map((c, i) => `${i + 1}. ${c}`).join(" | ")}` };
+    }
+    case "boolean": {
+      if (/^(ya|yes|y|1|iya)$/i.test(a)) return { ok: true, saved: "Ya" };
+      if (/^(tidak|no|n|0|tdk|tdak)$/i.test(a)) return { ok: true, saved: "Tidak" };
+      return { ok: false, err: 'Balas dengan "Ya" atau "Tidak".' };
+    }
+    case "image":
+      if (!a) return { ok: false, err: "Ketik nama file gambar sebagai simulasi." };
+      return { ok: true, saved: `[gambar] ${a}` };
+    default:
+      if (!a) return { ok: false, err: "Jawaban tidak boleh kosong." };
+      return { ok: true, saved: a };
+  }
+}
+
+function getQuickReplies(q) {
+  if (!q) return [];
+  if (q.type === "boolean") return ["Ya", "Tidak"];
+  if (q.type === "choice") return (q.options?.choices || []).map((_, i) => String(i + 1));
+  return [];
+}
+
+function inputPlaceholder(q) {
+  if (!q) return "";
+  if (q.type === "rating") { const min = q.options?.min ?? 1; const max = q.options?.max ?? 10; return `Angka ${min}–${max}…`; }
+  if (q.type === "number") return "Ketik angka…";
+  if (q.type === "boolean") return "Ya / Tidak…";
+  if (q.type === "choice") return "Nomor atau teks pilihan…";
+  if (q.type === "image") return "Nama file gambar (simulasi)…";
+  if (!q.required) return "Jawaban atau ketik lewati…";
+  return "Ketik jawaban…";
+}
+
+// Render teks dengan markdown WA: *bold* _italic_
+function WaText({ text }) {
+  const lines = text.split("\n");
+  return (
+    <span>
+      {lines.map((line, li) => {
+        const parts = line.split(/(\*[^*]+\*|_[^_]+_)/);
+        return (
+          <span key={li}>
+            {li > 0 && <br />}
+            {parts.map((p, pi) => {
+              if (p.startsWith("*") && p.endsWith("*")) return <strong key={pi}>{p.slice(1, -1)}</strong>;
+              if (p.startsWith("_") && p.endsWith("_")) return <em key={pi} style={{ color: "#666", fontSize: "0.93em" }}>{p.slice(1, -1)}</em>;
+              return p;
+            })}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function SurveyPreviewModal({ survey, onClose }) {
+  const questions = survey.questions || [];
+  const [messages, setMessages] = useState([]);
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState(false);
+  const [answers, setAnswers] = useState([]);
+  const [input, setInput] = useState("");
+  const endRef = useRef();
+
+  const reset = () => {
+    setStep(0); setDone(false); setAnswers([]); setInput("");
+    const init = [{ from: "bot", text: survey.description ? `*${survey.title}*\n${survey.description}` : `*${survey.title}*\nSurvei dimulai.` }];
+    if (questions.length) init.push({ from: "bot", text: previewFormatQuestion(questions[0], 0, questions.length) });
+    else { init.push({ from: "bot", text: "Survei ini belum memiliki pertanyaan." }); setDone(true); }
+    setMessages(init);
+  };
+
+  useEffect(() => { reset(); }, []);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const send = (text) => {
+    const trimmed = text.trim();
+    if (!trimmed || done) return;
+    const q = questions[step];
+    const result = previewValidate(q, trimmed);
+    if (!result.ok) {
+      setMessages((prev) => [...prev,
+        { from: "user", text: trimmed },
+        { from: "bot", text: `❌ ${result.err}\n\n${previewFormatQuestion(q, step, questions.length)}`, error: true },
+      ]);
+      setInput(""); return;
+    }
+    const newAnswers = [...answers, { question: q.text, type: q.type, value: result.saved }];
+    setAnswers(newAnswers);
+    const next = step + 1;
+    if (next >= questions.length) {
+      setMessages((prev) => [...prev,
+        { from: "user", text: trimmed },
+        { from: "bot", text: "✅ *Terima kasih!*\nJawaban Anda telah direkam. Survei selesai." },
+      ]);
+      setDone(true);
+    } else {
+      setMessages((prev) => [...prev,
+        { from: "user", text: trimmed },
+        { from: "bot", text: previewFormatQuestion(questions[next], next, questions.length) },
+      ]);
+      setStep(next);
+    }
+    setInput("");
+  };
+
+  const currentQ = !done && step < questions.length ? questions[step] : null;
+  const quickReplies = getQuickReplies(currentQ);
+  const progress = questions.length ? (done ? 1 : step / questions.length) : 1;
+
+  return (
+    <Modal title="" onClose={onClose} width={480}>
+      {/* WA-style header */}
+      <div style={{ margin: "-20px -20px 0", background: "#075E54", borderRadius: "12px 12px 0 0", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#25D366", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name="survey" size={18} style={{ color: "#fff" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: "#fff", fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{survey.title}</div>
+          <div style={{ color: "#b2dfdb", fontSize: 11.5 }}>Simulasi preview survei</div>
+        </div>
+        <Badge tone={survey.status === "active" ? "green" : "yellow"}>{survey.status}</Badge>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ margin: "0 -20px", height: 3, background: "#e0e0e0" }}>
+        <div style={{ height: "100%", background: "#25D366", width: `${progress * 100}%`, transition: "width 0.4s ease" }} />
+      </div>
+
+      {/* Chat area */}
+      <div style={{ height: 360, overflowY: "auto", background: "#ECE5DD", margin: "0 -20px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start" }}>
+            <div style={{
+              maxWidth: "80%", fontSize: 13.5, lineHeight: 1.5,
+              background: m.from === "user" ? "#DCF8C6" : "#fff",
+              borderRadius: m.from === "user" ? "12px 2px 12px 12px" : "2px 12px 12px 12px",
+              padding: "8px 12px",
+              boxShadow: "0 1px 2px rgba(0,0,0,.15)",
+              borderLeft: m.error ? "3px solid #ef4444" : "none",
+            }}>
+              <WaText text={m.text} />
+            </div>
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+
+      {/* Quick reply chips */}
+      {quickReplies.length > 0 && !done && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", margin: "10px 0 4px" }}>
+          {quickReplies.map((r, i) => (
+            <button key={i} onClick={() => send(r)} style={{
+              padding: "5px 14px", background: "#fff", color: "#075E54",
+              border: "1.5px solid #075E54", borderRadius: 20, fontSize: 12.5,
+              cursor: "pointer", fontWeight: 600, transition: "background 0.15s",
+            }} onMouseOver={(e) => e.target.style.background = "#e8f5e9"} onMouseOut={(e) => e.target.style.background = "#fff"}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input area */}
+      <div style={{ display: "flex", gap: 8, marginTop: quickReplies.length ? 4 : 12, alignItems: "center" }}>
+        {!done ? (
+          <>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+              placeholder={inputPlaceholder(currentQ)}
+              style={{ flex: 1, padding: "9px 14px", border: `1.5px solid ${theme.border}`, borderRadius: 22, fontSize: 13.5, outline: "none", background: "#fff" }}
+            />
+            <button onClick={() => send(input)} disabled={!input.trim()} style={{
+              width: 38, height: 38, borderRadius: "50%", border: "none", cursor: input.trim() ? "pointer" : "default",
+              background: input.trim() ? "#25D366" : "#ccc", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            }}>
+              <Icon name="send" size={15} />
+            </button>
+          </>
+        ) : (
+          <button onClick={reset} style={{ flex: 1, padding: "9px", background: "#075E54", color: "#fff", border: "none", borderRadius: 22, fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+            Ulangi Preview
+          </button>
+        )}
+      </div>
+
+      {/* Answer summary after completion */}
+      {done && answers.length > 0 && (
+        <div style={{ marginTop: 16, background: theme.surfaceAlt, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: theme.text, display: "flex", alignItems: "center", gap: 7 }}>
+            <Icon name="survey" size={15} />
+            Ringkasan Jawaban ({answers.length}/{questions.length})
+          </div>
+          {answers.map((a, i) => (
+            <div key={i} style={{ borderLeft: `3px solid ${a.value === "[dilewati]" ? theme.border : theme.green}`, paddingLeft: 10, marginBottom: 9 }}>
+              <div style={{ fontSize: 11.5, color: theme.textMuted, marginBottom: 2 }}>{a.question} <Badge tone="blue">{TYPE_LABEL[a.type] || a.type}</Badge></div>
+              <div style={{ fontSize: 13.5, color: a.value === "[dilewati]" ? theme.textMuted : theme.text, fontStyle: a.value === "[dilewati]" ? "italic" : "normal" }}>{a.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+        <Button variant="ghost" onClick={onClose}>Tutup</Button>
+      </div>
+    </Modal>
+  );
+}
+
 function SurveyModal({ survey, onClose, onSave }) {
   const [title, setTitle] = useState(survey?.title || "");
   const [description, setDescription] = useState(survey?.description || "");
@@ -60,7 +317,6 @@ function SurveyModal({ survey, onClose, onSave }) {
   const [questions, setQuestions] = useState(() => (survey?.questions || []).map((q) => ({ ...q, required: q.required ?? true })));
   const [saving, setSaving] = useState(false);
 
-  // composer
   const [c, setC] = useState({ text: "", type: "text", required: true, min: 1, max: 5, choices: "" });
   const setCk = (k, v) => setC({ ...c, [k]: v });
 
@@ -85,7 +341,6 @@ function SurveyModal({ survey, onClose, onSave }) {
       <Textarea label="Deskripsi" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "draft", label: "Draft" }, { value: "active", label: "Aktif" }, { value: "closed", label: "Ditutup" }]} />
 
-      {/* Daftar pertanyaan */}
       <div style={{ display: "grid", gap: 7, marginBottom: 14 }}>
         {questions.map((q, i) => (
           <div key={q.id || i} style={{ background: theme.surfaceAlt, borderRadius: 9, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
@@ -100,7 +355,6 @@ function SurveyModal({ survey, onClose, onSave }) {
         ))}
       </div>
 
-      {/* Composer pertanyaan baru */}
       <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14 }}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: theme.text }}>Tambah Pertanyaan</div>
         <Input label="Teks pertanyaan" value={c.text} onChange={(e) => setCk("text", e.target.value)} placeholder="cth: Seberapa puas Anda?" />
