@@ -22,8 +22,12 @@ export async function createBlast(input: CreateBlastInput) {
     include: { contacts: { include: { contact: true } } },
   });
   if (!segment) throw new Error("Segmen tidak ditemukan");
-  const contacts = segment.contacts.map((sc) => sc.contact);
-  if (contacts.length === 0) throw new Error("Segmen tidak punya kontak");
+  const allContacts = segment.contacts.map((sc) => sc.contact);
+  if (allContacts.length === 0) throw new Error("Segmen tidak punya kontak");
+  // Kecualikan kontak yang sudah opt-out (anti-banned)
+  const contacts = allContacts.filter((c) => c.subscribed);
+  const excludedOptOut = allContacts.length - contacts.length;
+  if (contacts.length === 0) throw new Error("Semua kontak di segmen ini sudah berhenti berlangganan (opt-out)");
 
   const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
 
@@ -77,5 +81,5 @@ export async function createBlast(input: CreateBlastInput) {
     }),
   );
 
-  return blast;
+  return { ...blast, excludedOptOut };
 }

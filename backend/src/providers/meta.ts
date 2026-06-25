@@ -67,6 +67,21 @@ export class MetaCloudAdapter implements MessagingProvider {
     });
   }
 
+  // Ambil status kualitas & tier nomor dari Graph API (untuk monitoring anti-banned).
+  async getPhoneQuality(): Promise<Record<string, unknown>> {
+    if (!this.isConfigured()) return { error: "Nomor Meta belum dikonfigurasi" };
+    const fields = "quality_rating,name_status,code_verification_status,display_phone_number,verified_name,throughput,platform_type,messaging_limit_tier";
+    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.phoneNumberId}?fields=${fields}`;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) return { error: json?.error?.message ?? "Gagal mengambil status nomor", raw: json };
+      return json;
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Gagal menghubungi Graph API" };
+    }
+  }
+
   async sendText(input: { to: string; text: string }): Promise<SendResult> {
     return this.post({
       messaging_product: "whatsapp",

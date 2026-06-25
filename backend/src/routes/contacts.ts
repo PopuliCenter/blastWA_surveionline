@@ -16,7 +16,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "desc" },
       take: 500,
     });
-    return contacts.map((c) => ({ id: c.id, phone: c.phone, name: c.name, attributes: c.attributes, createdAt: c.createdAt }));
+    return contacts.map((c) => ({ id: c.id, phone: c.phone, name: c.name, attributes: c.attributes, subscribed: c.subscribed, optOutAt: c.optOutAt, consentSource: c.consentSource, createdAt: c.createdAt }));
   });
 
   app.post("/api/contacts", async (req, reply) => {
@@ -25,7 +25,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const phone = normalizePhone(parsed.data.phone);
     const existing = await prisma.contact.findUnique({ where: { phone } });
     if (existing) return reply.code(409).send({ error: "nomor sudah ada" });
-    const c = await prisma.contact.create({ data: { phone, name: parsed.data.name } });
+    const c = await prisma.contact.create({ data: { phone, name: parsed.data.name, consentSource: "manual", consentAt: new Date() } });
     return reply.code(201).send(c);
   });
 
@@ -58,7 +58,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         if (Object.keys(data).length) { await prisma.contact.update({ where: { phone }, data }); updated++; }
         else skipped++;
       } else {
-        await prisma.contact.create({ data: { phone, name: item.name, attributes: hasAttrs ? (item.attributes as object) : undefined } });
+        await prisma.contact.create({ data: { phone, name: item.name, attributes: hasAttrs ? (item.attributes as object) : undefined, consentSource: "import", consentAt: new Date() } });
         created++;
       }
     }
@@ -67,11 +67,15 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
   app.put("/api/contacts/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const parsed = z.object({ name: z.string().optional(), phone: z.string().optional() }).safeParse(req.body);
+    const parsed = z.object({ name: z.string().optional(), phone: z.string().optional(), subscribed: z.boolean().optional() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.phone) data.phone = normalizePhone(parsed.data.phone);
+    if (parsed.data.subscribed !== undefined) {
+      data.subscribed = parsed.data.subscribed;
+      data.optOutAt = parsed.data.subscribed ? null : new Date();
+    }
     const c = await prisma.contact.update({ where: { id }, data });
     return c;
   });

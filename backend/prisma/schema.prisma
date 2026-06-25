@@ -86,15 +86,19 @@ model Segment {
 }
 
 model Contact {
-  id         String           @id @default(cuid())
-  phone      String           @unique // E.164, mis. 628xxxxxxxxx
-  name       String?
-  attributes Json?
-  createdAt  DateTime         @default(now())
-  segments   SegmentContact[]
-  messages   Message[]
-  recipients BlastRecipient[]
-  responses  SurveyResponse[]
+  id            String           @id @default(cuid())
+  phone         String           @unique // E.164, mis. 628xxxxxxxxx
+  name          String?
+  attributes    Json?
+  subscribed    Boolean          @default(true) // false = opt-out (dikecualikan dari blast)
+  optOutAt      DateTime? // kapan kontak menyatakan berhenti
+  consentSource String? // sumber persetujuan: manual | import | inbound | form
+  consentAt     DateTime?
+  createdAt     DateTime         @default(now())
+  segments      SegmentContact[]
+  messages      Message[]
+  recipients    BlastRecipient[]
+  responses     SurveyResponse[]
 }
 
 model SegmentContact {
@@ -229,4 +233,14 @@ model WebhookLog {
 
   @@index([vendor])
   @@index([createdAt])
+}
+
+// Kebijakan pengiriman (anti-banned): batas harian + jitter antar pesan (warm-up).
+model SendingPolicy {
+  id          String   @id // singleton: "default"
+  enabled     Boolean  @default(true)
+  dailyLimit  Int      @default(500) // maks pesan keluar / hari (naikkan bertahap saat warm-up)
+  jitterMinMs Int      @default(800) // jeda acak min antar pesan
+  jitterMaxMs Int      @default(2500) // jeda acak maks antar pesan
+  updatedAt   DateTime @updatedAt
 }

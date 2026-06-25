@@ -99,4 +99,10 @@ export const api = {
   // AI Agent
   getAiAgent: () => request("/api/ai-agent"),
   updateAiAgent: (data) => request("/api/ai-agent", { method: "PUT", body: data }),
+
+  // Pengaman pengiriman (anti-banned)
+  getSendingPolicy: () => request("/api/sending-policy"),
+  updateSendingPolicy: (data) => request("/api/sending-policy", { method: "PUT", body: data }),
+  getWaQuality: () => request("/api/wa/quality"),
+  getConsentSummary: () => request("/api/contacts-consent-summary"),
 };

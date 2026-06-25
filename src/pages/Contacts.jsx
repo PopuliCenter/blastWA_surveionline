@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Input, Textarea, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Textarea, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 
 export default function Contacts() {
   const [search, setSearch] = useState("");
@@ -33,11 +33,15 @@ export default function Contacts() {
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: theme.primarySoft, color: theme.primary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{(c.name || c.phone).slice(0, 1).toUpperCase()}</div>
                   <div>
-                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 13.5 }}>{c.name || "(tanpa nama)"}</div>
-                    <div style={{ color: theme.textMuted, fontSize: 12.5 }}>{c.phone} • ditambah {fmtDate(c.createdAt)}</div>
+                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 13.5, display: "flex", alignItems: "center", gap: 7 }}>
+                      {c.name || "(tanpa nama)"}
+                      {c.subscribed === false ? <Badge tone="red">berhenti</Badge> : null}
+                    </div>
+                    <div style={{ color: theme.textMuted, fontSize: 12.5 }}>{c.phone} • ditambah {fmtDate(c.createdAt)}{c.consentSource ? ` • ${c.consentSource}` : ""}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
+                  <Button variant="secondary" size="sm" onClick={() => run(() => api.updateContact(c.id, { subscribed: c.subscribed === false }))} title={c.subscribed === false ? "Langganan ulang" : "Tandai berhenti"}>{c.subscribed === false ? "Langgan" : "Berhenti"}</Button>
                   <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(c)}>Edit</Button>
                   <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteContact(c.id))} />
                 </div>

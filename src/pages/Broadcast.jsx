@@ -10,6 +10,7 @@ export default function Broadcast() {
   const [showBlast, setShowBlast] = useState(false);
   const [showSeg, setShowSeg] = useState(false);
   const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
 
   const run = async (fn, reloaders = []) => { setErr(""); try { await fn(); await Promise.all(reloaders.map((r) => r())); } catch (e) { setErr(e.message); } };
 
@@ -25,6 +26,7 @@ export default function Broadcast() {
         <Button key="b" icon="broadcast" onClick={() => setShowBlast(true)}>Buat Blast</Button>,
       ]} />
       <Notice>{err || blasts.error || segments.error}</Notice>
+      <Notice kind="success">{note}</Notice>
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}><Tab id="blasts">Riwayat Blast</Tab><Tab id="segments">Segmen</Tab></div>
 
       {tab === "blasts" ? (
@@ -65,7 +67,7 @@ export default function Broadcast() {
         ) : <Card><Empty icon="contacts" title="Belum ada segmen" /></Card>
       )}
 
-      {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(() => api.createBlast(d), [blasts.reload]).then(() => setShowBlast(false))} /> : null}
+      {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(async () => { setNote(""); const r = await api.createBlast(d); setNote(r?.excludedOptOut ? `Blast dibuat. ${r.excludedOptOut} kontak opt-out otomatis dikecualikan.` : "Blast dibuat & sedang dikirim."); }, [blasts.reload]).then(() => setShowBlast(false))} /> : null}
       {showSeg ? <SegmentModal onClose={() => setShowSeg(false)} onSave={(d) => run(() => api.createSegment(d), [segments.reload]).then(() => setShowSeg(false))} /> : null}
     </div>
   );

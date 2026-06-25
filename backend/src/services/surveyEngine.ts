@@ -9,6 +9,8 @@ import { findAutoResponse } from "./autoResponder.js";
 // Mendukung pertanyaan opsional (skip) & validasi jawaban (re-prompt bila salah).
 
 const SKIP_WORDS = ["lewati", "skip", "lewat", "-"];
+const OPT_OUT_WORDS = ["berhenti", "stop", "unsubscribe", "unsub", "cabut", "hapus saya", "berhenti langganan"];
+const OPT_IN_WORDS = ["mulai", "langganan", "berlangganan", "subscribe", "daftar", "gabung"];
 
 type QLite = { id: string; text: string; type: string; required: boolean; options: any };
 
@@ -44,6 +46,24 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   await prisma.message.create({
     data: { contactId: contact.id, direction: "in", vendor: ev.vendor, vendorMessageId: ev.messageId, text: storedText, payload: ev.raw as object },
   });
+
+  const lc = (ev.text ?? "").trim().toLowerCase();
+
+  // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi
+  if (OPT_OUT_WORDS.includes(lc)) {
+    await prisma.contact.update({ where: { id: contact.id }, data: { subscribed: false, optOutAt: new Date() } });
+    await reply(ev.vendor, phone, "Anda telah berhenti menerima pesan dari kami. Balas *MULAI* untuk berlangganan kembali.");
+    return;
+  }
+  if (OPT_IN_WORDS.includes(lc)) {
+    await prisma.contact.update({ where: { id: contact.id }, data: { subscribed: true, optOutAt: null, consentSource: contact.consentSource ?? "inbound", consentAt: contact.consentAt ?? new Date() } });
+    await reply(ev.vendor, phone, "Terima kasih, Anda kembali berlangganan pesan kami. 🙏");
+    return;
+  }
+  // Kontak yang membalas = persetujuan implisit (bila belum tercatat)
+  if (!contact.consentSource) {
+    await prisma.contact.update({ where: { id: contact.id }, data: { consentSource: "inbound", consentAt: new Date() } });
+  }
 
   // 1) Sesi survei berjalan?
   const active = await prisma.surveyResponse.findFirst({
