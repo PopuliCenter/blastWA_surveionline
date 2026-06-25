@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import Chat from "./pages/Chat";
 import Broadcast from "./pages/Broadcast";
+import Templates from "./pages/Templates";
 import Surveys from "./pages/Surveys";
 import Reports from "./pages/Reports";
 import AutoReply from "./pages/AutoReply";
@@ -24,6 +25,7 @@ const NAV = [
   { group: "Pesan", items: [
     { id: "chat", label: "Chat", icon: "chat" },
     { id: "broadcast", label: "Broadcast", icon: "broadcast" },
+    { id: "templates", label: "Template", icon: "template" },
     { id: "story", label: "WA Story", icon: "story", soon: true },
   ]},
   { group: "Survei", items: [
@@ -150,6 +152,7 @@ export default function PopuliApp() {
     contacts: <Contacts />,
     chat: <Chat />,
     broadcast: <Broadcast />,
+    templates: <Templates />,
     story: <ComingSoon title="WA Story" icon="story" desc="Posting status/story WhatsApp Business langsung dari dashboard." features={["Jadwal story", "Story ke banyak akun"]} />,
     surveys: <Surveys />,
     reports: <Reports />,

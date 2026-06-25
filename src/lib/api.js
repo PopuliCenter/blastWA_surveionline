@@ -100,6 +100,12 @@ export const api = {
   getAiAgent: () => request("/api/ai-agent"),
   updateAiAgent: (data) => request("/api/ai-agent", { method: "PUT", body: data }),
 
+  // Template pesan WhatsApp
+  listTemplates: () => request("/api/templates"),
+  createTemplate: (data) => request("/api/templates", { method: "POST", body: data }),
+  updateTemplate: (id, data) => request(`/api/templates/${id}`, { method: "PUT", body: data }),
+  deleteTemplate: (id) => request(`/api/templates/${id}`, { method: "DELETE" }),
+
   // Pengaman pengiriman (anti-banned)
   getSendingPolicy: () => request("/api/sending-policy"),
   updateSendingPolicy: (data) => request("/api/sending-policy", { method: "PUT", body: data }),

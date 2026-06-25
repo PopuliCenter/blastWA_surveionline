@@ -15,6 +15,7 @@ import { autoReplyRoutes } from "./routes/autoReply.js";
 import { aiAgentRoutes } from "./routes/aiAgent.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { sendingRoutes } from "./routes/sending.js";
+import { templateRoutes } from "./routes/templates.js";
 
 async function main() {
   const app = Fastify({ logger: true });
@@ -49,6 +50,7 @@ async function main() {
   await app.register(aiAgentRoutes);
   await app.register(webhookRoutes);
   await app.register(sendingRoutes);
+  await app.register(templateRoutes);
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`Populi WA backend siap di :${env.PORT}`);

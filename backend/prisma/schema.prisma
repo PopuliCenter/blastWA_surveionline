@@ -235,6 +235,26 @@ model WebhookLog {
   @@index([createdAt])
 }
 
+// Template pesan WhatsApp (harus disetujui Meta sebelum dipakai broadcast).
+// Disimpan lokal sebagai draf/arsip; status approval dikelola manual mengikuti Meta.
+model MessageTemplate {
+  id             String   @id @default(cuid())
+  name           String // nama template (snake_case, sesuai Meta)
+  category       String   @default("MARKETING") // MARKETING | UTILITY | AUTHENTICATION
+  language       String   @default("id") // id | en_US | ...
+  headerType     String   @default("none") // none | text | image | document | video
+  headerText     String? // dipakai bila headerType = text
+  headerMediaUrl String? // contoh URL media (gambar/dokumen/video) untuk preview & sampel approval
+  bodyText       String // isi utama, boleh berisi variabel {{1}} {{2}}
+  footerText     String?
+  buttons        Json? // [{type:"QUICK_REPLY"|"URL"|"PHONE_NUMBER", text, url?, phone?}]
+  sampleParams   String[] @default([]) // contoh nilai untuk {{1}}, {{2}} (untuk preview & submit ke Meta)
+  status         String   @default("draft") // draft | submitted | approved | rejected (lokal, ikuti status Meta)
+  useCase        String? // survei | rilis | acara | lainnya
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 // Kebijakan pengiriman (anti-banned): batas harian + jitter antar pesan (warm-up).
 model SendingPolicy {
   id          String   @id // singleton: "default"

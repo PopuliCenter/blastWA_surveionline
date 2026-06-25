@@ -6,6 +6,7 @@ export default function Broadcast() {
   const blasts = useLoader(useCallback(() => api.listBlasts(), []));
   const segments = useLoader(useCallback(() => api.listSegments(), []));
   const surveys = useLoader(useCallback(() => api.listSurveys(), []));
+  const templates = useLoader(useCallback(() => api.listTemplates(), []));
   const [tab, setTab] = useState("blasts");
   const [showBlast, setShowBlast] = useState(false);
   const [showSeg, setShowSeg] = useState(false);
@@ -67,16 +68,25 @@ export default function Broadcast() {
         ) : <Card><Empty icon="contacts" title="Belum ada segmen" /></Card>
       )}
 
-      {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(async () => { setNote(""); const r = await api.createBlast(d); setNote(r?.excludedOptOut ? `Blast dibuat. ${r.excludedOptOut} kontak opt-out otomatis dikecualikan.` : "Blast dibuat & sedang dikirim."); }, [blasts.reload]).then(() => setShowBlast(false))} /> : null}
+      {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} templates={templates.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(async () => { setNote(""); const r = await api.createBlast(d); setNote(r?.excludedOptOut ? `Blast dibuat. ${r.excludedOptOut} kontak opt-out otomatis dikecualikan.` : "Blast dibuat & sedang dikirim."); }, [blasts.reload]).then(() => setShowBlast(false))} /> : null}
       {showSeg ? <SegmentModal onClose={() => setShowSeg(false)} onSave={(d) => run(() => api.createSegment(d), [segments.reload]).then(() => setShowSeg(false))} /> : null}
     </div>
   );
 }
 
-function BlastModal({ surveys, segments, onClose, onSave }) {
-  const [f, setF] = useState({ surveyId: "", segmentId: segments[0]?.id || "", vendor: "meta", templateName: "", templateLang: "en_US", bodyParams: "", messageText: "", schedule: "" });
+function BlastModal({ surveys, segments, templates, onClose, onSave }) {
+  const [f, setF] = useState({ surveyId: "", segmentId: segments[0]?.id || "", vendor: "meta", templateId: "", templateName: "", templateLang: "en_US", bodyParams: "", messageText: "", schedule: "" });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
+
+  const pickTemplate = (id) => {
+    const t = templates.find((x) => x.id === id);
+    if (!t) { setF({ ...f, templateId: "", templateName: "", bodyParams: "" }); return; }
+    const preview = (t.bodyText || "").replace(/\{\{(\d+)\}\}/g, (_, n) => t.sampleParams?.[+n - 1] || `{{${n}}}`);
+    setF({ ...f, templateId: id, templateName: t.name, templateLang: t.language || "id", bodyParams: (t.sampleParams || []).join(", "), messageText: preview });
+  };
+  const selectedTpl = templates.find((x) => x.id === f.templateId);
+
   const submit = async () => {
     setSaving(true);
     try {
@@ -88,9 +98,11 @@ function BlastModal({ surveys, segments, onClose, onSave }) {
       <Select label="Survei (opsional)" value={f.surveyId} onChange={(e) => set("surveyId", e.target.value)} options={[{ value: "", label: "— tanpa survei —" }, ...surveys.map((s) => ({ value: s.id, label: s.title }))]} />
       <Select label="Segmen" value={f.segmentId} onChange={(e) => set("segmentId", e.target.value)} options={segments.map((s) => ({ value: s.id, label: `${s.name} (${s.contacts.length})` }))} />
       <Select label="Vendor" value={f.vendor} onChange={(e) => set("vendor", e.target.value)} options={[{ value: "meta", label: "Meta Cloud API" }, { value: "qontak", label: "Qontak" }]} />
-      <Input label="Nama / ID Template" value={f.templateName} onChange={(e) => set("templateName", e.target.value)} hint="cth: hello_world (Meta) atau Template ID (Qontak)" />
+      <Select label="Template Tersimpan" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />
+      {selectedTpl && selectedTpl.status !== "approved" ? <Notice kind="info">Template ini berstatus <strong>{selectedTpl.status}</strong>. Pastikan sudah disetujui Meta sebelum benar-benar dikirim.</Notice> : null}
+      <Input label="Nama / ID Template" value={f.templateName} onChange={(e) => set("templateName", e.target.value)} hint="Terisi otomatis bila memilih template tersimpan. Manual: hello_world (Meta) / Template ID (Qontak)" />
       <Input label="Bahasa Template" value={f.templateLang} onChange={(e) => set("templateLang", e.target.value)} hint="id / en_US" />
-      <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="kosongkan untuk template tanpa variabel" />
+      <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel" />
       <Textarea label="Preview Pesan (audit)" value={f.messageText} onChange={(e) => set("messageText", e.target.value)} />
       <Input label="Jadwal (opsional)" type="datetime-local" value={f.schedule} onChange={(e) => set("schedule", e.target.value)} />
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
