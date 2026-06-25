@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, apiBase } from "../lib/api";
 import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Toggle, useLoader, useIsMobile, theme, Icon } from "../lib/ui";
 
 export default function WhatsAppAccount() {
@@ -9,10 +9,14 @@ export default function WhatsAppAccount() {
   const [err, setErr] = useState("");
   const [meta, setMeta] = useState({ accessToken: "", phoneNumberId: "", appSecret: "", verifyToken: "", graphVersion: "v23.0" });
   const [qontak, setQontak] = useState({ accessToken: "", channelIntegrationId: "", webhookSecret: "", baseUrl: "https://service-chat.qontak.com/api/open/v1" });
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [metaTest, setMetaTest] = useState(null); // { ok, text }
+  const [testing, setTesting] = useState(false);
 
   const vendors = data || [];
   const vmeta = vendors.find((v) => v.name === "meta");
   const vqontak = vendors.find((v) => v.name === "qontak");
+  const activeReady = vendors.find((v) => v.active && v.configured);
 
   const saveCreds = async (vendor, creds) => {
     setErr(""); setNote("");
@@ -25,40 +29,73 @@ export default function WhatsAppAccount() {
   };
   const toggle = async (vendor, active) => { setErr(""); try { await api.setVendorActive(vendor, active); await reload(); } catch (e) { setErr(e.message); } };
 
+  const testMeta = async () => {
+    setTesting(true); setMetaTest(null);
+    try {
+      const q = await api.getWaQuality();
+      if (q.error) setMetaTest({ ok: false, text: q.error });
+      else setMetaTest({ ok: true, text: `Terhubung${q.display_phone_number ? ` — ${q.display_phone_number}` : ""}${q.verified_name ? ` (${q.verified_name})` : ""}.` });
+    } catch (e) { setMetaTest({ ok: false, text: e.message }); } finally { setTesting(false); }
+  };
+
   const Status = ({ v }) => v ? (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
       <Badge tone={v.configured ? "green" : "yellow"}>{v.configured ? "terkonfigurasi" : "belum lengkap"}</Badge>
+      {v.active ? <Badge tone="green">aktif</Badge> : <Badge tone="default">nonaktif</Badge>}
       {v.isDefault ? <Badge tone="purple">default</Badge> : null}
-      {v.hasStoredCredentials ? <Badge tone="blue">kredensial tersimpan</Badge> : null}
     </div>
-  ) : null;
+  ) : <Badge tone="default">belum diatur</Badge>;
 
   if (loading) return <div><PageHeader title="Akun WhatsApp" /><Loading /></div>;
 
+  const metaCallback = `${apiBase}/webhook/meta`;
+  const qontakCallback = `${apiBase}/webhook/qontak`;
+
   return (
     <div>
-      <PageHeader title="Akun WhatsApp" subtitle="Hubungkan vendor pengirim (Meta Cloud API / Qontak). Kredensial disimpan terenkripsi di server." actions={[<Button key="r" variant="ghost" icon="refresh" onClick={reload}>Refresh</Button>]} />
+      <PageHeader title="Akun WhatsApp" subtitle="Hubungkan vendor pengirim (Meta Cloud API / Qontak). Kredensial disimpan terenkripsi di server." actions={[
+        <Button key="g" variant="secondary" icon="eye" onClick={() => setGuideOpen((o) => !o)}>{guideOpen ? "Tutup Panduan" : "Panduan Koneksi"}</Button>,
+        <Button key="r" variant="ghost" icon="refresh" onClick={reload}>Refresh</Button>,
+      ]} />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
+
+      {/* Banner status koneksi */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 12, marginBottom: 16, background: activeReady ? theme.greenSoft : theme.yellowSoft, border: `1px solid ${activeReady ? theme.green : theme.yellow}22` }}>
+        <span style={{ width: 38, height: 38, borderRadius: "50%", background: activeReady ? theme.green : theme.yellow, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={activeReady ? "check" : "whatsapp"} size={20} /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: activeReady ? theme.green : theme.yellow }}>{activeReady ? `Siap mengirim via ${activeReady.name === "meta" ? "Meta Cloud API" : "Qontak"}` : "Belum ada vendor yang siap"}</div>
+          <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 2 }}>{activeReady ? "Akun terhubung & aktif. Anda bisa membuat broadcast." : "Isi kredensial salah satu vendor di bawah, lalu aktifkan. Klik “Panduan Koneksi” bila butuh langkah detail."}</div>
+        </div>
+      </div>
+
+      {guideOpen ? <SetupGuide metaCallback={metaCallback} verifyToken={meta.verifyToken} /> : null}
+
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
         <Card title="Meta Cloud API" actions={<Status v={vmeta} />}>
-          <Input label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} />
-          <Input label="Phone Number ID" value={meta.phoneNumberId} onChange={(e) => setMeta({ ...meta, phoneNumberId: e.target.value })} />
-          <Input label="App Secret" value={meta.appSecret} onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })} />
-          <Input label="Webhook Verify Token" value={meta.verifyToken} onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })} />
-          <Input label="Graph API Version" value={meta.graphVersion} onChange={(e) => setMeta({ ...meta, graphVersion: e.target.value })} />
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12 }}>Jalur resmi WhatsApp. Cocok untuk broadcast template & survei. <span style={{ color: theme.primary, cursor: "pointer", fontWeight: 600 }} onClick={() => setGuideOpen(true)}>Lihat langkahnya →</span></div>
+          <Input label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} hint="Meta Business › System Users › Generate token (akses WhatsApp). Pakai token permanen." />
+          <Input label="Phone Number ID" value={meta.phoneNumberId} onChange={(e) => setMeta({ ...meta, phoneNumberId: e.target.value })} hint="WhatsApp Manager › API Setup › di bawah nomor Anda." />
+          <Input label="App Secret" value={meta.appSecret} onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })} hint="Meta for Developers › App › Settings › Basic › App Secret. Untuk verifikasi webhook." />
+          <Input label="Webhook Verify Token" value={meta.verifyToken} onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })} hint="Buat sendiri (bebas). Isikan sama persis di kolom Verify Token milik Meta." />
+          <Input label="Graph API Version" value={meta.graphVersion} onChange={(e) => setMeta({ ...meta, graphVersion: e.target.value })} hint="Default v23.0 — biarkan bila ragu." />
+          <CopyField label="Callback URL (untuk webhook Meta)" value={metaCallback} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={() => saveCreds("meta", meta)}>Simpan Meta</Button>
+            {vmeta?.hasStoredCredentials ? <Button variant="secondary" icon="refresh" onClick={testMeta} disabled={testing}>{testing ? "Mengecek..." : "Cek Koneksi"}</Button> : null}
             {vmeta ? <Button variant="secondary" onClick={() => toggle("meta", !vmeta.active)}>{vmeta.active ? "Nonaktifkan" : "Aktifkan"}</Button> : null}
           </div>
+          {metaTest ? <div style={{ marginTop: 10, fontSize: 12.5, color: metaTest.ok ? theme.green : theme.red, background: metaTest.ok ? theme.greenSoft : theme.redSoft, borderRadius: 8, padding: "8px 11px" }}>{metaTest.ok ? "✓ " : "✕ "}{metaTest.text}</div> : null}
         </Card>
 
         <Card title="Mekari Qontak" actions={<Status v={vqontak} />}>
-          <Input label="Access Token" value={qontak.accessToken} onChange={(e) => setQontak({ ...qontak, accessToken: e.target.value })} placeholder={vqontak?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : ""} />
-          <Input label="Channel Integration ID" value={qontak.channelIntegrationId} onChange={(e) => setQontak({ ...qontak, channelIntegrationId: e.target.value })} />
-          <Input label="Webhook Secret" value={qontak.webhookSecret} onChange={(e) => setQontak({ ...qontak, webhookSecret: e.target.value })} />
-          <Input label="Base URL" value={qontak.baseUrl} onChange={(e) => setQontak({ ...qontak, baseUrl: e.target.value })} />
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12 }}>Alternatif via partner resmi (BSP). Cocok bila Anda sudah berlangganan Qontak.</div>
+          <Input label="Access Token" value={qontak.accessToken} onChange={(e) => setQontak({ ...qontak, accessToken: e.target.value })} placeholder={vqontak?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : ""} hint="Qontak › Pengaturan › API / Integrasi." />
+          <Input label="Channel Integration ID" value={qontak.channelIntegrationId} onChange={(e) => setQontak({ ...qontak, channelIntegrationId: e.target.value })} hint="ID channel WhatsApp di akun Qontak Anda." />
+          <Input label="Webhook Secret" value={qontak.webhookSecret} onChange={(e) => setQontak({ ...qontak, webhookSecret: e.target.value })} hint="Untuk verifikasi pesan masuk dari Qontak." />
+          <Input label="Base URL" value={qontak.baseUrl} onChange={(e) => setQontak({ ...qontak, baseUrl: e.target.value })} hint="Biarkan default kecuali diarahkan lain." />
+          <CopyField label="Callback URL (untuk webhook Qontak)" value={qontakCallback} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={() => saveCreds("qontak", qontak)}>Simpan Qontak</Button>
             {vqontak ? <Button variant="secondary" onClick={() => toggle("qontak", !vqontak.active)}>{vqontak.active ? "Nonaktifkan" : "Aktifkan"}</Button> : null}
           </div>
@@ -67,6 +104,52 @@ export default function WhatsAppAccount() {
 
       <div style={{ marginTop: 20 }}><SendingSafety isMobile={isMobile} /></div>
     </div>
+  );
+}
+
+// Field read-only dengan tombol salin
+function CopyField({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, color: theme.text, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input readOnly value={value} onFocus={(e) => e.target.select()} style={{ flex: 1, padding: "10px 12px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: 9, fontSize: 12.5, fontFamily: "monospace", boxSizing: "border-box", outline: "none" }} />
+        <Button variant="secondary" size="sm" icon={copied ? "check" : "download"} onClick={copy}>{copied ? "Disalin" : "Salin"}</Button>
+      </div>
+    </div>
+  );
+}
+
+// Panduan langkah-langkah koneksi Meta
+function SetupGuide({ metaCallback }) {
+  const steps = [
+    ["Buat aplikasi & WhatsApp", "Di Meta for Developers, buat App tipe Business lalu tambahkan produk WhatsApp."],
+    ["Ambil Phone Number ID", "WhatsApp Manager › API Setup. Salin Phone Number ID (dan daftarkan nomor Anda)."],
+    ["Buat Access Token permanen", "Meta Business › System Users › buat system user, beri akses aset WhatsApp, lalu Generate Token permanen."],
+    ["Salin App Secret", "App › Settings › Basic › App Secret."],
+    ["Pasang Webhook", "WhatsApp › Configuration › Webhook. Tempel Callback URL di bawah, isi Verify Token (samakan dgn yang Anda isi di form), lalu Subscribe ke field 'messages'."],
+    ["Simpan & Cek Koneksi", "Isi semua kolom di kartu Meta, klik Simpan, lalu klik “Cek Koneksi”."],
+  ];
+  return (
+    <Card title="Panduan Koneksi Meta Cloud API" style={{ marginBottom: 16 }}>
+      <div style={{ display: "grid", gap: 12 }}>
+        {steps.map((s, i) => (
+          <div key={i} style={{ display: "flex", gap: 12 }}>
+            <span style={{ width: 24, height: 24, borderRadius: "50%", background: theme.primarySoft, color: theme.primary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12.5, flexShrink: 0 }}>{i + 1}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, color: theme.text }}>{s[0]}</div>
+              <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 2, lineHeight: 1.5 }}>{s[1]}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 14 }}><CopyField label="Callback URL" value={metaCallback} /></div>
+      <div style={{ fontSize: 12, color: theme.textMuted, background: theme.surfaceAlt, borderRadius: 8, padding: "9px 12px" }}>Catatan: server harus bisa diakses publik (https) agar webhook Meta bisa menjangkau Callback URL. Untuk uji lokal, gunakan tunnel seperti ngrok.</div>
+    </Card>
   );
 }
 

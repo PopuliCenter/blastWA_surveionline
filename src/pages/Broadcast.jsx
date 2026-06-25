@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate } from "../lib/ui";
+import { ContactImporter } from "../lib/contactImport";
 
 export default function Broadcast() {
   const blasts = useLoader(useCallback(() => api.listBlasts(), []));
@@ -115,18 +116,21 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
 
 function SegmentModal({ onClose, onSave }) {
   const [name, setName] = useState("");
-  const [raw, setRaw] = useState("");
+  const [contacts, setContacts] = useState([]);
   const [saving, setSaving] = useState(false);
-  const contacts = raw.split("\n").map((s) => s.trim()).filter(Boolean);
   const submit = async () => { setSaving(true); try { await onSave({ name, contacts }); } finally { setSaving(false); } };
+  const attrKeys = [...new Set(contacts.flatMap((c) => Object.keys(c.attributes || {})))];
   return (
-    <Modal title="Tambah Segmen" onClose={onClose} width={460}>
-      <Input label="Nama Segmen" value={name} onChange={(e) => setName(e.target.value)} />
-      <Textarea label="Daftar Nomor (satu per baris)" value={raw} onChange={(e) => setRaw(e.target.value)} placeholder={"08123456789\n628987654321"} />
-      <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 14 }}>Jumlah: {contacts.length} (dinormalisasi ke 62…)</div>
+    <Modal title="Tambah Segmen" onClose={onClose} width={540}>
+      <Input label="Nama Segmen" value={name} onChange={(e) => setName(e.target.value)} placeholder="cth: Pemilih Jawa Barat" />
+      <div style={{ fontSize: 12.5, color: theme.text, fontWeight: 600, marginBottom: 8 }}>Isi kontak segmen (upload file atau tempel nomor)</div>
+      <ContactImporter onContacts={setContacts} />
+      <div style={{ color: theme.textMuted, fontSize: 12.5, margin: "6px 0 14px" }}>
+        {contacts.length} kontak akan masuk segmen (nomor dinormalisasi ke 62…){attrKeys.length ? ` • ${attrKeys.length} kolom pembobot ikut tersimpan` : ""}.
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Button variant="ghost" onClick={onClose}>Batal</Button>
-        <Button onClick={submit} disabled={!name.trim() || saving}>{saving ? "Menyimpan..." : "Simpan"}</Button>
+        <Button onClick={submit} disabled={!name.trim() || !contacts.length || saving}>{saving ? "Menyimpan..." : `Simpan Segmen (${contacts.length})`}</Button>
       </div>
     </Modal>
   );
