@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Modal, Notice, Loading, Empty, Toggle, useLoader, theme } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Modal, Notice, Loading, Empty, Toggle, useLoader, useIsMobile, theme } from "../lib/ui";
 
 const MATCH_LABEL = { contains: "mengandung", exact: "sama persis", starts: "diawali" };
 
@@ -48,6 +48,7 @@ export default function AutoReply() {
 }
 
 function RuleModal({ rule, onClose, onSave }) {
+  const isMobile = useIsMobile();
   const [f, setF] = useState({ name: rule?.name || "", keyword: rule?.keyword || "", matchType: rule?.matchType || "contains", response: rule?.response || "", priority: rule?.priority ?? 0, enabled: rule?.enabled ?? true });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
@@ -55,7 +56,7 @@ function RuleModal({ rule, onClose, onSave }) {
   return (
     <Modal title={rule ? "Edit Aturan" : "Tambah Aturan"} onClose={onClose} width={520}>
       <Input label="Nama aturan" value={f.name} onChange={(e) => set("name", e.target.value)} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <Select label="Tipe cocok" value={f.matchType} onChange={(e) => set("matchType", e.target.value)} options={[{ value: "contains", label: "Mengandung" }, { value: "exact", label: "Sama persis" }, { value: "starts", label: "Diawali" }]} />
         <Input label="Kata kunci" value={f.keyword} onChange={(e) => set("keyword", e.target.value)} placeholder="cth: harga" />
       </div>

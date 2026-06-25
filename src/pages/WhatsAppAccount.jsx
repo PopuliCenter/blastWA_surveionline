@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Toggle, useLoader, theme } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Toggle, useLoader, useIsMobile, theme } from "../lib/ui";
 
 export default function WhatsAppAccount() {
+  const isMobile = useIsMobile();
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listVendors(), []));
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
@@ -39,7 +40,7 @@ export default function WhatsAppAccount() {
       <PageHeader title="Akun WhatsApp" subtitle="Hubungkan vendor pengirim (Meta Cloud API / Qontak). Kredensial disimpan terenkripsi di server." actions={[<Button key="r" variant="ghost" icon="refresh" onClick={reload}>Refresh</Button>]} />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
         <Card title="Meta Cloud API" actions={<Status v={vmeta} />}>
           <Input label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} />
           <Input label="Phone Number ID" value={meta.phoneNumberId} onChange={(e) => setMeta({ ...meta, phoneNumberId: e.target.value })} />

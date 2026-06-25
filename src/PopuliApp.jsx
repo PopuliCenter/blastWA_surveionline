@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
-import { theme, fontStack, card, Icon, Button, Input, Loading } from "./lib/ui";
+import { theme, fontStack, card, Icon, Button, Input, Loading, useIsMobile } from "./lib/ui";
 import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import Chat from "./pages/Chat";
@@ -71,12 +71,16 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function Sidebar({ active, setActive, currentUser, onLogout }) {
+function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose }) {
+  const asideStyle = mobile
+    ? { width: "100%", background: theme.surface, padding: "16px 14px", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: "100vh" }
+    : { width: 250, background: theme.surface, borderRight: `1px solid ${theme.border}`, padding: "18px 14px", position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", overflowY: "auto", display: "flex", flexDirection: "column" };
   return (
-    <aside style={{ width: 250, background: theme.surface, borderRight: `1px solid ${theme.border}`, padding: "18px 14px", position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+    <aside style={asideStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px 18px" }}>
         <img src="/logopopuli.png" alt="Populi" style={{ height: 30, objectFit: "contain" }} />
         <div style={{ fontWeight: 800, fontSize: 16, color: theme.text }}>Populi</div>
+        {mobile ? <button onClick={onClose} aria-label="Tutup menu" style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="close" size={22} /></button> : null}
       </div>
       <nav style={{ flex: 1 }}>
         {NAV.map((sec) => {
@@ -117,6 +121,8 @@ export default function PopuliApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [active, setActive] = useState("dashboard");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!getToken()) { setAuthReady(true); return; }
@@ -129,7 +135,11 @@ export default function PopuliApp() {
     return () => window.removeEventListener("populi:logout", onLogout);
   }, []);
 
+  // Tutup drawer otomatis saat berpindah ke layar lebar
+  useEffect(() => { if (!isMobile) setDrawerOpen(false); }, [isMobile]);
+
   const logout = () => { setToken(null); setCurrentUser(null); setActive("dashboard"); };
+  const selectPage = (id) => { setActive(id); setDrawerOpen(false); };
 
   const pages = useMemo(() => ({
     dashboard: <Dashboard />,
@@ -151,10 +161,33 @@ export default function PopuliApp() {
   if (!authReady) return <div style={{ minHeight: "100vh", background: theme.bg, display: "flex", justifyContent: "center", alignItems: "center" }}><Loading /></div>;
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
 
+  if (isMobile) {
+    return (
+      <div style={{ minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
+        <header style={{ position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: theme.surface, borderBottom: `1px solid ${theme.border}` }}>
+          <button onClick={() => setDrawerOpen(true)} aria-label="Buka menu" style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.text, display: "flex", padding: 2 }}><Icon name="menu" size={24} /></button>
+          <img src="/logopopuli.png" alt="Populi" style={{ height: 26, objectFit: "contain" }} />
+          <div style={{ fontWeight: 800, fontSize: 15.5, color: theme.text }}>Populi</div>
+        </header>
+
+        {drawerOpen ? (
+          <>
+            <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 50 }} />
+            <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 270, maxWidth: "84vw", background: theme.surface, zIndex: 55, boxShadow: "2px 0 18px rgba(15,23,42,0.18)", overflowY: "auto" }}>
+              <Sidebar active={active} setActive={selectPage} currentUser={currentUser} onLogout={logout} mobile onClose={() => setDrawerOpen(false)} />
+            </div>
+          </>
+        ) : null}
+
+        <main style={{ padding: "16px 14px", minWidth: 0 }}>{pages[active] || pages.dashboard}</main>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
       <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} />
-      <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200 }}>{pages[active] || pages.dashboard}</main>
+      <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>{pages[active] || pages.dashboard}</main>
     </div>
   );
 }

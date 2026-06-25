@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Notice, Loading, Toggle, useLoader, theme, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Notice, Loading, Toggle, useLoader, useIsMobile, theme, Icon } from "../lib/ui";
 
 const PROVIDERS = [
   { value: "anthropic", label: "Anthropic (Claude)" },
@@ -23,6 +23,7 @@ const KEY_HINT = {
 };
 
 export default function AiAgent() {
+  const isMobile = useIsMobile();
   const { data, loading, error, reload } = useLoader(useCallback(() => api.getAiAgent(), []));
   const [f, setF] = useState(null);
   const [apiKey, setApiKey] = useState("");
@@ -53,7 +54,7 @@ export default function AiAgent() {
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 16 }}>
         <Card title="Konfigurasi">
           <div style={{ marginBottom: 16 }}><Toggle checked={f.enabled} onChange={(v) => set("enabled", v)} label="Aktifkan Agen AI" /></div>
           <Select label="Provider AI" value={f.provider} onChange={(e) => set("provider", e.target.value)} options={PROVIDERS} />

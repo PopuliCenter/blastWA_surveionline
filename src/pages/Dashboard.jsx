@@ -1,8 +1,9 @@
 import { useCallback } from "react";
 import { api } from "../lib/api";
-import { PageHeader, StatCard, Card, Badge, Loading, Notice, Empty, useLoader, theme, fmtDate } from "../lib/ui";
+import { PageHeader, StatCard, Card, Badge, Loading, Notice, Empty, useLoader, useIsMobile, theme, fmtDate } from "../lib/ui";
 
 export default function Dashboard() {
+  const isMobile = useIsMobile();
   const stats = useLoader(useCallback(() => api.stats(), []));
   const surveys = useLoader(useCallback(() => api.listSurveys(), []));
   const blasts = useLoader(useCallback(() => api.listBlasts(), []));
@@ -21,7 +22,7 @@ export default function Dashboard() {
         <StatCard label="Gagal Kirim" value={s.failed} note="perlu dicek bila > 0" tone="yellow" icon="autoreply" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.1fr 0.9fr", gap: 16 }}>
         <Card title="Survei Terbaru">
           {surveys.loading ? <Loading /> : (surveys.data || []).length ? (
             <div style={{ display: "grid", gap: 10 }}>

@@ -61,6 +61,8 @@ export function Icon({ name, size = 18 }) {
     upload: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
     download: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
     eye: <svg {...c}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
+    menu: <svg {...c}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
+    back: <svg {...c}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
   };
   return I[name] || <span style={{ width: size, display: "inline-block" }} />;
 }
@@ -140,9 +142,14 @@ export function Toggle({ checked, onChange, label }) {
 }
 
 export function Modal({ title, children, onClose, width = 600 }) {
+  const isMobile = useIsMobile();
+  const overlay = isMobile ? { padding: 0, alignItems: "stretch" } : { padding: "6vh 16px", alignItems: "flex-start" };
+  const box = isMobile
+    ? { width: "100%", maxWidth: "100%", minHeight: "100vh", borderRadius: 0, padding: 20 }
+    : { width: "100%", maxWidth: width, maxHeight: "86vh", padding: 22 };
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "6vh 16px", zIndex: 60 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ ...card, width: "100%", maxWidth: width, maxHeight: "86vh", overflow: "auto", padding: 22 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", justifyContent: "center", overflowY: "auto", zIndex: 60, ...overlay }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...card, overflow: "auto", ...box }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h3 style={{ margin: 0, fontSize: 17, color: theme.text }}>{title}</h3>
           <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="close" /></button>
@@ -213,6 +220,25 @@ export function Empty({ icon = "survey", title = "Belum ada data", note }) {
       {note ? <div style={{ fontSize: 13, marginTop: 4 }}>{note}</div> : null}
     </div>
   );
+}
+
+// Hook media query reaktif — true bila viewport cocok dengan query
+export function useMediaQuery(query) {
+  const get = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
+// True bila layar selebar ponsel (≤ 768px)
+export function useIsMobile(breakpoint = 768) {
+  return useMediaQuery(`(max-width: ${breakpoint}px)`);
 }
 
 // Hook pemuat data: loader stabil (useCallback) → fetch otomatis + reload()

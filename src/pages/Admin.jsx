@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Select, Modal, Notice, Loading, useLoader, theme } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Select, Modal, Notice, Loading, useLoader, useIsMobile, theme } from "../lib/ui";
 
 export default function Admin({ currentUser }) {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listUsers(), []));
@@ -50,6 +50,7 @@ export default function Admin({ currentUser }) {
 }
 
 function UserModal({ user, onClose, onSave }) {
+  const isMobile = useIsMobile();
   const [f, setF] = useState({ name: user?.name || "", username: user?.username || "", password: "", email: user?.email || "", role: user?.role || "admin", active: user?.active ?? true });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
@@ -59,11 +60,11 @@ function UserModal({ user, onClose, onSave }) {
   };
   return (
     <Modal title={user ? "Edit User" : "Tambah User"} onClose={onClose}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <Input label="Nama" value={f.name} onChange={(e) => set("name", e.target.value)} />
         <Input label="Username" value={f.username} onChange={(e) => set("username", e.target.value)} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <Input label={user ? "Password (kosongkan = tetap)" : "Password"} type="password" value={f.password} onChange={(e) => set("password", e.target.value)} />
         <Input label="Email" value={f.email} onChange={(e) => set("email", e.target.value)} />
       </div>
