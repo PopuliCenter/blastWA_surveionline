@@ -29,10 +29,17 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(c);
   });
 
-  // Impor massal: array {phone, name?}. Nomor dinormalisasi & di-upsert (lewati yang sudah ada).
+  // Impor massal: array {phone, name?, attributes?}. Nomor dinormalisasi & di-upsert.
+  // attributes = data pembobot (Jenis Kelamin, Umur, Agama, Pendidikan, Pekerjaan, Provinsi, dll)
+  // disimpan di Contact.attributes (digabung, tidak menimpa state chat seperti notes/chatResolved).
   app.post("/api/contacts/bulk", async (req, reply) => {
     const parsed = z
-      .object({ contacts: z.array(z.object({ phone: z.string().min(5), name: z.string().optional() })).min(1).max(5000) })
+      .object({
+        contacts: z
+          .array(z.object({ phone: z.string().min(5), name: z.string().optional(), attributes: z.record(z.any()).optional() }))
+          .min(1)
+          .max(5000),
+      })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "format tidak valid" });
 
@@ -42,12 +49,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       const phone = normalizePhone(item.phone);
       if (!phone || phone.length < 8 || seen.has(phone)) { skipped++; continue; }
       seen.add(phone);
+      const hasAttrs = item.attributes && Object.keys(item.attributes).length > 0;
       const existing = await prisma.contact.findUnique({ where: { phone } });
       if (existing) {
-        if (item.name && item.name !== existing.name) { await prisma.contact.update({ where: { phone }, data: { name: item.name } }); updated++; }
+        const data: Record<string, unknown> = {};
+        if (item.name && item.name !== existing.name) data.name = item.name;
+        if (hasAttrs) data.attributes = { ...((existing.attributes as Record<string, unknown> | null) ?? {}), ...item.attributes } as object;
+        if (Object.keys(data).length) { await prisma.contact.update({ where: { phone }, data }); updated++; }
         else skipped++;
       } else {
-        await prisma.contact.create({ data: { phone, name: item.name } });
+        await prisma.contact.create({ data: { phone, name: item.name, attributes: hasAttrs ? (item.attributes as object) : undefined } });
         created++;
       }
     }

@@ -88,7 +88,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       where: { surveyId: id },
       orderBy: { startedAt: "desc" },
       include: {
-        contact: { select: { phone: true, name: true } },
+        contact: { select: { phone: true, name: true, attributes: true } },
         answers: { include: { question: { select: { text: true, order: true } } } },
       },
     });
@@ -96,6 +96,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       id: r.id,
       phone: r.contact.phone,
       name: r.contact.name,
+      attributes: r.contact.attributes ?? {},
       startedAt: r.startedAt,
       completedAt: r.completedAt,
       answers: r.answers

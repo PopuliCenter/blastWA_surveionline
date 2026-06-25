@@ -71,36 +71,50 @@ function parseExcelContacts(workbook) {
   if (!rows.length) return [];
 
   // Deteksi kolom dari baris pertama (header)
-  const header = rows[0].map((h) => String(h).toLowerCase().trim());
-  const nameIdx = header.findIndex((h) => /nama|name/.test(h));
-  const phoneIdx = header.findIndex((h) => /nomor|phone|hp|wa|telepon|handphone|no\.?\s*wa/.test(h));
+  const rawHeader = rows[0].map((h) => String(h).trim());
+  const headerLc = rawHeader.map((h) => h.toLowerCase());
+  const nameIdx = headerLc.findIndex((h) => /\bnama\b|\bname\b/.test(h));
+  const phoneIdx = headerLc.findIndex((h) => /nomor|phone|no\.?\s*hp|^hp$|wa|telepon|handphone|no\.?\s*wa/.test(h));
+  const hasHeader = nameIdx >= 0 || phoneIdx >= 0;
 
-  const dataRows = (nameIdx >= 0 || phoneIdx >= 0) ? rows.slice(1) : rows;
-  const ni = nameIdx >= 0 ? nameIdx : -1;
-  // jika tidak ada header nomor, coba kolom yang banyak digit
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const ni = nameIdx;
   const pi = phoneIdx >= 0 ? phoneIdx : (ni === 0 ? 1 : 0);
 
   return dataRows.map((row) => {
     const phone = String(row[pi] ?? "").trim();
     if (phone.replace(/\D/g, "").length < 8) return null;
     const name = ni >= 0 ? String(row[ni] ?? "").trim() || undefined : undefined;
-    return { phone, name };
+    // Semua kolom lain (selain nama & nomor) → atribut pembobot, lewati sel kosong
+    const attributes = {};
+    if (hasHeader) {
+      rawHeader.forEach((h, idx) => {
+        if (idx === ni || idx === pi || !h) return;
+        const v = row[idx];
+        if (v === "" || v === null || v === undefined) return;
+        attributes[h] = typeof v === "number" ? v : String(v).trim();
+      });
+    }
+    const c = { phone };
+    if (name) c.name = name;
+    if (Object.keys(attributes).length) c.attributes = attributes;
+    return c;
   }).filter(Boolean);
 }
 
+// Template pembobot: kolom demografi standar (cocok dengan dataset responden)
 function downloadTemplate() {
   const wb = XLSX.utils.book_new();
   const data = [
-    ["Nama", "Nomor WhatsApp"],
-    ["Andi Susanto", "081234567890"],
-    ["Budi Pratama", "6281298765432"],
-    ["Citra Dewi", "081200001111"],
+    ["Nama", "No hp", "Jenis Kelamin", "Umur", "Agama", "Pendidikan", "Pekerjaan", "Provinsi", "Kab/Kota"],
+    ["Andi Susanto", "081234567890", "Laki-Laki", 35, "Islam", "Tamat SMA", "Pegawai Swasta", "ACEH", "Banda Aceh"],
+    ["Sari Dewi", "6281298765432", "Perempuan", 28, "Kristen", "Tamat S-1 atau Lebih Tinggi", "Wiraswasta", "JAWA BARAT", "Bandung"],
+    ["Budi Pratama", "081200001111", "Laki-Laki", 47, "Islam", "Tamat SD", "Petani/Peternak/Nelayan", "JAWA TENGAH", "Semarang"],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  // Lebar kolom
-  ws["!cols"] = [{ wch: 24 }, { wch: 20 }];
+  ws["!cols"] = [{ wch: 20 }, { wch: 16 }, { wch: 13 }, { wch: 7 }, { wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 14 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, ws, "Kontak");
-  XLSX.writeFile(wb, "template-kontak-populi.xlsx");
+  XLSX.writeFile(wb, "template-pembobot-populi.xlsx");
 }
 
 function BulkModal({ onClose, onDone }) {
@@ -166,8 +180,9 @@ function BulkModal({ onClose, onDone }) {
       {mode === "file" ? (
         <>
           {/* Template download */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-            <Button variant="ghost" size="sm" icon="download" onClick={downloadTemplate}>Download Template Excel</Button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: theme.textMuted }}>Sertakan kolom pembobot (Jenis Kelamin, Umur, Agama, dll) — otomatis tergabung ke hasil survei.</span>
+            <Button variant="ghost" size="sm" icon="download" onClick={downloadTemplate}>Template Pembobot</Button>
           </div>
 
           {/* Drop zone */}
@@ -190,19 +205,23 @@ function BulkModal({ onClose, onDone }) {
               ? <div style={{ fontWeight: 600, color: theme.text, fontSize: 13.5 }}>{fileName}</div>
               : <div style={{ color: theme.textMuted, fontSize: 13.5 }}>Seret file ke sini atau <span style={{ color: theme.primary, fontWeight: 600 }}>klik untuk pilih</span></div>
             }
-            <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 6 }}>Format: .xlsx, .xls, .csv • Kolom: Nama, Nomor WhatsApp</div>
+            <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 6 }}>Format: .xlsx, .xls, .csv • Wajib: Nama, No hp • Opsional: kolom pembobot apa pun</div>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={(e) => handleFile(e.target.files[0])} />
           </div>
 
-          {contacts.length > 0 && (
-            <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, color: theme.textMuted, marginBottom: 14 }}>
-              <span style={{ color: theme.green, fontWeight: 600 }}>✓ {contacts.length} kontak terdeteksi</span>
-              {contacts.slice(0, 3).map((c, i) => (
-                <div key={i} style={{ marginTop: 4 }}>{c.name ? `${c.name} — ` : ""}{c.phone}</div>
-              ))}
-              {contacts.length > 3 && <div style={{ color: theme.textMuted }}>...dan {contacts.length - 3} lainnya</div>}
-            </div>
-          )}
+          {contacts.length > 0 && (() => {
+            const attrKeys = [...new Set(contacts.flatMap((c) => Object.keys(c.attributes || {})))];
+            return (
+              <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: "10px 14px", fontSize: 12.5, color: theme.textMuted, marginBottom: 14 }}>
+                <span style={{ color: theme.green, fontWeight: 600 }}>✓ {contacts.length} kontak terdeteksi</span>
+                {attrKeys.length ? <span style={{ marginLeft: 8 }}>• {attrKeys.length} kolom pembobot: {attrKeys.slice(0, 6).join(", ")}{attrKeys.length > 6 ? "…" : ""}</span> : null}
+                {contacts.slice(0, 3).map((c, i) => (
+                  <div key={i} style={{ marginTop: 4 }}>{c.name ? `${c.name} — ` : ""}{c.phone}</div>
+                ))}
+                {contacts.length > 3 && <div style={{ color: theme.textMuted }}>...dan {contacts.length - 3} lainnya</div>}
+              </div>
+            );
+          })()}
         </>
       ) : (
         <>

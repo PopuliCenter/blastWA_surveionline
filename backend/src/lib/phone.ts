@@ -4,6 +4,8 @@ export function normalizePhone(input: string, defaultCountry = "62"): string {
   let s = (input || "").replace(/[^\d+]/g, "");
   if (s.startsWith("+")) s = s.slice(1);
   if (s.startsWith("0")) s = defaultCountry + s.slice(1);
+  // Nomor lokal tanpa 0/62 (mis. "8123..." dari dataset) → beri kode negara
+  else if (s.startsWith("8")) s = defaultCountry + s;
   // Sudah diawali kode negara
   return s;
 }

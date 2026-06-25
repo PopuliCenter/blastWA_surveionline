@@ -3,24 +3,33 @@ import * as XLSX from "xlsx";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 
-// Ekspor respons survei → tabel lebar (1 baris/responden, 1 kolom/pertanyaan)
+// Atribut internal chat yang tidak ikut diekspor sebagai kolom pembobot
+const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"]);
+
+// Ekspor respons survei → tabel lebar: identitas + pembobot (dari kontak) + 1 kolom/pertanyaan
 function exportResponses(survey, responses, format) {
   const questions = (survey.questions || []).map((q) => q.text);
-  const header = ["Nomor", "Nama", "Mulai", "Selesai", "Status", ...questions];
+  // Kumpulkan kolom pembobot sesuai urutan kemunculan
+  const attrKeys = [];
+  responses.forEach((r) => Object.keys(r.attributes || {}).forEach((k) => { if (!INTERNAL_ATTRS.has(k) && !attrKeys.includes(k)) attrKeys.push(k); }));
+
+  const header = ["Nomor", "Nama", ...attrKeys, "Status", "Mulai", "Selesai", ...questions];
   const rows = responses.map((r) => {
     const map = {};
     (r.answers || []).forEach((a) => { map[a.question] = a.value; });
+    const attrs = r.attributes || {};
     return [
       r.phone,
       r.name || "",
+      ...attrKeys.map((k) => attrs[k] ?? ""),
+      r.completedAt ? "Selesai" : "Berlangsung",
       fmtDate(r.startedAt),
       r.completedAt ? fmtDate(r.completedAt) : "",
-      r.completedAt ? "Selesai" : "Berlangsung",
       ...questions.map((q) => map[q] ?? ""),
     ];
   });
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws["!cols"] = header.map((h, i) => ({ wch: i < 5 ? Math.max(12, h.length) : Math.max(16, h.length) }));
+  ws["!cols"] = header.map((h) => ({ wch: Math.max(12, Math.min(40, h.length + 2)) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Respons");
   const slug = (survey.title || "survei").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
