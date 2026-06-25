@@ -63,6 +63,7 @@ export function Icon({ name, size = 18 }) {
     eye: <svg {...c}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
     menu: <svg {...c}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
     back: <svg {...c}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
+    report: <svg {...c}><line x1="3" y1="21" x2="21" y2="21" /><rect x="4" y="11" width="4" height="7" /><rect x="10" y="6" width="4" height="12" /><rect x="16" y="9" width="4" height="9" /></svg>,
   };
   return I[name] || <span style={{ width: size, display: "inline-block" }} />;
 }

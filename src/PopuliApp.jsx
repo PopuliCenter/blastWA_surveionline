@@ -6,6 +6,7 @@ import Contacts from "./pages/Contacts";
 import Chat from "./pages/Chat";
 import Broadcast from "./pages/Broadcast";
 import Surveys from "./pages/Surveys";
+import Reports from "./pages/Reports";
 import AutoReply from "./pages/AutoReply";
 import AiAgent from "./pages/AiAgent";
 import WhatsAppAccount from "./pages/WhatsAppAccount";
@@ -27,6 +28,7 @@ const NAV = [
   ]},
   { group: "Survei", items: [
     { id: "surveys", label: "Survei", icon: "survey" },
+    { id: "reports", label: "Laporan", icon: "report" },
   ]},
   { group: "Otomasi", items: [
     { id: "autoreply", label: "Auto Reply", icon: "autoreply" },
@@ -150,6 +152,7 @@ export default function PopuliApp() {
     broadcast: <Broadcast />,
     story: <ComingSoon title="WA Story" icon="story" desc="Posting status/story WhatsApp Business langsung dari dashboard." features={["Jadwal story", "Story ke banyak akun"]} />,
     surveys: <Surveys />,
+    reports: <Reports />,
     autoreply: <AutoReply />,
     ai: <AiAgent />,
     leads: <ComingSoon title="Daily Leads" icon="leads" desc="Kumpulkan & kelola leads harian dari percakapan WhatsApp secara otomatis." features={["Tangkap leads dari chat", "Pipeline & status", "Ekspor ke CRM"]} />,
