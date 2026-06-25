@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Select, StatCard, Badge, Notice, Loading, Empty, useLoader, theme, Icon } from "../lib/ui";
+import { exportResponses } from "../lib/exportSurvey";
+import { PageHeader, Card, Button, Select, StatCard, Badge, Notice, Loading, Empty, useLoader, theme, Icon } from "../lib/ui";
 
 const INTERNAL = new Set(["chatResolved", "chatResolvedAt", "notes"]);
 const TYPE_LABEL = { text: "Teks", rating: "Rating", number: "Angka", choice: "Pilihan", boolean: "Ya/Tidak", image: "Gambar" };
@@ -83,7 +84,15 @@ export default function Reports() {
       {!list.length ? <Card><Empty icon="report" title="Belum ada survei" note="Buat survei dulu untuk melihat laporan." /></Card> : (
         <>
           <Card style={{ marginBottom: 16 }}>
-            <Select label="Pilih survei" value={sid} onChange={(e) => setSid(e.target.value)} options={list.map((s) => ({ value: s.id, label: `${s.title} (${s.responses} respons)` }))} />
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <Select label="Pilih survei" value={sid} onChange={(e) => setSid(e.target.value)} options={list.map((s) => ({ value: s.id, label: `${s.title} (${s.responses} respons)` }))} style={{ marginBottom: 0 }} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "xlsx")} disabled={!total}>Export Excel</Button>
+                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "csv")} disabled={!total}>CSV</Button>
+              </div>
+            </div>
           </Card>
 
           {resp.loading ? <Loading /> : !total ? (
