@@ -53,7 +53,17 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   });
   if (active) { await advanceSurvey(active.id, active.currentStep, active.survey.questions as QLite[], contact.id, phone, ev.vendor, ev); return; }
 
-  // 2) Mulai survei dari blast terkait
+  // 2) Pemicu kata kunci → mulai survei yang cocok (mis. responden ketik "isi survey")
+  const triggered = await findTriggeredSurvey(ev.text ?? "");
+  if (triggered && triggered.questions.length) {
+    await prisma.surveyResponse.create({ data: { surveyId: triggered.id, contactId: contact.id, currentStep: 0 } });
+    const first = formatQuestion(triggered.questions[0] as QLite);
+    const intro = triggered.description ? `${triggered.description}\n\n${first}` : first;
+    await reply(ev.vendor, phone, intro);
+    return;
+  }
+
+  // 3) Mulai survei dari blast terkait
   const recipient = await prisma.blastRecipient.findFirst({
     where: { contactId: contact.id, blast: { surveyId: { not: null } } },
     orderBy: { createdAt: "desc" },
@@ -65,9 +75,25 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     return;
   }
 
-  // 3) Auto Reply / Agen AI
+  // 4) Auto Reply / Agen AI
   const auto = await findAutoResponse(contact.id, ev.text ?? "");
   if (auto) await reply(ev.vendor, phone, auto);
+}
+
+// Cari survei aktif yang kata kunci pemicunya cocok dengan teks masuk.
+async function findTriggeredSurvey(text: string) {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  const surveys = await prisma.survey.findMany({
+    where: { triggerEnabled: true, status: "active" },
+    include: { questions: { orderBy: { order: "asc" } } },
+  });
+  for (const s of surveys) {
+    const kws = (s.triggerKeywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean);
+    // Cocok bila teks sama persis, mengandung kata kunci, atau kata kunci muncul sebagai kata utuh
+    if (kws.some((k) => t === k || t.includes(k))) return s;
+  }
+  return null;
 }
 
 async function advanceSurvey(responseId: string, step: number, questions: QLite[], contactId: string, phone: string, vendor: string, ev: NormalizedInbound): Promise<void> {

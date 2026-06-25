@@ -53,14 +53,16 @@ model User {
 }
 
 model Survey {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  status      SurveyStatus @default(draft)
-  createdAt   DateTime     @default(now())
-  questions   Question[]
-  blasts      Blast[]
-  responses   SurveyResponse[]
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  status          SurveyStatus @default(draft)
+  triggerEnabled  Boolean      @default(false) // mulai survei otomatis bila pesan masuk cocok kata kunci
+  triggerKeywords String[]     @default([]) // kata kunci pemicu (mis. "isi survey", "survei")
+  createdAt       DateTime     @default(now())
+  questions       Question[]
+  blasts          Blast[]
+  responses       SurveyResponse[]
 }
 
 model Question {

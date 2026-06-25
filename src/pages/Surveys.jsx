@@ -26,10 +26,13 @@ export default function Surveys() {
             <Card key={s.id}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: theme.text }}>{s.title}</div>
-                <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>{s.status}</Badge>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
+                  <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>{s.status}</Badge>
+                </div>
               </div>
               <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 6 }}>{s.description}</div>
-              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 10 }}>{s.questions.length} pertanyaan • {s.responses} respons</div>
+              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 10 }}>{s.questions.length} pertanyaan • {s.responses} respons{s.triggerEnabled && s.triggerKeywords?.length ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}` : ""}</div>
               <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                 <Button variant="secondary" size="sm" icon="survey" onClick={() => setResponsesFor(s)}>Respons ({s.responses})</Button>
                 <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>Preview</Button>
@@ -315,10 +318,23 @@ function SurveyModal({ survey, onClose, onSave }) {
   const [description, setDescription] = useState(survey?.description || "");
   const [status, setStatus] = useState(survey?.status || "draft");
   const [questions, setQuestions] = useState(() => (survey?.questions || []).map((q) => ({ ...q, required: q.required ?? true })));
+  const [triggerEnabled, setTriggerEnabled] = useState(survey?.triggerEnabled ?? false);
+  const [triggerKeywords, setTriggerKeywords] = useState(survey?.triggerKeywords || []);
+  const [kwInput, setKwInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [c, setC] = useState({ text: "", type: "text", required: true, min: 1, max: 5, choices: "" });
   const setCk = (k, v) => setC({ ...c, [k]: v });
+
+  const addKeywords = (raw) => {
+    const parts = raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    const merged = [...triggerKeywords];
+    for (const p of parts) if (!merged.some((k) => k.toLowerCase() === p.toLowerCase())) merged.push(p);
+    setTriggerKeywords(merged);
+    setKwInput("");
+  };
+  const removeKeyword = (kw) => setTriggerKeywords(triggerKeywords.filter((k) => k !== kw));
 
   const addQuestion = () => {
     if (!c.text.trim()) return;
@@ -331,7 +347,7 @@ function SurveyModal({ survey, onClose, onSave }) {
 
   const submit = async () => {
     setSaving(true);
-    try { await onSave({ title, description, status, questions: questions.map((q) => ({ text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
+    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, questions: questions.map((q) => ({ text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
     finally { setSaving(false); }
   };
 
@@ -340,6 +356,39 @@ function SurveyModal({ survey, onClose, onSave }) {
       <Input label="Judul" value={title} onChange={(e) => setTitle(e.target.value)} />
       <Textarea label="Deskripsi" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "draft", label: "Draft" }, { value: "active", label: "Aktif" }, { value: "closed", label: "Ditutup" }]} />
+
+      {/* Pemicu otomatis (bot) */}
+      <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: triggerEnabled ? 12 : 0 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: theme.text }}>Pemicu otomatis (bot)</div>
+            <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 2 }}>Survei dimulai otomatis saat pesan masuk cocok kata kunci.</div>
+          </div>
+          <Toggle checked={triggerEnabled} onChange={setTriggerEnabled} />
+        </div>
+        {triggerEnabled ? (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
+              {triggerKeywords.map((kw) => (
+                <span key={kw} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: theme.primarySoft, color: theme.primary, borderRadius: 999, padding: "4px 10px", fontSize: 12.5, fontWeight: 600 }}>
+                  {kw}
+                  <button onClick={() => removeKeyword(kw)} style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.primary, display: "flex", padding: 0 }}><Icon name="close" size={13} /></button>
+                </span>
+              ))}
+              {!triggerKeywords.length ? <span style={{ fontSize: 12, color: theme.textMuted }}>Belum ada kata kunci.</span> : null}
+            </div>
+            <input
+              value={kwInput}
+              onChange={(e) => setKwInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addKeywords(kwInput); } }}
+              onBlur={() => addKeywords(kwInput)}
+              placeholder="cth: isi survey, survei, mulai survei"
+              style={{ width: "100%", padding: "9px 12px", border: `1px solid ${theme.border}`, borderRadius: 9, fontSize: 13, outline: "none", boxSizing: "border-box", background: theme.surface }}
+            />
+            <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 5 }}>Pisahkan dengan koma (,) atau Enter. Survei harus berstatus <strong>Aktif</strong> agar pemicu berfungsi.</div>
+          </>
+        ) : null}
+      </div>
 
       <div style={{ display: "grid", gap: 7, marginBottom: 14 }}>
         {questions.map((q, i) => (
