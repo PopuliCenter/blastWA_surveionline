@@ -1,6 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+
+// Ekspor respons survei → tabel lebar (1 baris/responden, 1 kolom/pertanyaan)
+function exportResponses(survey, responses, format) {
+  const questions = (survey.questions || []).map((q) => q.text);
+  const header = ["Nomor", "Nama", "Mulai", "Selesai", "Status", ...questions];
+  const rows = responses.map((r) => {
+    const map = {};
+    (r.answers || []).forEach((a) => { map[a.question] = a.value; });
+    return [
+      r.phone,
+      r.name || "",
+      fmtDate(r.startedAt),
+      r.completedAt ? fmtDate(r.completedAt) : "",
+      r.completedAt ? "Selesai" : "Berlangsung",
+      ...questions.map((q) => map[q] ?? ""),
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  ws["!cols"] = header.map((h, i) => ({ wch: i < 5 ? Math.max(12, h.length) : Math.max(16, h.length) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Respons");
+  const slug = (survey.title || "survei").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  const base = `survei-${slug}-${responses.length}responden`;
+  if (format === "csv") XLSX.writeFile(wb, `${base}.csv`, { bookType: "csv" });
+  else XLSX.writeFile(wb, `${base}.xlsx`);
+}
 
 export default function Surveys() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
@@ -440,6 +467,13 @@ function ResponsesModal({ survey, onClose }) {
   return (
     <Modal title={`Respons: ${survey.title}`} onClose={onClose} width={760}>
       <Notice>{error}</Notice>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 13, color: theme.textMuted }}>{responses.length} responden{responses.length ? ` • ${responses.filter((r) => r.completedAt).length} selesai` : ""}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "xlsx")} disabled={!responses.length}>Export Excel</Button>
+          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "csv")} disabled={!responses.length}>CSV</Button>
+        </div>
+      </div>
       {loading ? <Loading /> : responses.length ? (
         <div style={{ display: "grid", gap: 12 }}>
           {responses.map((r) => (
