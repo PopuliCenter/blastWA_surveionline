@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 
 const questionSchema = z.object({
+  id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
   text: z.string().min(1),
   type: z.enum(["text", "rating", "number", "choice", "boolean", "image"]).default("text"),
   required: z.boolean().default(true),
@@ -49,12 +50,22 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const { questions, ...data } = parsed.data;
 
-    // Ganti pertanyaan bila dikirim
+    // Perbarui pertanyaan secara non-destruktif: pertanyaan lama di-update (id tetap →
+    // jawaban responden tidak ikut terhapus), pertanyaan baru dibuat, yang dihapus saja yang dibuang.
     if (questions) {
-      await prisma.question.deleteMany({ where: { surveyId: id } });
-      await prisma.question.createMany({
-        data: questions.map((q, i) => ({ surveyId: id, text: q.text, type: q.type, required: q.required, order: i, options: q.options ?? undefined })),
-      });
+      const existing = await prisma.question.findMany({ where: { surveyId: id }, select: { id: true } });
+      const existingIds = new Set(existing.map((e) => e.id));
+      const keepIds = new Set(questions.filter((q) => q.id && existingIds.has(q.id)).map((q) => q.id as string));
+
+      const toDelete = [...existingIds].filter((eid) => !keepIds.has(eid));
+      if (toDelete.length) await prisma.question.deleteMany({ where: { id: { in: toDelete } } });
+
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i]!;
+        const data = { text: q.text, type: q.type, required: q.required, order: i, options: q.options ?? null };
+        if (q.id && existingIds.has(q.id)) await prisma.question.update({ where: { id: q.id }, data });
+        else await prisma.question.create({ data: { surveyId: id, ...data } });
+      }
     }
     const survey = await prisma.survey.update({
       where: { id },

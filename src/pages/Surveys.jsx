@@ -347,7 +347,7 @@ function SurveyModal({ survey, onClose, onSave }) {
 
   const submit = async () => {
     setSaving(true);
-    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, questions: questions.map((q) => ({ text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
+    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, questions: questions.map((q) => ({ id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined, text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
     finally { setSaving(false); }
   };
 
