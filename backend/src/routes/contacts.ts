@@ -73,23 +73,81 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
   // === Chat / Inbox ===
 
-  // Daftar percakapan (kontak yang punya pesan + pesan terakhir)
+  // Daftar percakapan (kontak yang punya pesan) + status sesi 24 jam, belum-dibalas, selesai
+  const SESSION_MS = 24 * 60 * 60 * 1000;
   app.get("/api/conversations", async () => {
     const contacts = await prisma.contact.findMany({
       where: { messages: { some: {} } },
       include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
       take: 200,
     });
-    return contacts
-      .map((c) => ({
-        id: c.id,
-        phone: c.phone,
-        name: c.name,
-        lastMessage: c.messages[0]?.text ?? "",
-        lastDirection: c.messages[0]?.direction ?? null,
-        lastAt: c.messages[0]?.createdAt ?? c.createdAt,
-      }))
-      .sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+    const results = await Promise.all(
+      contacts.map(async (c) => {
+        const [lastInbound, lastOutbound] = await Promise.all([
+          prisma.message.findFirst({ where: { contactId: c.id, direction: "in" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+          prisma.message.findFirst({ where: { contactId: c.id, direction: "out" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+        ]);
+        // "Belum dibalas" = pesan masuk yang lebih baru dari balasan terakhir kita
+        const unread = await prisma.message.count({
+          where: { contactId: c.id, direction: "in", ...(lastOutbound ? { createdAt: { gt: lastOutbound.createdAt } } : {}) },
+        });
+        const attrs = (c.attributes as Record<string, unknown> | null) ?? {};
+        const sessionExpiresAt = lastInbound ? new Date(new Date(lastInbound.createdAt).getTime() + SESSION_MS) : null;
+        return {
+          id: c.id,
+          phone: c.phone,
+          name: c.name,
+          lastMessage: c.messages[0]?.text ?? "",
+          lastDirection: c.messages[0]?.direction ?? null,
+          lastAt: c.messages[0]?.createdAt ?? c.createdAt,
+          firstAt: c.createdAt,
+          vendor: c.messages[0]?.vendor ?? null,
+          lastInboundAt: lastInbound?.createdAt ?? null,
+          sessionExpiresAt,
+          unread,
+          resolved: attrs.chatResolved === true,
+        };
+      })
+    );
+    return results.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+  });
+
+  // Tandai percakapan selesai / buka kembali (disimpan di attributes — tanpa migrasi)
+  app.post("/api/contacts/:id/resolve", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const parsed = z.object({ resolved: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const contact = await prisma.contact.findUnique({ where: { id } });
+    if (!contact) return reply.code(404).send({ error: "kontak tidak ditemukan" });
+    const attrs = (contact.attributes as Record<string, unknown> | null) ?? {};
+    attrs.chatResolved = parsed.data.resolved;
+    attrs.chatResolvedAt = parsed.data.resolved ? new Date().toISOString() : null;
+    await prisma.contact.update({ where: { id }, data: { attributes: attrs as object } });
+    return { ok: true, resolved: parsed.data.resolved };
+  });
+
+  // Catatan internal per percakapan (disimpan di attributes.notes)
+  app.get("/api/contacts/:id/notes", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const contact = await prisma.contact.findUnique({ where: { id } });
+    if (!contact) return reply.code(404).send({ error: "kontak tidak ditemukan" });
+    const attrs = (contact.attributes as Record<string, unknown> | null) ?? {};
+    return Array.isArray(attrs.notes) ? attrs.notes : [];
+  });
+
+  app.post("/api/contacts/:id/notes", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const parsed = z.object({ text: z.string().min(1).max(2000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "catatan kosong" });
+    const contact = await prisma.contact.findUnique({ where: { id } });
+    if (!contact) return reply.code(404).send({ error: "kontak tidak ditemukan" });
+    const attrs = (contact.attributes as Record<string, unknown> | null) ?? {};
+    const notes = Array.isArray(attrs.notes) ? (attrs.notes as unknown[]) : [];
+    const note = { text: parsed.data.text, at: new Date().toISOString() };
+    notes.unshift(note);
+    attrs.notes = notes.slice(0, 100);
+    await prisma.contact.update({ where: { id }, data: { attributes: attrs as object } });
+    return reply.code(201).send(note);
   });
 
   // Riwayat pesan satu kontak

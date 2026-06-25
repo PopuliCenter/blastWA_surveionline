@@ -86,6 +86,9 @@ export const api = {
   conversations: () => request("/api/conversations"),
   contactMessages: (id) => request(`/api/contacts/${id}/messages`),
   sendMessage: (id, text) => request(`/api/contacts/${id}/messages`, { method: "POST", body: { text } }),
+  resolveConversation: (id, resolved) => request(`/api/contacts/${id}/resolve`, { method: "POST", body: { resolved } }),
+  listNotes: (id) => request(`/api/contacts/${id}/notes`),
+  addNote: (id, text) => request(`/api/contacts/${id}/notes`, { method: "POST", body: { text } }),
 
   // Auto Reply
   listAutoReplies: () => request("/api/auto-replies"),
