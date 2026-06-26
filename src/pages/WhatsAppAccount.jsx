@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "../lib/api";
 import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Toggle, useLoader, useIsMobile, theme, Icon } from "../lib/ui";
+import { TopUpGuide } from "../lib/topup";
 
 export default function WhatsAppAccount() {
   const isMobile = useIsMobile();
@@ -10,6 +11,7 @@ export default function WhatsAppAccount() {
   const [meta, setMeta] = useState({ accessToken: "", phoneNumberId: "", appSecret: "", verifyToken: "", graphVersion: "v23.0" });
   const [qontak, setQontak] = useState({ accessToken: "", channelIntegrationId: "", webhookSecret: "", baseUrl: "https://service-chat.qontak.com/api/open/v1" });
   const [guideOpen, setGuideOpen] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
   const [metaTest, setMetaTest] = useState(null); // { ok, text }
   const [testing, setTesting] = useState(false);
 
@@ -67,8 +69,10 @@ export default function WhatsAppAccount() {
           <div style={{ fontWeight: 700, fontSize: 14, color: activeReady ? theme.green : theme.yellow }}>{activeReady ? `Siap mengirim via ${activeReady.name === "meta" ? "Meta Cloud API" : "Qontak"}` : "Belum ada vendor yang siap"}</div>
           <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 2 }}>{activeReady ? "Akun terhubung & aktif. Anda bisa membuat broadcast." : "Isi kredensial salah satu vendor di bawah, lalu aktifkan. Klik “Panduan Koneksi” bila butuh langkah detail."}</div>
         </div>
+        <Button variant="secondary" size="sm" icon="invoice" onClick={() => setTopupOpen((o) => !o)}>{topupOpen ? "Tutup" : "Cara Top Up"}</Button>
       </div>
 
+      {topupOpen ? <div style={{ marginBottom: 16 }}><TopUpGuide /></div> : null}
       {guideOpen ? <SetupGuide metaCallback={metaCallback} verifyToken={meta.verifyToken} /> : null}
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
