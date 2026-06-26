@@ -28,6 +28,7 @@ export default function Surveys() {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <div style={{ fontWeight: 700, fontSize: 15.5, color: theme.text }}>{s.title}</div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  {s.mode === "flow" ? <Badge tone="blue">flow</Badge> : null}
                   {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
                   <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>{s.status}</Badge>
                 </div>
@@ -326,6 +327,10 @@ function SurveyModal({ survey, onClose, onSave }) {
   const [triggerEnabled, setTriggerEnabled] = useState(survey?.triggerEnabled ?? false);
   const [triggerKeywords, setTriggerKeywords] = useState(survey?.triggerKeywords || []);
   const [kwInput, setKwInput] = useState("");
+  const [mode, setMode] = useState(survey?.mode || "chat");
+  const [flowId, setFlowId] = useState(survey?.flowId || "");
+  const [flowCta, setFlowCta] = useState(survey?.flowCta || "Isi Survei");
+  const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [c, setC] = useState({ text: "", type: "text", required: true, min: 1, max: 5, choices: "" });
@@ -352,15 +357,37 @@ function SurveyModal({ survey, onClose, onSave }) {
 
   const submit = async () => {
     setSaving(true);
-    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, questions: questions.map((q) => ({ id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined, text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
+    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, mode, flowId: mode === "flow" ? flowId.trim() : null, flowCta: mode === "flow" ? (flowCta.trim() || "Isi Survei") : null, questions: questions.map((q) => ({ id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined, text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
     finally { setSaving(false); }
   };
 
   return (
+    <>
     <Modal title={survey ? "Edit Survei" : "Buat Survei"} onClose={onClose} width={680}>
       <Input label="Judul" value={title} onChange={(e) => setTitle(e.target.value)} />
       <Textarea label="Deskripsi" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: "draft", label: "Draft" }, { value: "active", label: "Aktif" }, { value: "closed", label: "Ditutup" }]} />
+
+      {/* Mode survei: chat vs WhatsApp Flow */}
+      <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <Select label="Mode pengisian" value={mode} onChange={(e) => setMode(e.target.value)} options={[
+          { value: "chat", label: "Chat — tanya-jawab per pesan (jalan di mana saja)" },
+          { value: "flow", label: "WhatsApp Flow — formulir native (1 layar, lebih rapi)" },
+        ]} />
+        {mode === "flow" ? (
+          <>
+            <Input label="Flow ID (dari Meta)" value={flowId} onChange={(e) => setFlowId(e.target.value)} placeholder="cth: 1234567890123456" hint="ID Flow yang sudah diterbitkan di WhatsApp Manager. Lihat langkah lewat tombol di bawah." />
+            <Input label="Teks tombol pembuka (CTA)" value={flowCta} onChange={(e) => setFlowCta(e.target.value)} placeholder="Isi Survei" />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <Button variant="secondary" size="sm" icon="download" onClick={() => survey?.id ? setFlowJsonOpen(true) : null} disabled={!survey?.id}>Lihat / Salin Flow JSON</Button>
+              {!survey?.id ? <span style={{ fontSize: 11.5, color: theme.textMuted }}>Simpan survei dulu agar Flow JSON memakai ID pertanyaan final.</span> : null}
+            </div>
+            <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+              Alur: simpan survei → salin Flow JSON → tempel di <strong>Meta WhatsApp Manager › Flows › buat Flow</strong> → terbitkan → salin <strong>Flow ID</strong> ke sini. Tipe <strong>Gambar</strong> tidak didukung di Flow (dilewati).
+            </div>
+          </>
+        ) : null}
+      </div>
 
       {/* Pemicu otomatis (bot) */}
       <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
@@ -439,6 +466,39 @@ function SurveyModal({ survey, onClose, onSave }) {
         <Button variant="ghost" onClick={onClose}>Batal</Button>
         <Button onClick={submit} disabled={!title.trim() || saving}>{saving ? "Menyimpan..." : "Simpan"}</Button>
       </div>
+    </Modal>
+    {flowJsonOpen && survey?.id ? <FlowJsonModal surveyId={survey.id} onClose={() => setFlowJsonOpen(false)} /> : null}
+    </>
+  );
+}
+
+function FlowJsonModal({ surveyId, onClose }) {
+  const { data, loading, error } = useLoader(useCallback(() => api.surveyFlowJson(surveyId), [surveyId]));
+  const [copied, setCopied] = useState(false);
+  const json = data ? JSON.stringify(data, null, 2) : "";
+  const copy = async () => { try { await navigator.clipboard.writeText(json); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } };
+  const download = () => {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "survey-flow.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <Modal title="Flow JSON untuk Meta" onClose={onClose} width={640}>
+      <Notice>{error}</Notice>
+      <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
+        Salin JSON ini → buka <strong>Meta WhatsApp Manager › Flows › Create Flow › Editor (JSON)</strong> → tempel → <strong>Publish</strong> → salin <strong>Flow ID</strong> kembali ke kolom di editor survei.
+      </div>
+      {loading ? <Loading /> : (
+        <>
+          <textarea readOnly value={json} style={{ width: "100%", height: 280, fontFamily: "monospace", fontSize: 11.5, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 9, boxSizing: "border-box", outline: "none", background: theme.surfaceAlt, color: theme.text, resize: "vertical" }} />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <Button variant="secondary" icon={copied ? "check" : "download"} onClick={copy}>{copied ? "Disalin" : "Salin JSON"}</Button>
+            <Button variant="secondary" icon="download" onClick={download}>Unduh .json</Button>
+            <Button variant="ghost" onClick={onClose}>Tutup</Button>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

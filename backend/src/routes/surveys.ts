@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { buildSurveyFlow } from "../lib/flowJson.js";
 
 const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
@@ -16,6 +17,9 @@ const surveySchema = z.object({
   status: z.enum(["draft", "active", "closed"]).default("draft"),
   triggerEnabled: z.boolean().default(false),
   triggerKeywords: z.array(z.string().min(1)).max(50).default([]),
+  mode: z.enum(["chat", "flow"]).default("chat"),
+  flowId: z.string().optional().nullable(),
+  flowCta: z.string().optional().nullable(),
   questions: z.array(questionSchema).default([]),
 });
 
@@ -73,6 +77,15 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       include: { questions: { orderBy: { order: "asc" } } },
     });
     return survey;
+  });
+
+  // Flow JSON dari survei tersimpan (untuk ditempel ke Meta Flow Builder).
+  // Dibuat dari pertanyaan tersimpan agar nama field cocok saat memetakan balasan flow.
+  app.get("/api/surveys/:id/flow-json", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const survey = await prisma.survey.findUnique({ where: { id }, include: { questions: { orderBy: { order: "asc" } } } });
+    if (!survey) return reply.code(404).send({ error: "survei tidak ditemukan" });
+    return buildSurveyFlow({ title: survey.title, description: survey.description, questions: survey.questions as any });
   });
 
   app.delete("/api/surveys/:id", async (req) => {

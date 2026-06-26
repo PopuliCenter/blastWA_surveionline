@@ -47,6 +47,7 @@ export const api = {
   updateSurvey: (id, data) => request(`/api/surveys/${id}`, { method: "PUT", body: data }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),
   surveyResponses: (id) => request(`/api/surveys/${id}/responses`),
+  surveyFlowJson: (id) => request(`/api/surveys/${id}/flow-json`),
 
   // Segments
   listSegments: () => request("/api/segments"),

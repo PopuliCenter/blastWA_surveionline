@@ -59,6 +59,9 @@ model Survey {
   status          SurveyStatus @default(draft)
   triggerEnabled  Boolean      @default(false) // mulai survei otomatis bila pesan masuk cocok kata kunci
   triggerKeywords String[]     @default([]) // kata kunci pemicu (mis. "isi survey", "survei")
+  mode            String       @default("chat") // chat (tanya-jawab per pesan) | flow (formulir WhatsApp Flow)
+  flowId          String? // ID Flow terbit di Meta (mode flow)
+  flowCta         String? // label tombol pembuka flow (mis. "Isi Survei")
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]

@@ -3,6 +3,7 @@ import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
 import { findAutoResponse } from "./autoResponder.js";
+import { parseFlowAnswers } from "../lib/flowJson.js";
 
 // Mesin survei berbasis chat dengan tipe pertanyaan kaya:
 // text | rating (min-max) | number | choice (pilihan ganda) | boolean (ya/tidak) | image
@@ -42,10 +43,13 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   const phone = normalizePhone(ev.from);
   const contact = await prisma.contact.upsert({ where: { phone }, update: {}, create: { phone } });
 
-  const storedText = ev.text ?? (ev.mediaType ? `[${ev.mediaType}]` : null);
+  const storedText = ev.interactiveType === "nfm_reply" ? "[formulir survei terkirim]" : (ev.text ?? (ev.mediaType ? `[${ev.mediaType}]` : null));
   await prisma.message.create({
     data: { contactId: contact.id, direction: "in", vendor: ev.vendor, vendorMessageId: ev.messageId, text: storedText, payload: ev.raw as object },
   });
+
+  // Balasan WhatsApp Flow (formulir terkirim) → simpan jawaban & selesaikan survei
+  if (ev.interactiveType === "nfm_reply" && ev.flowResponse) { await handleFlowReply(ev, contact.id, phone, ev.vendor); return; }
 
   const lc = (ev.text ?? "").trim().toLowerCase();
 
@@ -71,15 +75,16 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     orderBy: { startedAt: "desc" },
     include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } },
   });
-  if (active) { await advanceSurvey(active.id, active.currentStep, active.survey.questions as QLite[], contact.id, phone, ev.vendor, ev); return; }
+  if (active) {
+    if (active.survey.mode === "flow") return; // menunggu pengisian formulir flow, abaikan teks
+    await advanceSurvey(active.id, active.currentStep, active.survey.questions as QLite[], contact.id, phone, ev.vendor, ev);
+    return;
+  }
 
   // 2) Pemicu kata kunci → mulai survei yang cocok (mis. responden ketik "isi survey")
   const triggered = await findTriggeredSurvey(ev.text ?? "");
   if (triggered && triggered.questions.length) {
-    await prisma.surveyResponse.create({ data: { surveyId: triggered.id, contactId: contact.id, currentStep: 0 } });
-    const first = formatQuestion(triggered.questions[0] as QLite);
-    const intro = triggered.description ? `${triggered.description}\n\n${first}` : first;
-    await reply(ev.vendor, phone, intro);
+    await startSurvey(triggered, contact.id, phone, ev.vendor);
     return;
   }
 
@@ -90,8 +95,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
   if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
-    await prisma.surveyResponse.create({ data: { surveyId: recipient.blast.survey.id, contactId: contact.id, blastId: recipient.blastId, currentStep: 0 } });
-    await reply(ev.vendor, phone, formatQuestion(recipient.blast.survey.questions[0] as QLite));
+    await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
     return;
   }
 
@@ -114,6 +118,48 @@ async function findTriggeredSurvey(text: string) {
     if (kws.some((k) => t === k || t.includes(k))) return s;
   }
   return null;
+}
+
+type SurveyLite = { id: string; title: string; description: string | null; mode: string; flowId: string | null; flowCta: string | null; questions: QLite[] };
+
+// Mulai survei: mode flow → kirim formulir WhatsApp Flow; selain itu → chat per pesan.
+async function startSurvey(survey: SurveyLite, contactId: string, phone: string, vendor: string, blastId?: string): Promise<void> {
+  const provider = getProvider(vendor);
+  if (survey.mode === "flow" && survey.flowId && typeof provider.sendFlow === "function") {
+    const resp = await prisma.surveyResponse.create({ data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) } });
+    const body = survey.description ? `${survey.title}\n\n${survey.description}` : survey.title;
+    const result = await provider.sendFlow({ to: phone, flowId: survey.flowId, flowToken: `resp_${resp.id}`, cta: survey.flowCta || "Isi Survei", bodyText: body, screen: "SURVEY" });
+    await prisma.message.create({ data: { contactId, direction: "out", vendor, vendorMessageId: result.vendorMessageId || null, text: `[flow] ${survey.title}`, payload: result.raw as object } });
+    return;
+  }
+  // Fallback / mode chat
+  await prisma.surveyResponse.create({ data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) } });
+  const first = formatQuestion(survey.questions[0]!);
+  const intro = survey.description ? `${survey.description}\n\n${first}` : first;
+  await reply(vendor, phone, intro);
+}
+
+// Terima balasan WhatsApp Flow (response_json) → simpan jawaban & tandai selesai.
+async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: string, vendor: string): Promise<void> {
+  const resp = ev.flowResponse ?? {};
+  const token = String((resp as any).flow_token ?? "");
+  const responseId = token.startsWith("resp_") ? token.slice(5) : "";
+  let surveyResponse = responseId
+    ? await prisma.surveyResponse.findUnique({ where: { id: responseId }, include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } })
+    : null;
+  if (!surveyResponse || surveyResponse.contactId !== contactId) {
+    surveyResponse = await prisma.surveyResponse.findFirst({
+      where: { contactId, completedAt: null, survey: { mode: "flow" } },
+      orderBy: { startedAt: "desc" },
+      include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } },
+    });
+  }
+  if (!surveyResponse) return;
+  if (surveyResponse.completedAt) return; // sudah pernah diproses
+  const answers = parseFlowAnswers(resp as Record<string, unknown>, surveyResponse.survey.questions as QLite[]);
+  for (const a of answers) await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
+  await prisma.surveyResponse.update({ where: { id: surveyResponse.id }, data: { completedAt: new Date(), currentStep: surveyResponse.survey.questions.length } });
+  await reply(vendor, phone, "Terima kasih, jawaban survei Anda sudah kami terima. 🙏");
 }
 
 async function advanceSurvey(responseId: string, step: number, questions: QLite[], contactId: string, phone: string, vendor: string, ev: NormalizedInbound): Promise<void> {

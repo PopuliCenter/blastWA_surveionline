@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type {
   MessagingProvider,
   NormalizedInbound,
+  SendFlowInput,
   SendResult,
   SendTemplateInput,
   WebhookRequest,
@@ -91,6 +92,31 @@ export class MetaCloudAdapter implements MessagingProvider {
     });
   }
 
+  // Kirim pesan interaktif WhatsApp Flow (formulir native). Hanya valid dalam sesi 24 jam.
+  async sendFlow(input: SendFlowInput): Promise<SendResult> {
+    return this.post({
+      messaging_product: "whatsapp",
+      to: input.to,
+      type: "interactive",
+      interactive: {
+        type: "flow",
+        ...(input.headerText ? { header: { type: "text", text: input.headerText } } : {}),
+        body: { text: input.bodyText },
+        action: {
+          name: "flow",
+          parameters: {
+            flow_message_version: "3",
+            flow_token: input.flowToken,
+            flow_id: input.flowId,
+            flow_cta: input.cta,
+            flow_action: "navigate",
+            flow_action_payload: { screen: input.screen || "SURVEY" },
+          },
+        },
+      },
+    });
+  }
+
   verifyWebhook(req: WebhookRequest): boolean | string {
     // GET challenge dari Meta
     const mode = req.query["hub.mode"];
@@ -126,6 +152,26 @@ export class MetaCloudAdapter implements MessagingProvider {
         const value = change?.value ?? {};
 
         for (const msg of value?.messages ?? []) {
+          // Balasan WhatsApp Flow (form terkirim) → parse response_json
+          const nfm = msg?.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : null;
+          let flowResponse: Record<string, unknown> | undefined;
+          if (nfm?.response_json) {
+            try { flowResponse = JSON.parse(nfm.response_json); } catch { flowResponse = undefined; }
+          }
+          if (flowResponse) {
+            out.push({
+              vendor: this.name,
+              kind: "message",
+              from: msg?.from,
+              interactiveType: "nfm_reply",
+              flowResponse,
+              messageId: msg?.id,
+              timestamp: tsFromUnix(msg?.timestamp),
+              raw: msg,
+            });
+            continue;
+          }
+
           const media =
             msg?.image ?? msg?.audio ?? msg?.video ?? msg?.document ?? msg?.sticker;
           const mediaType = msg?.image

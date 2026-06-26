@@ -19,6 +19,8 @@ export type NormalizedInbound = {
   messageId?: string;
   refMessageId?: string; // id pesan outbound yang statusnya diupdate
   deliveryStatus?: DeliveryStatus;
+  interactiveType?: string; // mis. "nfm_reply" (balasan WhatsApp Flow)
+  flowResponse?: Record<string, unknown>; // isi response_json flow (sudah diparse)
   timestamp: string; // ISO 8601
   raw: unknown;
 };
@@ -37,6 +39,16 @@ export interface SendTemplateInput {
   bodyParams?: string[];
 }
 
+export interface SendFlowInput {
+  to: string;
+  flowId: string;
+  flowToken: string; // dikembalikan di response_json untuk korelasi
+  cta: string; // label tombol pembuka flow
+  bodyText: string;
+  headerText?: string;
+  screen?: string; // id layar awal (default "SURVEY")
+}
+
 export interface MessagingProvider {
   readonly name: string;
 
@@ -45,6 +57,8 @@ export interface MessagingProvider {
 
   sendTemplate(input: SendTemplateInput): Promise<SendResult>;
   sendText(input: { to: string; text: string }): Promise<SendResult>;
+  /** Kirim pesan interaktif WhatsApp Flow (opsional; hanya vendor yang mendukung). */
+  sendFlow?(input: SendFlowInput): Promise<SendResult>;
 
   /**
    * Verifikasi webhook.
