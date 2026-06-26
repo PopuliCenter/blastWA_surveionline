@@ -80,6 +80,7 @@ export default function Broadcast() {
 function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const [f, setF] = useState({ surveyId: "", segmentId: segments[0]?.id || "", vendor: "meta", templateId: "", templateName: "", templateLang: "en_US", bodyParams: "", messageText: "", schedule: "" });
   const [saving, setSaving] = useState(false);
+  const [rates] = useState(loadRates);
   const set = (k, v) => setF({ ...f, [k]: v });
 
   const pickTemplate = (id) => {
@@ -89,6 +90,13 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     setF({ ...f, templateId: id, templateName: t.name, templateLang: t.language || "id", bodyParams: (t.sampleParams || []).join(", "), messageText: preview });
   };
   const selectedTpl = templates.find((x) => x.id === f.templateId);
+
+  // Perkiraan biaya = jumlah kontak segmen × tarif kategori template (atau asumsi Marketing)
+  const seg = segments.find((s) => s.id === f.segmentId);
+  const recipients = seg?.contacts.length || 0;
+  const catKey = (selectedTpl?.category || "MARKETING").toLowerCase();
+  const estRate = rates[catKey] || 0;
+  const estTotal = recipients * estRate;
 
   const submit = async () => {
     setSaving(true);
@@ -108,6 +116,14 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
       <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel" />
       <Textarea label="Preview Pesan (audit)" value={f.messageText} onChange={(e) => set("messageText", e.target.value)} />
       <Input label="Jadwal (opsional)" type="datetime-local" value={f.schedule} onChange={(e) => set("schedule", e.target.value)} />
+
+      {recipients > 0 ? (
+        <div style={{ background: theme.primarySoft, borderRadius: 10, padding: "11px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 12.5, color: theme.textMuted }}>Perkiraan biaya <span style={{ textTransform: "capitalize", color: theme.primary, fontWeight: 600 }}>{catKey}</span>{!selectedTpl ? " (asumsi)" : ""}<br />{recipients.toLocaleString("id-ID")} penerima × {rupiah(estRate)}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: theme.primary }}>{rupiah(estTotal)}</div>
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Button variant="ghost" onClick={onClose}>Batal</Button>
         <Button icon="send" onClick={submit} disabled={!f.segmentId || !f.templateName.trim() || saving}>{saving ? "Mengirim..." : "Kirim Blast"}</Button>
