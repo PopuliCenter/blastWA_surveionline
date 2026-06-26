@@ -61,6 +61,8 @@ export function Icon({ name, size = 18 }) {
     upload: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
     download: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
     eye: <svg {...c}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
+    eyeOff: <svg {...c}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>,
+    sidebar: <svg {...c}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></svg>,
     menu: <svg {...c}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
     back: <svg {...c}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
     report: <svg {...c}><line x1="3" y1="21" x2="21" y2="21" /><rect x="4" y="11" width="4" height="7" /><rect x="10" y="6" width="4" height="12" /><rect x="16" y="9" width="4" height="9" /></svg>,
@@ -123,6 +125,20 @@ const inputStyle = (error) => ({
 export function Input({ label, error, hint, ...props }) {
   return <Field label={label} error={error} hint={hint}><input {...props} style={{ ...inputStyle(error), ...(props.style || {}) }} /></Field>;
 }
+// Input rahasia dengan tombol lihat/sembunyikan
+export function PasswordInput({ label, error, hint, ...props }) {
+  const [show, setShow] = useState(false);
+  return (
+    <Field label={label} error={error} hint={hint}>
+      <div style={{ position: "relative" }}>
+        <input {...props} type={show ? "text" : "password"} style={{ ...inputStyle(error), paddingRight: 42, ...(props.style || {}) }} />
+        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Sembunyikan" : "Tampilkan"} title={show ? "Sembunyikan" : "Tampilkan"} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex", padding: 5 }}>
+          <Icon name={show ? "eyeOff" : "eye"} size={17} />
+        </button>
+      </div>
+    </Field>
+  );
+}
 export function Textarea({ label, error, hint, ...props }) {
   return <Field label={label} error={error} hint={hint}><textarea {...props} style={{ ...inputStyle(error), minHeight: 92, resize: "vertical", ...(props.style || {}) }} /></Field>;
 }
@@ -144,6 +160,20 @@ export function Toggle({ checked, onChange, label }) {
       </span>
       {label ? <span style={{ fontSize: 13, color: theme.text }}>{label}</span> : null}
     </label>
+  );
+}
+
+// Segmented control / tab bar konsisten
+export function Tabs({ tabs, active, onChange, style }) {
+  return (
+    <div style={{ display: "inline-flex", gap: 4, background: theme.surfaceAlt, padding: 4, borderRadius: 11, flexWrap: "wrap", ...style }}>
+      {tabs.map((t) => {
+        const on = active === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)} style={{ padding: "7px 15px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: on ? theme.surface : "transparent", color: on ? theme.primary : theme.textMuted, boxShadow: on ? "0 1px 2px rgba(16,24,40,0.10)" : "none", transition: "all .15s" }}>{t.label}</button>
+        );
+      })}
+    </div>
   );
 }
 

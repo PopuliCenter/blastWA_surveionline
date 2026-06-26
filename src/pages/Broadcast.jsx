@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, Tabs, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
 import { TopUpGuide } from "../lib/topup";
 
@@ -17,10 +17,6 @@ export default function Broadcast() {
 
   const run = async (fn, reloaders = []) => { setErr(""); try { await fn(); await Promise.all(reloaders.map((r) => r())); } catch (e) { setErr(e.message); } };
 
-  const Tab = ({ id, children }) => (
-    <button onClick={() => setTab(id)} style={{ padding: "8px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: tab === id ? theme.primary : "transparent", color: tab === id ? "#fff" : theme.textMuted }}>{children}</button>
-  );
-
   return (
     <div>
       <PageHeader title="Broadcast" subtitle="Kirim pesan/survei ke segmen kontak." actions={[
@@ -30,7 +26,7 @@ export default function Broadcast() {
       ]} />
       <Notice>{err || blasts.error || segments.error}</Notice>
       <Notice kind="success">{note}</Notice>
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}><Tab id="blasts">Riwayat Blast</Tab><Tab id="segments">Segmen</Tab><Tab id="cost">Simulasi Biaya</Tab></div>
+      <Tabs active={tab} onChange={setTab} style={{ marginBottom: 16 }} tabs={[{ id: "blasts", label: "Riwayat Blast" }, { id: "segments", label: "Segmen" }, { id: "cost", label: "Simulasi Biaya" }]} />
 
       {tab === "cost" ? (
         <CostSimulator segments={segments.data || []} />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
-import { theme, fontStack, card, Icon, Button, Input, Loading, useIsMobile } from "./lib/ui";
+import { theme, fontStack, card, Icon, Button, Input, PasswordInput, Loading, useIsMobile } from "./lib/ui";
 import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import Chat from "./pages/Chat";
@@ -66,7 +66,7 @@ function LoginPage({ onLogin }) {
         </div>
         <div onKeyDown={(e) => e.key === "Enter" && !loading && username && password && handleLogin()}>
           <Input label="Username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Masukkan username" />
-          <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password" error={error} />
+          <PasswordInput label="Password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password" error={error} />
         </div>
         <Button onClick={handleLogin} disabled={loading || !username || !password} style={{ width: "100%" }}>{loading ? "Memverifikasi..." : "Masuk"}</Button>
         <div style={{ marginTop: 14, fontSize: 12, color: theme.textMuted, textAlign: "center" }}>Default: <strong style={{ color: theme.text }}>populi / populi13!</strong></div>
@@ -75,32 +75,38 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose }) {
+function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, collapsed, onToggleCollapse }) {
+  const mini = !mobile && collapsed;
   const asideStyle = mobile
     ? { width: "100%", background: theme.surface, padding: "16px 14px", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: "100vh" }
-    : { width: 250, background: theme.surface, borderRight: `1px solid ${theme.border}`, padding: "18px 14px", position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", overflowY: "auto", display: "flex", flexDirection: "column" };
+    : { width: mini ? 74 : 250, background: theme.surface, borderRight: `1px solid ${theme.border}`, padding: mini ? "18px 10px" : "18px 14px", position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", transition: "width .16s ease" };
   return (
     <aside style={asideStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px 18px" }}>
-        <img src="/logopopuli.png" alt="Populi" style={{ height: 30, objectFit: "contain" }} />
-        <div style={{ fontWeight: 800, fontSize: 16, color: theme.text }}>Populi</div>
-        {mobile ? <button onClick={onClose} aria-label="Tutup menu" style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="close" size={22} /></button> : null}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: mini ? "0 0 16px" : "0 8px 18px", justifyContent: mini ? "center" : "flex-start" }}>
+        {!mini ? <img src="/logopopuli.png" alt="Populi" style={{ height: 30, objectFit: "contain" }} /> : null}
+        {!mini && !mobile ? <div style={{ fontWeight: 800, fontSize: 16, color: theme.text }}>Populi</div> : null}
+        {mobile ? <>
+          <div style={{ fontWeight: 800, fontSize: 16, color: theme.text }}>Populi</div>
+          <button onClick={onClose} aria-label="Tutup menu" style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="close" size={22} /></button>
+        </> : null}
+        {!mobile ? <button onClick={onToggleCollapse} aria-label={mini ? "Buka sidebar" : "Tutup sidebar"} title={mini ? "Buka sidebar" : "Tutup sidebar"} style={{ marginLeft: mini ? 0 : "auto", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex", padding: 2 }}><Icon name="sidebar" size={20} /></button> : null}
       </div>
       <nav style={{ flex: 1 }}>
         {NAV.map((sec) => {
           const items = sec.items.filter((it) => !it.superadmin || currentUser.role === "superadmin");
           if (!items.length) return null;
           return (
-            <div key={sec.group} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: theme.textMuted, padding: "0 10px 7px" }}>{sec.group}</div>
+            <div key={sec.group} style={{ marginBottom: mini ? 8 : 14 }}>
+              {!mini ? <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: theme.textMuted, padding: "0 10px 7px" }}>{sec.group}</div> : <div style={{ height: 1, background: theme.border, margin: "0 6px 8px" }} />}
               <div style={{ display: "grid", gap: 2 }}>
                 {items.map((it) => {
                   const on = active === it.id;
                   return (
-                    <button key={it.id} onClick={() => setActive(it.id)} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 10px", borderRadius: 9, border: "none", background: on ? theme.primarySoft : "transparent", color: on ? theme.primary : theme.text, fontWeight: on ? 600 : 500, fontSize: 13.5, textAlign: "left", cursor: "pointer" }}>
+                    <button key={it.id} onClick={() => setActive(it.id)} title={mini ? it.label : undefined} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: mini ? "11px 0" : "9px 10px", borderRadius: 9, border: "none", background: on ? theme.primarySoft : "transparent", color: on ? theme.primary : theme.text, fontWeight: on ? 600 : 500, fontSize: 13.5, textAlign: "left", cursor: "pointer", justifyContent: mini ? "center" : "flex-start", position: "relative" }}>
                       <Icon name={it.icon} size={18} />
-                      <span style={{ flex: 1 }}>{it.label}</span>
-                      {it.soon ? <span style={{ fontSize: 9.5, color: theme.yellow, background: theme.yellowSoft, padding: "2px 6px", borderRadius: 6, fontWeight: 700 }}>SOON</span> : null}
+                      {!mini ? <span style={{ flex: 1 }}>{it.label}</span> : null}
+                      {!mini && it.soon ? <span style={{ fontSize: 9.5, color: theme.yellow, background: theme.yellowSoft, padding: "2px 6px", borderRadius: 6, fontWeight: 700 }}>SOON</span> : null}
+                      {mini && it.soon ? <span style={{ position: "absolute", top: 6, right: 12, width: 6, height: 6, borderRadius: "50%", background: theme.yellow }} /> : null}
                     </button>
                   );
                 })}
@@ -109,12 +115,12 @@ function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose }) 
           );
         })}
       </nav>
-      <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{(currentUser.name || currentUser.username || "?").slice(0, 1).toUpperCase()}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, display: "flex", alignItems: "center", gap: 10, flexDirection: mini ? "column" : "row" }}>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: theme.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flexShrink: 0 }}>{(currentUser.name || currentUser.username || "?").slice(0, 1).toUpperCase()}</div>
+        {!mini ? <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name || currentUser.username}</div>
           <div style={{ fontSize: 11.5, color: theme.textMuted }}>{currentUser.role}</div>
-        </div>
+        </div> : null}
         <button onClick={onLogout} title="Keluar" style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="logout" size={18} /></button>
       </div>
     </aside>
@@ -124,9 +130,13 @@ function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose }) 
 export default function PopuliApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [active, setActive] = useState("dashboard");
+  const [active, setActive] = useState(() => localStorage.getItem("populi.activePage") || "dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("populi.sidebarCollapsed") === "1");
   const isMobile = useIsMobile();
+
+  useEffect(() => { localStorage.setItem("populi.activePage", active); }, [active]);
+  useEffect(() => { localStorage.setItem("populi.sidebarCollapsed", collapsed ? "1" : "0"); }, [collapsed]);
 
   useEffect(() => {
     if (!getToken()) { setAuthReady(true); return; }
@@ -192,7 +202,7 @@ export default function PopuliApp() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
-      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} />
+      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} />
       <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>{pages[active] || pages.dashboard}</main>
     </div>
   );

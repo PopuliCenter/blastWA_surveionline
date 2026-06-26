@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, apiBase } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Toggle, useLoader, useIsMobile, theme, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, PasswordInput, Notice, Loading, Toggle, useLoader, useIsMobile, theme, Icon } from "../lib/ui";
 import { TopUpGuide } from "../lib/topup";
 
 export default function WhatsAppAccount() {
@@ -78,10 +78,10 @@ export default function WhatsAppAccount() {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
         <Card title="Meta Cloud API" actions={<Status v={vmeta} />}>
           <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12 }}>Jalur resmi WhatsApp. Cocok untuk broadcast template & survei. <span style={{ color: theme.primary, cursor: "pointer", fontWeight: 600 }} onClick={() => setGuideOpen(true)}>Lihat langkahnya →</span></div>
-          <Input label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} hint="Meta Business › System Users › Generate token (akses WhatsApp). Pakai token permanen." />
+          <PasswordInput label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} hint="Meta Business › System Users › Generate token (akses WhatsApp). Pakai token permanen." />
           <Input label="Phone Number ID" value={meta.phoneNumberId} onChange={(e) => setMeta({ ...meta, phoneNumberId: e.target.value })} hint="WhatsApp Manager › API Setup › di bawah nomor Anda." />
-          <Input label="App Secret" value={meta.appSecret} onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })} hint="Meta for Developers › App › Settings › Basic › App Secret. Untuk verifikasi webhook." />
-          <Input label="Webhook Verify Token" value={meta.verifyToken} onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })} hint="Buat sendiri (bebas). Isikan sama persis di kolom Verify Token milik Meta." />
+          <PasswordInput label="App Secret" value={meta.appSecret} onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })} hint="Meta for Developers › App › Settings › Basic › App Secret. Untuk verifikasi webhook." />
+          <PasswordInput label="Webhook Verify Token" value={meta.verifyToken} onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })} hint="Buat sendiri (bebas). Isikan sama persis di kolom Verify Token milik Meta." />
           <Input label="Graph API Version" value={meta.graphVersion} onChange={(e) => setMeta({ ...meta, graphVersion: e.target.value })} hint="Default v23.0 — biarkan bila ragu." />
           <CopyField label="Callback URL (untuk webhook Meta)" value={metaCallback} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
@@ -94,9 +94,9 @@ export default function WhatsAppAccount() {
 
         <Card title="Mekari Qontak" actions={<Status v={vqontak} />}>
           <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12 }}>Alternatif via partner resmi (BSP). Cocok bila Anda sudah berlangganan Qontak.</div>
-          <Input label="Access Token" value={qontak.accessToken} onChange={(e) => setQontak({ ...qontak, accessToken: e.target.value })} placeholder={vqontak?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : ""} hint="Qontak › Pengaturan › API / Integrasi." />
+          <PasswordInput label="Access Token" value={qontak.accessToken} onChange={(e) => setQontak({ ...qontak, accessToken: e.target.value })} placeholder={vqontak?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : ""} hint="Qontak › Pengaturan › API / Integrasi." />
           <Input label="Channel Integration ID" value={qontak.channelIntegrationId} onChange={(e) => setQontak({ ...qontak, channelIntegrationId: e.target.value })} hint="ID channel WhatsApp di akun Qontak Anda." />
-          <Input label="Webhook Secret" value={qontak.webhookSecret} onChange={(e) => setQontak({ ...qontak, webhookSecret: e.target.value })} hint="Untuk verifikasi pesan masuk dari Qontak." />
+          <PasswordInput label="Webhook Secret" value={qontak.webhookSecret} onChange={(e) => setQontak({ ...qontak, webhookSecret: e.target.value })} hint="Untuk verifikasi pesan masuk dari Qontak." />
           <Input label="Base URL" value={qontak.baseUrl} onChange={(e) => setQontak({ ...qontak, baseUrl: e.target.value })} hint="Biarkan default kecuali diarahkan lain." />
           <CopyField label="Callback URL (untuk webhook Qontak)" value={qontakCallback} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
