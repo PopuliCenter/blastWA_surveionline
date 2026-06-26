@@ -53,6 +53,10 @@ export default function Surveys() {
 }
 
 const TYPE_LABEL = { text: "Teks", rating: "Rating", number: "Angka", choice: "Pilihan", boolean: "Ya/Tidak", image: "Gambar" };
+const QTYPE_OPTIONS = [
+  { value: "text", label: "Teks bebas" }, { value: "rating", label: "Rating (skala angka)" }, { value: "number", label: "Angka" },
+  { value: "choice", label: "Pilihan ganda" }, { value: "boolean", label: "Ya / Tidak" }, { value: "image", label: "Gambar / foto" },
+];
 
 function qSummary(q) {
   if (q.type === "rating") return `skala ${q.options?.min ?? 1}-${q.options?.max ?? 5}`;
@@ -392,16 +396,23 @@ function SurveyModal({ survey, onClose, onSave }) {
       </div>
 
       <div style={{ display: "grid", gap: 7, marginBottom: 14 }}>
+        {questions.length ? <div style={{ fontSize: 11.5, color: theme.textMuted, fontWeight: 600 }}>{questions.length} pertanyaan — klik ikon pensil untuk mengedit.</div> : null}
         {questions.map((q, i) => (
-          <div key={q.id || i} style={{ background: theme.surfaceAlt, borderRadius: 9, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-            <div style={{ fontSize: 13, color: theme.text }}>
-              {i + 1}. {q.text}
-              <span style={{ marginLeft: 8 }}><Badge tone="blue">{TYPE_LABEL[q.type] || q.type}</Badge></span>
-              {qSummary(q) ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>{qSummary(q)}</span> : null}
-              {!q.required ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>• opsional</span> : null}
-            </div>
-            <Button variant="danger" size="sm" icon="trash" onClick={() => setQuestions(questions.filter((_, j) => j !== i))} />
-          </div>
+          <QuestionItem
+            key={q.id || i}
+            q={q}
+            index={i}
+            total={questions.length}
+            onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
+            onDelete={() => setQuestions(questions.filter((_, j) => j !== i))}
+            onMove={(dir) => {
+              const j = i + dir;
+              if (j < 0 || j >= questions.length) return;
+              const arr = [...questions];
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+              setQuestions(arr);
+            }}
+          />
         ))}
       </div>
 
@@ -409,10 +420,7 @@ function SurveyModal({ survey, onClose, onSave }) {
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: theme.text }}>Tambah Pertanyaan</div>
         <Input label="Teks pertanyaan" value={c.text} onChange={(e) => setCk("text", e.target.value)} placeholder="cth: Seberapa puas Anda?" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
-          <Select label="Tipe jawaban" value={c.type} onChange={(e) => setCk("type", e.target.value)} options={[
-            { value: "text", label: "Teks bebas" }, { value: "rating", label: "Rating (skala angka)" }, { value: "number", label: "Angka" },
-            { value: "choice", label: "Pilihan ganda" }, { value: "boolean", label: "Ya / Tidak" }, { value: "image", label: "Gambar / foto" },
-          ]} />
+          <Select label="Tipe jawaban" value={c.type} onChange={(e) => setCk("type", e.target.value)} options={QTYPE_OPTIONS} />
           <div style={{ marginBottom: 14 }}><Toggle checked={c.required} onChange={(v) => setCk("required", v)} label="Wajib" /></div>
         </div>
         {c.type === "rating" ? (
@@ -432,6 +440,67 @@ function SurveyModal({ survey, onClose, onSave }) {
         <Button onClick={submit} disabled={!title.trim() || saving}>{saving ? "Menyimpan..." : "Simpan"}</Button>
       </div>
     </Modal>
+  );
+}
+
+// Satu pertanyaan: mode lihat (bisa naik/turun, edit, hapus) & mode edit inline.
+function QuestionItem({ q, index, total, onChange, onDelete, onMove }) {
+  const [editing, setEditing] = useState(false);
+  const [d, setD] = useState(null);
+  const setDk = (k, v) => setD((p) => ({ ...p, [k]: v }));
+
+  const startEdit = () => {
+    setD({ text: q.text || "", type: q.type || "text", required: q.required ?? true, min: q.options?.min ?? 1, max: q.options?.max ?? 5, choices: (q.options?.choices || []).join("\n") });
+    setEditing(true);
+  };
+  const saveEdit = () => {
+    let options;
+    if (d.type === "rating") options = { min: Number(d.min) || 1, max: Number(d.max) || 5 };
+    if (d.type === "choice") options = { choices: d.choices.split(/[\n,]/).map((s) => s.trim()).filter(Boolean) };
+    onChange({ ...q, text: d.text.trim(), type: d.type, required: d.required, options });
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div style={{ background: theme.surface, border: `1.5px solid ${theme.primary}`, borderRadius: 9, padding: 12 }}>
+        <Input label={`Pertanyaan ${index + 1}`} value={d.text} onChange={(e) => setDk("text", e.target.value)} placeholder="Teks pertanyaan" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
+          <Select label="Tipe jawaban" value={d.type} onChange={(e) => setDk("type", e.target.value)} options={QTYPE_OPTIONS} />
+          <div style={{ marginBottom: 14 }}><Toggle checked={d.required} onChange={(v) => setDk("required", v)} label="Wajib" /></div>
+        </div>
+        {d.type === "rating" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Input label="Nilai minimum" type="number" value={d.min} onChange={(e) => setDk("min", e.target.value)} />
+            <Input label="Nilai maksimum" type="number" value={d.max} onChange={(e) => setDk("max", e.target.value)} />
+          </div>
+        ) : null}
+        {d.type === "choice" ? (
+          <Textarea label="Pilihan (satu per baris atau pisah koma)" value={d.choices} onChange={(e) => setDk("choices", e.target.value)} placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"} />
+        ) : null}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Batal</Button>
+          <Button size="sm" icon="check" onClick={saveEdit} disabled={!d.text.trim()}>Simpan Pertanyaan</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: "10px 12px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+      <div style={{ fontSize: 13, color: theme.text, minWidth: 0 }}>
+        {index + 1}. {q.text}
+        <span style={{ marginLeft: 8 }}><Badge tone="blue">{TYPE_LABEL[q.type] || q.type}</Badge></span>
+        {qSummary(q) ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>{qSummary(q)}</span> : null}
+        {!q.required ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>• opsional</span> : null}
+      </div>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+        <Button variant="ghost" size="sm" icon="up" onClick={() => onMove(-1)} disabled={index === 0} title="Naikkan" />
+        <Button variant="ghost" size="sm" icon="down" onClick={() => onMove(1)} disabled={index === total - 1} title="Turunkan" />
+        <Button variant="secondary" size="sm" icon="edit" onClick={startEdit} title="Edit" />
+        <Button variant="danger" size="sm" icon="trash" onClick={onDelete} title="Hapus" />
+      </div>
+    </div>
   );
 }
 
