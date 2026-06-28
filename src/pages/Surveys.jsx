@@ -567,14 +567,18 @@ function QuestionItem({ q, index, total, onChange, onDelete, onMove }) {
 function ResponsesModal({ survey, onClose }) {
   const { data, loading, error } = useLoader(useCallback(() => api.surveyResponses(survey.id), [survey.id]));
   const responses = data || [];
+  const [upper, setUpper] = useState(false);
   return (
     <Modal title={`Respons: ${survey.title}`} onClose={onClose} width={760}>
       <Notice>{error}</Notice>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, color: theme.textMuted }}>{responses.length} responden{responses.length ? ` • ${responses.filter((r) => r.completedAt).length} selesai` : ""}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "xlsx")} disabled={!responses.length}>Export Excel</Button>
-          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "csv")} disabled={!responses.length}>CSV</Button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: theme.textMuted, cursor: "pointer" }} title="Ubah semua nilai jadi huruf kapital saat ekspor">
+            <input type="checkbox" checked={upper} onChange={(e) => setUpper(e.target.checked)} /> HURUF KAPITAL
+          </label>
+          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "xlsx", { upper })} disabled={!responses.length}>Export Excel</Button>
+          <Button variant="secondary" size="sm" icon="download" onClick={() => exportResponses(survey, responses, "csv", { upper })} disabled={!responses.length}>CSV</Button>
         </div>
       </div>
       {loading ? <Loading /> : responses.length ? (

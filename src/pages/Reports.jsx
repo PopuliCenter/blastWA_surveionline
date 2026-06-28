@@ -31,6 +31,7 @@ function BarRow({ label, count, total, color }) {
 export default function Reports() {
   const surveys = useLoader(useCallback(() => api.listSurveys(), []));
   const [sid, setSid] = useState("");
+  const [upper, setUpper] = useState(false);
   const list = surveys.data || [];
   const survey = list.find((s) => s.id === sid) || null;
 
@@ -88,9 +89,12 @@ export default function Reports() {
               <div style={{ flex: 1, minWidth: 220 }}>
                 <Select label="Pilih survei" value={sid} onChange={(e) => setSid(e.target.value)} options={list.map((s) => ({ value: s.id, label: `${s.title} (${s.responses} respons)` }))} style={{ marginBottom: 0 }} />
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "xlsx")} disabled={!total}>Export Excel</Button>
-                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "csv")} disabled={!total}>CSV</Button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: theme.textMuted, cursor: "pointer" }} title="Ubah semua nilai jadi huruf kapital saat ekspor">
+                  <input type="checkbox" checked={upper} onChange={(e) => setUpper(e.target.checked)} /> HURUF KAPITAL
+                </label>
+                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "xlsx", { upper })} disabled={!total}>Export Excel</Button>
+                <Button variant="secondary" icon="download" onClick={() => survey && exportResponses(survey, responses, "csv", { upper })} disabled={!total}>CSV</Button>
               </div>
             </div>
           </Card>
