@@ -87,6 +87,7 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     setF({ ...f, templateId: id, templateName: t.name, templateLang: t.language || "id", bodyParams: (t.sampleParams || []).join(", "), messageText: preview });
   };
   const selectedTpl = templates.find((x) => x.id === f.templateId);
+  const selSurvey = surveys.find((s) => s.id === f.surveyId);
 
   // Perkiraan biaya = jumlah kontak segmen × tarif kategori template (atau asumsi Marketing)
   const seg = segments.find((s) => s.id === f.segmentId);
@@ -103,7 +104,8 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   };
   return (
     <Modal title="Buat Blast" onClose={onClose}>
-      <Select label="Survei (opsional)" value={f.surveyId} onChange={(e) => set("surveyId", e.target.value)} options={[{ value: "", label: "— tanpa survei —" }, ...surveys.map((s) => ({ value: s.id, label: s.title }))]} />
+      <Select label="Survei (opsional)" value={f.surveyId} onChange={(e) => set("surveyId", e.target.value)} options={[{ value: "", label: "— tanpa survei —" }, ...surveys.map((s) => ({ value: s.id, label: `${s.title}${s.mode === "flow" ? " (Flow)" : ""}` }))]} />
+      {selSurvey?.mode === "flow" ? <Notice kind="info">Survei <strong>Flow</strong>: pakai template yang punya <strong>tombol Flow</strong> (terhubung ke Flow ID survei ini di Meta). Jawaban responden tertangkap otomatis tanpa tanya-jawab per pesan.</Notice> : null}
       <Select label="Segmen" value={f.segmentId} onChange={(e) => set("segmentId", e.target.value)} options={segments.map((s) => ({ value: s.id, label: `${s.name} (${s.contacts.length})` }))} />
       <Select label="Vendor" value={f.vendor} onChange={(e) => set("vendor", e.target.value)} options={[{ value: "meta", label: "Meta Cloud API" }, { value: "qontak", label: "Qontak" }]} />
       <Select label="Template Tersimpan" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />

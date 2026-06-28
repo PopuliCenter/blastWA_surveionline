@@ -12,6 +12,7 @@ export type BlastJob = {
   templateName: string;
   templateLang: string;
   bodyParams: string[];
+  flowToken?: string; // broadcast Flow: korelasi balasan flow ke survei
 };
 
 export const BLAST_QUEUE = "blast";

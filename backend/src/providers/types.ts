@@ -37,6 +37,7 @@ export interface SendTemplateInput {
   templateName: string;
   languageCode: string;
   bodyParams?: string[];
+  flowToken?: string; // bila template punya tombol Flow → korelasi balasan (broadcast Flow)
 }
 
 export interface SendFlowInput {

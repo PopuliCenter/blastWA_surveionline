@@ -46,15 +46,14 @@ export class MetaCloudAdapter implements MessagingProvider {
   }
 
   async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
-    const components =
-      input.bodyParams && input.bodyParams.length
-        ? [
-            {
-              type: "body",
-              parameters: input.bodyParams.map((text) => ({ type: "text", text })),
-            },
-          ]
-        : undefined;
+    const components: unknown[] = [];
+    if (input.bodyParams && input.bodyParams.length) {
+      components.push({ type: "body", parameters: input.bodyParams.map((text) => ({ type: "text", text })) });
+    }
+    // Template ber-tombol Flow (broadcast Flow): sisipkan flow_token untuk korelasi balasan.
+    if (input.flowToken) {
+      components.push({ type: "button", sub_type: "flow", index: "0", parameters: [{ type: "action", action: { flow_token: input.flowToken } }] });
+    }
 
     return this.post({
       messaging_product: "whatsapp",
@@ -63,7 +62,7 @@ export class MetaCloudAdapter implements MessagingProvider {
       template: {
         name: input.templateName,
         language: { code: input.languageCode },
-        ...(components ? { components } : {}),
+        ...(components.length ? { components } : {}),
       },
     });
   }

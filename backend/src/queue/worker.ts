@@ -37,7 +37,7 @@ async function main() {
   const worker = new Worker<BlastJob>(
     BLAST_QUEUE,
     async (job, token) => {
-      const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams } = job.data;
+      const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams, flowToken } = job.data;
 
       // 1) Lewati kontak yang sudah opt-out (penting untuk blast terjadwal)
       const recipient = await prisma.blastRecipient.findUnique({
@@ -70,6 +70,7 @@ async function main() {
         templateName,
         languageCode: templateLang,
         bodyParams,
+        ...(flowToken ? { flowToken } : {}),
       });
 
       if (result.status === "failed") {

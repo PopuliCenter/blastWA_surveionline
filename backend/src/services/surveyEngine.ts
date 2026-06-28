@@ -143,15 +143,30 @@ async function startSurvey(survey: SurveyLite, contactId: string, phone: string,
 async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: string, vendor: string): Promise<void> {
   const resp = ev.flowResponse ?? {};
   const token = String((resp as any).flow_token ?? "");
-  const responseId = token.startsWith("resp_") ? token.slice(5) : "";
-  let surveyResponse = responseId
-    ? await prisma.surveyResponse.findUnique({ where: { id: responseId }, include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } })
-    : null;
-  if (!surveyResponse || surveyResponse.contactId !== contactId) {
+  const withQuestions = { survey: { include: { questions: { orderBy: { order: "asc" as const } } } } };
+
+  let surveyResponse: any = null;
+
+  // Token sesi/pemicu: resp_<responseId>
+  if (token.startsWith("resp_")) {
+    const r = await prisma.surveyResponse.findUnique({ where: { id: token.slice(5) }, include: withQuestions });
+    if (r && r.contactId === contactId) surveyResponse = r;
+  }
+  // Token broadcast: srv_<surveyId> → cari/ buat respons untuk kontak ini
+  if (!surveyResponse && token.startsWith("srv_")) {
+    const surveyId = token.slice(4);
+    surveyResponse = await prisma.surveyResponse.findFirst({ where: { contactId, surveyId, completedAt: null }, orderBy: { startedAt: "desc" }, include: withQuestions });
+    if (!surveyResponse) {
+      const exists = await prisma.survey.findUnique({ where: { id: surveyId }, select: { id: true } });
+      if (exists) surveyResponse = await prisma.surveyResponse.create({ data: { surveyId, contactId, currentStep: 0 }, include: withQuestions });
+    }
+  }
+  // Fallback: respons flow belum selesai milik kontak ini
+  if (!surveyResponse) {
     surveyResponse = await prisma.surveyResponse.findFirst({
       where: { contactId, completedAt: null, survey: { mode: "flow" } },
       orderBy: { startedAt: "desc" },
-      include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } },
+      include: withQuestions,
     });
   }
   if (!surveyResponse) return;

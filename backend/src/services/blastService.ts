@@ -17,6 +17,10 @@ export async function createBlast(input: CreateBlastInput) {
   const vendor = input.vendor ?? env.DEFAULT_VENDOR;
   const templateLang = input.templateLang ?? "id";
 
+  // Survei mode flow → kirim template ber-tombol Flow + flow_token untuk korelasi balasan
+  const survey = input.surveyId ? await prisma.survey.findUnique({ where: { id: input.surveyId }, select: { id: true, mode: true } }) : null;
+  const flowToken = survey?.mode === "flow" ? `srv_${survey.id}` : undefined;
+
   const segment = await prisma.segment.findUnique({
     where: { id: input.segmentId },
     include: { contacts: { include: { contact: true } } },
@@ -75,6 +79,7 @@ export async function createBlast(input: CreateBlastInput) {
           templateName: input.templateName,
           templateLang,
           bodyParams,
+          ...(flowToken ? { flowToken } : {}),
         },
         opts: { delay: delayBase + i * 50 }, // stagger ringan
       };
