@@ -160,6 +160,7 @@ model Message {
   vendorMessageId String?
   text            String?
   payload         Json?
+  isBot           Boolean   @default(false) // true = balasan otomatis (survei/auto-reply/AI), bukan kiriman agen
   createdAt       DateTime  @default(now())
 
   @@index([contactId])

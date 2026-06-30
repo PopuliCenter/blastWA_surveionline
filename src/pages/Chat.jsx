@@ -206,7 +206,12 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 16, background: theme.surfaceAlt }}>
         {loading ? <Loading /> : error ? <Notice>{error}</Notice> : msgs.length ? msgs.map((m) => (
           <div key={m.id} style={{ display: "flex", justifyContent: m.direction === "out" ? "flex-end" : "flex-start", marginBottom: 8 }}>
-            <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: m.direction === "out" ? "12px 4px 12px 12px" : "4px 12px 12px 12px", fontSize: 13.5, background: m.direction === "out" ? "#dcf8c6" : theme.surface, color: theme.text, border: m.direction === "out" ? "none" : `1px solid ${theme.border}`, boxShadow: "0 1px 1px rgba(0,0,0,.06)" }}>
+            <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: m.direction === "out" ? "12px 4px 12px 12px" : "4px 12px 12px 12px", fontSize: 13.5, background: m.direction === "out" ? (m.isBot ? "#e2f0ff" : "#dcf8c6") : theme.surface, color: theme.text, border: m.direction === "out" ? "none" : `1px solid ${theme.border}`, boxShadow: "0 1px 1px rgba(0,0,0,.06)" }}>
+              {m.direction === "out" ? (
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: m.isBot ? theme.primary : theme.green, marginBottom: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon name={m.isBot ? "ai" : "contacts"} size={12} />{m.isBot ? "Bot" : "Anda"}
+                </div>
+              ) : null}
               <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
               <div style={{ fontSize: 10.5, color: theme.textMuted, marginTop: 3, textAlign: "right" }}>{shortTime(m.createdAt)}</div>
             </div>

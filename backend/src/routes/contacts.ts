@@ -173,7 +173,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "asc" },
       take: 200,
     });
-    return messages.map((m) => ({ id: m.id, direction: m.direction, text: m.text, vendor: m.vendor, createdAt: m.createdAt }));
+    return messages.map((m) => ({ id: m.id, direction: m.direction, text: m.text, vendor: m.vendor, isBot: m.isBot, createdAt: m.createdAt }));
   });
 
   // Kirim pesan teks ke kontak (hanya valid dalam jendela 24 jam sesi)

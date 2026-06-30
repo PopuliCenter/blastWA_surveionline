@@ -56,12 +56,12 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi
   if (OPT_OUT_WORDS.includes(lc)) {
     await prisma.contact.update({ where: { id: contact.id }, data: { subscribed: false, optOutAt: new Date() } });
-    await reply(ev.vendor, phone, "Anda telah berhenti menerima pesan dari kami. Balas *MULAI* untuk berlangganan kembali.");
+    await reply(ev.vendor, phone, "Anda telah berhenti menerima pesan dari kami. Balas *MULAI* untuk berlangganan kembali.", contact.id);
     return;
   }
   if (OPT_IN_WORDS.includes(lc)) {
     await prisma.contact.update({ where: { id: contact.id }, data: { subscribed: true, optOutAt: null, consentSource: contact.consentSource ?? "inbound", consentAt: contact.consentAt ?? new Date() } });
-    await reply(ev.vendor, phone, "Terima kasih, Anda kembali berlangganan pesan kami. 🙏");
+    await reply(ev.vendor, phone, "Terima kasih, Anda kembali berlangganan pesan kami. 🙏", contact.id);
     return;
   }
   // Kontak yang membalas = persetujuan implisit (bila belum tercatat)
@@ -101,7 +101,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
 
   // 4) Auto Reply / Agen AI
   const auto = await findAutoResponse(contact.id, ev.text ?? "");
-  if (auto) await reply(ev.vendor, phone, auto);
+  if (auto) await reply(ev.vendor, phone, auto, contact.id);
 }
 
 // Cari survei aktif yang kata kunci pemicunya cocok dengan teks masuk.
@@ -129,14 +129,14 @@ async function startSurvey(survey: SurveyLite, contactId: string, phone: string,
     const resp = await prisma.surveyResponse.create({ data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) } });
     const body = survey.description ? `${survey.title}\n\n${survey.description}` : survey.title;
     const result = await provider.sendFlow({ to: phone, flowId: survey.flowId, flowToken: `resp_${resp.id}`, cta: survey.flowCta || "Isi Survei", bodyText: body, screen: "SURVEY" });
-    await prisma.message.create({ data: { contactId, direction: "out", vendor, vendorMessageId: result.vendorMessageId || null, text: `[flow] ${survey.title}`, payload: result.raw as object } });
+    await prisma.message.create({ data: { contactId, direction: "out", vendor, vendorMessageId: result.vendorMessageId || null, text: `[flow] ${survey.title}`, payload: result.raw as object, isBot: true } });
     return;
   }
   // Fallback / mode chat
   await prisma.surveyResponse.create({ data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) } });
   const first = formatQuestion(survey.questions[0]!);
   const intro = survey.description ? `${survey.description}\n\n${first}` : first;
-  await reply(vendor, phone, intro);
+  await reply(vendor, phone, intro, contactId);
 }
 
 // Terima balasan WhatsApp Flow (response_json) → simpan jawaban & tandai selesai.
@@ -174,7 +174,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
   const answers = parseFlowAnswers(resp as Record<string, unknown>, surveyResponse.survey.questions as QLite[]);
   for (const a of answers) await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
   await prisma.surveyResponse.update({ where: { id: surveyResponse.id }, data: { completedAt: new Date(), currentStep: surveyResponse.survey.questions.length } });
-  await reply(vendor, phone, "Terima kasih, jawaban survei Anda sudah kami terima. 🙏");
+  await reply(vendor, phone, "Terima kasih, jawaban survei Anda sudah kami terima. 🙏", contactId);
 }
 
 async function advanceSurvey(responseId: string, step: number, questions: QLite[], contactId: string, phone: string, vendor: string, ev: NormalizedInbound): Promise<void> {
@@ -190,7 +190,7 @@ async function advanceSurvey(responseId: string, step: number, questions: QLite[
     const v = validateAnswer(current, ev);
     if (!v.ok) {
       // Jawaban tidak valid → beri tahu & ulangi pertanyaan, jangan maju.
-      await reply(vendor, phone, `${v.error}\n\n${formatQuestion(current)}`);
+      await reply(vendor, phone, `${v.error}\n\n${formatQuestion(current)}`, contactId);
       return;
     }
     await saveAnswer(responseId, current.id, v.value);
@@ -200,10 +200,10 @@ async function advanceSurvey(responseId: string, step: number, questions: QLite[
   const next = questions[nextStep];
   if (next) {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep } });
-    await reply(vendor, phone, formatQuestion(next));
+    await reply(vendor, phone, formatQuestion(next), contactId);
   } else {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep, completedAt: new Date() } });
-    await reply(vendor, phone, "Terima kasih, semua jawaban Anda sudah kami terima. 🙏");
+    await reply(vendor, phone, "Terima kasih, semua jawaban Anda sudah kami terima. 🙏", contactId);
   }
 }
 
@@ -239,9 +239,13 @@ function validateAnswer(q: QLite, ev: NormalizedInbound): { ok: true; value: str
       if (!opts.length) return text ? { ok: true, value: text } : { ok: false, error: "Mohon pilih jawaban." };
       const asNum = Number(text);
       if (Number.isInteger(asNum) && asNum >= 1 && asNum <= opts.length) return { ok: true, value: opts[asNum - 1]! };
-      const match = opts.find((o) => o.toLowerCase() === text.toLowerCase());
-      if (match) return { ok: true, value: match };
-      return { ok: false, error: "Pilihan tidak dikenali. Balas dengan nomor pilihan." };
+      const lc = text.toLowerCase();
+      const exact = opts.find((o) => o.toLowerCase() === lc);
+      if (exact) return { ok: true, value: exact };
+      // Toleransi: cocok sebagian bila TIDAK ambigu (hanya satu pilihan yang cocok)
+      const partial = opts.filter((o) => o.toLowerCase().includes(lc) || lc.includes(o.toLowerCase()));
+      if (partial.length === 1) return { ok: true, value: partial[0]! };
+      return { ok: false, error: "Maaf, pilihan belum dikenali. Balas dengan *nomor* pilihan, ya." };
     }
     case "boolean": {
       const t = text.toLowerCase();
@@ -277,10 +281,10 @@ async function saveAnswer(responseId: string, questionId: string, value: string)
   await prisma.answer.create({ data: { responseId, questionId, value } });
 }
 
-async function reply(vendor: string, to: string, text: string): Promise<void> {
+async function reply(vendor: string, to: string, text: string, contactId?: string): Promise<void> {
   if (!to) return;
   const result = await getProvider(vendor).sendText({ to, text });
   await prisma.message.create({
-    data: { direction: "out", vendor, vendorMessageId: result.vendorMessageId || null, text, payload: result.raw as object },
+    data: { contactId: contactId ?? null, direction: "out", vendor, vendorMessageId: result.vendorMessageId || null, text, payload: result.raw as object, isBot: true },
   });
 }
