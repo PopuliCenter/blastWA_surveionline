@@ -56,6 +56,29 @@ export class QontakAdapter implements MessagingProvider {
     return { vendorMessageId: String(id), status: "sent", raw: json };
   }
 
+  // Cek koneksi: panggil endpoint daftar template WhatsApp (butuh token valid).
+  // Dipakai tombol "Cek Koneksi" di UI. Transparan: laporkan status apa adanya.
+  async checkConnection(): Promise<Record<string, unknown>> {
+    if (!this.cfg.accessToken) return { ok: false, error: "Access Token Qontak belum diisi." };
+    if (!this.cfg.channelIntegrationId) return { ok: false, error: "Channel Integration ID belum diisi." };
+    const url = `${this.cfg.baseUrl}/templates/whatsapp`;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, error: "Token tidak valid / kedaluwarsa. Ambil ulang access_token Qontak (OAuth)." };
+      }
+      if (res.ok) {
+        const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+        return { ok: true, status: res.status, templates: list.length, channelIntegrationId: this.cfg.channelIntegrationId };
+      }
+      // 404 dll: token mungkin sampai ke Qontak tapi path beda versi API.
+      return { ok: false, status: res.status, error: json?.error?.messages?.[0] ?? json?.message ?? `Qontak membalas HTTP ${res.status}. Cek base URL/versi API.`, raw: json };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Gagal menghubungi Qontak (cek base URL/jaringan)." };
+    }
+  }
+
   async sendText(input: { to: string; text: string }): Promise<SendResult> {
     // Pesan teks bebas (dalam 24h window) di Qontak lewat API conversation/room.
     // Endpoint persis tergantung setup Anda — verifikasi di Postman collection.

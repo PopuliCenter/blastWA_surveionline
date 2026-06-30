@@ -14,6 +14,8 @@ export default function WhatsAppAccount() {
   const [topupOpen, setTopupOpen] = useState(false);
   const [metaTest, setMetaTest] = useState(null); // { ok, text }
   const [testing, setTesting] = useState(false);
+  const [qontakTest, setQontakTest] = useState(null); // { ok, text }
+  const [qtesting, setQtesting] = useState(false);
 
   const vendors = data || [];
   const vmeta = vendors.find((v) => v.name === "meta");
@@ -39,6 +41,15 @@ export default function WhatsAppAccount() {
       if (q.error) setMetaTest({ ok: false, text: q.error });
       else setMetaTest({ ok: true, text: `Terhubung${q.display_phone_number ? ` — ${q.display_phone_number}` : ""}${q.verified_name ? ` (${q.verified_name})` : ""}.` });
     } catch (e) { setMetaTest({ ok: false, text: e.message }); } finally { setTesting(false); }
+  };
+
+  const testQontak = async () => {
+    setQtesting(true); setQontakTest(null);
+    try {
+      const q = await api.checkQontak();
+      if (q.ok) setQontakTest({ ok: true, text: `Terhubung — token valid${typeof q.templates === "number" ? `, ${q.templates} template tersedia` : ""}.` });
+      else setQontakTest({ ok: false, text: q.error || `Gagal (HTTP ${q.status ?? "?"})` });
+    } catch (e) { setQontakTest({ ok: false, text: e.message }); } finally { setQtesting(false); }
   };
 
   const Status = ({ v }) => v ? (
@@ -102,8 +113,10 @@ export default function WhatsAppAccount() {
           <CopyField label="Callback URL (untuk webhook Qontak)" value={qontakCallback} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <Button onClick={() => saveCreds("qontak", qontak)}>Simpan Qontak</Button>
+            {vqontak?.hasStoredCredentials ? <Button variant="secondary" icon="refresh" onClick={testQontak} disabled={qtesting}>{qtesting ? "Mengecek..." : "Cek Koneksi"}</Button> : null}
             {vqontak ? <Button variant="secondary" onClick={() => toggle("qontak", !vqontak.active)}>{vqontak.active ? "Nonaktifkan" : "Aktifkan"}</Button> : null}
           </div>
+          {qontakTest ? <div style={{ marginTop: 10, fontSize: 12.5, color: qontakTest.ok ? theme.green : theme.red, background: qontakTest.ok ? theme.greenSoft : theme.redSoft, borderRadius: 8, padding: "8px 11px" }}>{qontakTest.ok ? "✓ " : "✕ "}{qontakTest.text}</div> : null}
         </Card>
       </div>
 

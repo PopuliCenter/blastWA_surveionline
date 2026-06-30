@@ -43,6 +43,14 @@ export async function sendingRoutes(app: FastifyInstance): Promise<void> {
     return meta.getPhoneQuality();
   });
 
+  // Cek koneksi Qontak (validitas token + reachability API)
+  app.get("/api/qontak/check", async () => {
+    await loadProviders();
+    const qontak = getProvider("qontak") as unknown as { checkConnection?: () => Promise<Record<string, unknown>> };
+    if (typeof qontak.checkConnection !== "function") return { ok: false, error: "Tidak didukung vendor ini" };
+    return qontak.checkConnection();
+  });
+
   // Ringkasan opt-out / consent kontak (untuk dashboard pengaman)
   app.get("/api/contacts-consent-summary", async () => {
     const [total, subscribed, optedOut, bySource] = await Promise.all([

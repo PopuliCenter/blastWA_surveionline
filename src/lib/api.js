@@ -121,5 +121,6 @@ export const api = {
   getSendingPolicy: () => request("/api/sending-policy"),
   updateSendingPolicy: (data) => request("/api/sending-policy", { method: "PUT", body: data }),
   getWaQuality: () => request("/api/wa/quality"),
+  checkQontak: () => request("/api/qontak/check"),
   getConsentSummary: () => request("/api/contacts-consent-summary"),
 };
