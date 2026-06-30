@@ -361,6 +361,9 @@ function SurveyModal({ survey, onClose, onSave }) {
     finally { setSaving(false); }
   };
 
+  // Mode Flow tidak mendukung tipe "Gambar" → sembunyikan agar tidak salah pilih.
+  const qtypeOptions = mode === "flow" ? QTYPE_OPTIONS.filter((o) => o.value !== "image") : QTYPE_OPTIONS;
+
   return (
     <>
     <Modal title={survey ? "Edit Survei" : "Buat Survei"} onClose={onClose} width={680}>
@@ -370,9 +373,9 @@ function SurveyModal({ survey, onClose, onSave }) {
 
       {/* Mode survei: chat vs WhatsApp Flow */}
       <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
-        <Select label="Mode pengisian" value={mode} onChange={(e) => setMode(e.target.value)} options={[
-          { value: "chat", label: "Chat — tanya-jawab per pesan (jalan di mana saja)" },
-          { value: "flow", label: "WhatsApp Flow — formulir native (1 layar, lebih rapi)" },
+        <Select label="Mode pengisian survei" value={mode} onChange={(e) => { const m = e.target.value; setMode(m); if (m === "flow" && c.type === "image") setCk("type", "text"); }} options={[
+          { value: "chat", label: "Chatbot — tanya-jawab per pesan (semua jalur: Meta/Qontak/Baileys)" },
+          { value: "flow", label: "WhatsApp Flow — formulir 1 layar (khusus Meta Cloud API)" },
         ]} />
         {mode === "flow" ? (
           <>
@@ -430,6 +433,7 @@ function SurveyModal({ survey, onClose, onSave }) {
             q={q}
             index={i}
             total={questions.length}
+            qtypeOptions={qtypeOptions}
             onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
             onDelete={() => setQuestions(questions.filter((_, j) => j !== i))}
             onMove={(dir) => {
@@ -447,7 +451,7 @@ function SurveyModal({ survey, onClose, onSave }) {
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: theme.text }}>Tambah Pertanyaan</div>
         <Input label="Teks pertanyaan" value={c.text} onChange={(e) => setCk("text", e.target.value)} placeholder="cth: Seberapa puas Anda?" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
-          <Select label="Tipe jawaban" value={c.type} onChange={(e) => setCk("type", e.target.value)} options={QTYPE_OPTIONS} />
+          <Select label="Tipe jawaban" value={c.type} onChange={(e) => setCk("type", e.target.value)} options={qtypeOptions} />
           <div style={{ marginBottom: 14 }}><Toggle checked={c.required} onChange={(v) => setCk("required", v)} label="Wajib" /></div>
         </div>
         {c.type === "rating" ? (
@@ -504,7 +508,7 @@ function FlowJsonModal({ surveyId, onClose }) {
 }
 
 // Satu pertanyaan: mode lihat (bisa naik/turun, edit, hapus) & mode edit inline.
-function QuestionItem({ q, index, total, onChange, onDelete, onMove }) {
+function QuestionItem({ q, index, total, onChange, onDelete, onMove, qtypeOptions = QTYPE_OPTIONS }) {
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState(null);
   const setDk = (k, v) => setD((p) => ({ ...p, [k]: v }));
@@ -526,7 +530,7 @@ function QuestionItem({ q, index, total, onChange, onDelete, onMove }) {
       <div style={{ background: theme.surface, border: `1.5px solid ${theme.primary}`, borderRadius: 9, padding: 12 }}>
         <Input label={`Pertanyaan ${index + 1}`} value={d.text} onChange={(e) => setDk("text", e.target.value)} placeholder="Teks pertanyaan" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "end" }}>
-          <Select label="Tipe jawaban" value={d.type} onChange={(e) => setDk("type", e.target.value)} options={QTYPE_OPTIONS} />
+          <Select label="Tipe jawaban" value={d.type} onChange={(e) => setDk("type", e.target.value)} options={qtypeOptions} />
           <div style={{ marginBottom: 14 }}><Toggle checked={d.required} onChange={(v) => setDk("required", v)} label="Wajib" /></div>
         </div>
         {d.type === "rating" ? (
