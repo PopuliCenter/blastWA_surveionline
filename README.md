@@ -145,6 +145,8 @@ Kredensial Meta/Qontak (token, phone number id, app secret, dst.) **tidak perlu*
 
 Skenario: satu VPS sudah menjalankan beberapa app (mis. `risetcenter.com`, `survei.risetcenter.com`). App ini dipasang di subdomain **`wa.risetcenter.com`**, DNS sudah diarahkan di **Cloudflare (Proxied)** ke IP origin VPS.
 
+> 🚀 **VPS yang sudah punya edge nginx + Docker network `web`** (kasus risetcenter.com): pakai panduan & file siap‑pakai di **[`deploy/`](deploy/README.md)** — stack terpisah tanpa buka port host, otomatis diproxy edge nginx. Bagian di bawah ini adalah panduan umum (nginx level host).
+
 ### 1) DNS & SSL (Cloudflare)
 - Record **A** `wa` → IP VPS, **Proxied** (☁️ oranye). ✅ (sudah dibuat)
 - SSL/TLS mode: **Full** (atau Full strict bila origin punya sertifikat). HTTPS publik ditangani Cloudflare.

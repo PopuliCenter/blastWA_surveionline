@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+.git
+backend
+docs
+.claude
+.tools
+*.log
+*.xlsx
+*.xls
+*.csv
+.env
+.env.*

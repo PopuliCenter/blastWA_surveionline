@@ -1,0 +1,78 @@
+# Stack produksi app WA — wa.risetcenter.com
+# Project name "survei-wa" → kontainer wa_frontend / wa_backend / wa_worker / dst.
+# TANPA buka port host (3000/5432/6379) agar tidak bentrok app lain.
+# Frontend gabung ke network "web" (bersama edge nginx) → diproxy via nama "wa_frontend".
+#
+# Jalankan dari folder ini:
+#   docker compose -f docker-compose.prod.yml up -d --build
+name: survei-wa
+
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        VITE_API_URL: https://wa.risetcenter.com
+    container_name: wa_frontend
+    restart: unless-stopped
+    networks: [internal, web]
+    depends_on: [backend]
+
+  backend:
+    build: ../backend
+    container_name: wa_backend
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
+    env_file: [../backend/.env]
+    environment:
+      DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
+      REDIS_URL: redis://redis:6379
+    restart: unless-stopped
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  worker:
+    build: ../backend
+    container_name: wa_worker
+    command: node dist/queue/worker.js
+    env_file: [../backend/.env]
+    environment:
+      DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
+      REDIS_URL: redis://redis:6379
+    restart: unless-stopped
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: populi
+      POSTGRES_PASSWORD: populi
+      POSTGRES_DB: populi
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U populi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    volumes: [redisdata:/data]
+    networks: [internal]
+    restart: unless-stopped
+
+networks:
+  internal:
+  web:
+    external: true
+
+volumes:
+  pgdata:
+  redisdata:
