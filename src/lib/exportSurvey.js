@@ -36,8 +36,12 @@ export function exportResponses(survey, responses, format, opts = {}) {
   ws["!cols"] = header.map((h) => ({ wch: Math.max(12, Math.min(40, h.length + 2)) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Respons");
-  const slug = (survey.title || "survei").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
-  const base = `survei-${slug}-${responses.length}responden`;
+  // Nama file = judul survei + tanggal_jam ekspor (mudah dilacak, tak saling menimpa).
+  const slug = (survey.title || "survei").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+  const base = `survei-${slug}-${stamp}`;
   if (format === "csv") XLSX.writeFile(wb, `${base}.csv`, { bookType: "csv" });
   else XLSX.writeFile(wb, `${base}.xlsx`);
 }
