@@ -28,8 +28,12 @@ export function TopUpGuide() {
             ))}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            <a href="https://business.facebook.com/billing_hub/accounts" target="_blank" rel="noopener noreferrer" style={linkBtn}><Icon name="link" size={15} />Buka Pengaturan Pembayaran Meta</a>
-            <a href="https://business.facebook.com/wa/manage/home/" target="_blank" rel="noopener noreferrer" style={{ ...linkBtn, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}` }}><Icon name="whatsapp" size={15} />WhatsApp Manager</a>
+            <a href="https://business.facebook.com/wa/manage/" target="_blank" rel="noopener noreferrer" style={linkBtn}><Icon name="whatsapp" size={15} />Buka WhatsApp Manager</a>
+            <a href="https://business.facebook.com/settings" target="_blank" rel="noopener noreferrer" style={{ ...linkBtn, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}` }}><Icon name="settings" size={15} />Pengaturan Bisnis</a>
+            <a href="https://www.facebook.com/business/help/488291839463771" target="_blank" rel="noopener noreferrer" style={{ ...linkBtn, background: theme.surface, color: theme.text, border: `1px solid ${theme.border}` }}><Icon name="link" size={15} />Panduan Resmi</a>
+          </div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+            Tautan dashboard perlu <strong>login akun Meta Business</strong> dulu. Jika halaman tidak terbuka: login ke <span style={{ fontFamily: "monospace" }}>business.facebook.com</span>, pilih akun bisnis Anda, lalu buka menu <strong>Tagihan &amp; Pembayaran (Billing)</strong>.
           </div>
         </div>
 
