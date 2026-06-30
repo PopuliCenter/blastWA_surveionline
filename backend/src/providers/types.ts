@@ -53,6 +53,9 @@ export interface SendFlowInput {
 export interface MessagingProvider {
   readonly name: string;
 
+  /** True bila vendor tidak memakai template tersetujui (kirim teks langsung), mis. Baileys. */
+  readonly templateless?: boolean;
+
   /** True jika konfigurasi cukup untuk mengirim pesan. */
   isConfigured(): boolean;
 

@@ -6,16 +6,27 @@ export type CreateBlastInput = {
   surveyId?: string;
   segmentId: string;
   vendor?: string;
-  templateName: string;
+  templateName?: string; // wajib untuk meta/qontak; tak dipakai vendor templateless (baileys)
   templateLang?: string;
   messageText?: string;
   bodyParams?: string[];
   scheduledAt?: string; // ISO; bila ada → dijadwalkan
 };
 
+// Render teks pesan: ganti placeholder {{1}}, {{2}}, ... dengan bodyParams.
+function renderText(messageText: string | undefined, params: string[]): string {
+  let t = messageText ?? "";
+  params.forEach((p, i) => {
+    t = t.split(`{{${i + 1}}}`).join(p);
+  });
+  return t.trim();
+}
+
 export async function createBlast(input: CreateBlastInput) {
   const vendor = input.vendor ?? env.DEFAULT_VENDOR;
   const templateLang = input.templateLang ?? "id";
+  // Baileys tak punya template Meta → simpan label saja agar kolom tetap terisi.
+  const templateName = input.templateName ?? (vendor === "baileys" ? "(teks langsung)" : "");
 
   // Survei mode flow → kirim template ber-tombol Flow + flow_token untuk korelasi balasan
   const survey = input.surveyId ? await prisma.survey.findUnique({ where: { id: input.surveyId }, select: { id: true, mode: true } }) : null;
@@ -40,7 +51,7 @@ export async function createBlast(input: CreateBlastInput) {
       surveyId: input.surveyId ?? null,
       segmentId: input.segmentId,
       vendor,
-      templateName: input.templateName,
+      templateName,
       templateLang,
       messageText: input.messageText ?? null,
       status: scheduledAt ? "scheduled" : "running",
@@ -69,6 +80,8 @@ export async function createBlast(input: CreateBlastInput) {
       const c = contactById.get(r.contactId)!;
       // Personalisasi sederhana: bila bodyParams kosong, pakai [nama]
       const bodyParams = input.bodyParams ?? [c.name ?? "Pelanggan"];
+      // Teks final untuk vendor templateless (Baileys): {{1}},{{2}}.. → bodyParams.
+      const text = renderText(input.messageText, bodyParams);
       return {
         name: "send",
         data: {
@@ -76,9 +89,10 @@ export async function createBlast(input: CreateBlastInput) {
           blastId: blast.id,
           vendor,
           to: c.phone,
-          templateName: input.templateName,
+          templateName,
           templateLang,
           bodyParams,
+          ...(text ? { text } : {}),
           ...(flowToken ? { flowToken } : {}),
         },
         opts: { delay: delayBase + i * 50 }, // stagger ringan

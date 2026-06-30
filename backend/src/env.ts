@@ -32,7 +32,13 @@ const schema = z.object({
   QONTAK_CHANNEL_INTEGRATION_ID: z.string().optional(),
   QONTAK_WEBHOOK_SECRET: z.string().optional(),
 
-  DEFAULT_VENDOR: z.enum(["meta", "qontak"]).default("qontak"),
+  DEFAULT_VENDOR: z.enum(["meta", "qontak", "baileys"]).default("qontak"),
+
+  // Baileys (gateway WhatsApp tidak resmi via scan QR)
+  BAILEYS_AUTH_DIR: z.string().default("./.baileys-auth"), // folder sesi (mount ke volume di prod)
+  // Worker meneruskan kirim ke backend (pemilik socket) lewat URL internal ini.
+  INTERNAL_API_URL: z.string().default("http://localhost:3000"),
+  BAILEYS_INTERNAL_TOKEN: z.string().optional(), // opsional: amankan endpoint internal worker→backend
 
   // Agen AI (opsional; bisa juga diisi via UI, tersimpan terenkripsi)
   ANTHROPIC_API_KEY: z.string().optional(),

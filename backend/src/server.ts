@@ -16,6 +16,9 @@ import { aiAgentRoutes } from "./routes/aiAgent.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { sendingRoutes } from "./routes/sending.js";
 import { templateRoutes } from "./routes/templates.js";
+import { baileysRoutes } from "./routes/baileys.js";
+import { baileysGateway } from "./providers/baileys.js";
+import { handleInboundEvents } from "./services/surveyEngine.js";
 
 async function main() {
   const app = Fastify({ logger: true });
@@ -51,6 +54,15 @@ async function main() {
   await app.register(webhookRoutes);
   await app.register(sendingRoutes);
   await app.register(templateRoutes);
+  await app.register(baileysRoutes);
+
+  // Baileys: proses backend = pemilik socket. Pasang handler pesan masuk (survei/auto-reply)
+  // & auto-start bila ada sesi tersimpan (tak perlu scan ulang setelah restart).
+  baileysGateway.claimOwnership();
+  baileysGateway.setInboundHandler(handleInboundEvents);
+  if (baileysGateway.hasSession()) {
+    baileysGateway.start().catch((e) => app.log.error({ err: e }, "Baileys auto-start gagal"));
+  }
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`Populi WA backend siap di :${env.PORT}`);

@@ -27,6 +27,9 @@ services:
     environment:
       DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
       REDIS_URL: redis://redis:6379
+      BAILEYS_AUTH_DIR: /app/.baileys-auth
+    volumes:
+      - baileys_auth:/app/.baileys-auth # sesi WhatsApp Langsung (QR) — bertahan saat restart
     restart: unless-stopped
     networks: [internal]
     depends_on:
@@ -41,6 +44,8 @@ services:
     environment:
       DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
       REDIS_URL: redis://redis:6379
+      # Blast Baileys: worker tak punya socket → teruskan kirim ke backend (pemilik socket).
+      INTERNAL_API_URL: http://wa_backend:3000
     restart: unless-stopped
     networks: [internal]
     depends_on:
@@ -76,3 +81,4 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  baileys_auth:

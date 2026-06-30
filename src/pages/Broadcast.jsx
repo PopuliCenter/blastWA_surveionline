@@ -120,6 +120,7 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   };
   const selectedTpl = templates.find((x) => x.id === f.templateId);
   const selSurvey = surveys.find((s) => s.id === f.surveyId);
+  const isBaileys = f.vendor === "baileys"; // jalur tidak resmi: kirim teks langsung, tanpa template
 
   // Perkiraan biaya = jumlah kontak segmen × tarif kategori template (atau asumsi Marketing)
   const seg = segments.find((s) => s.id === f.segmentId);
@@ -131,7 +132,7 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const submit = async () => {
     setSaving(true);
     try {
-      await onSave({ surveyId: f.surveyId || undefined, segmentId: f.segmentId, vendor: f.vendor, templateName: f.templateName.trim(), templateLang: f.templateLang, messageText: f.messageText, bodyParams: f.bodyParams.trim() ? f.bodyParams.split(",").map((s) => s.trim()) : undefined, scheduledAt: f.schedule || undefined });
+      await onSave({ surveyId: f.surveyId || undefined, segmentId: f.segmentId, vendor: f.vendor, templateName: isBaileys ? undefined : f.templateName.trim(), templateLang: f.templateLang, messageText: f.messageText, bodyParams: f.bodyParams.trim() ? f.bodyParams.split(",").map((s) => s.trim()) : undefined, scheduledAt: f.schedule || undefined });
     } finally { setSaving(false); }
   };
   return (
@@ -139,13 +140,23 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
       <Select label="Survei (opsional)" value={f.surveyId} onChange={(e) => set("surveyId", e.target.value)} options={[{ value: "", label: "— tanpa survei —" }, ...surveys.map((s) => ({ value: s.id, label: `${s.title}${s.mode === "flow" ? " (Flow)" : ""}` }))]} />
       {selSurvey?.mode === "flow" ? <Notice kind="info">Survei <strong>Flow</strong>: pakai template yang punya <strong>tombol Flow</strong> (terhubung ke Flow ID survei ini di Meta). Jawaban responden tertangkap otomatis tanpa tanya-jawab per pesan.</Notice> : null}
       <Select label="Segmen" value={f.segmentId} onChange={(e) => set("segmentId", e.target.value)} options={segments.map((s) => ({ value: s.id, label: `${s.name} (${s.contacts.length})` }))} />
-      <Select label="Vendor" value={f.vendor} onChange={(e) => set("vendor", e.target.value)} options={[{ value: "meta", label: "Meta Cloud API" }, { value: "qontak", label: "Qontak" }]} />
-      <Select label="Template Tersimpan" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />
-      {selectedTpl && selectedTpl.status !== "approved" ? <Notice kind="info">Template ini berstatus <strong>{selectedTpl.status}</strong>. Pastikan sudah disetujui Meta sebelum benar-benar dikirim.</Notice> : null}
-      <Input label="Nama / ID Template" value={f.templateName} onChange={(e) => set("templateName", e.target.value)} hint="Terisi otomatis bila memilih template tersimpan. Manual: hello_world (Meta) / Template ID (Qontak)" />
-      <Input label="Bahasa Template" value={f.templateLang} onChange={(e) => set("templateLang", e.target.value)} hint="id / en_US" />
-      <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel" />
-      <Textarea label="Preview Pesan (audit)" value={f.messageText} onChange={(e) => set("messageText", e.target.value)} />
+      <Select label="Vendor" value={f.vendor} onChange={(e) => set("vendor", e.target.value)} options={[{ value: "meta", label: "Meta Cloud API" }, { value: "qontak", label: "Qontak" }, { value: "baileys", label: "WhatsApp Langsung (QR) — tanpa template" }]} />
+      {isBaileys ? (
+        <>
+          <Notice kind="info">Jalur <strong>tidak resmi</strong> (scan QR). Pesan teks dikirim langsung tanpa template/approval. ⚠ Ada risiko nomor diblokir — pakai volume kecil & nomor non-kritis. Pastikan sudah <strong>Terhubung</strong> di menu Akun WhatsApp.</Notice>
+          <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="nilai untuk {{1}}, {{2}}, … di dalam pesan — kosongkan bila tak pakai variabel" />
+          <Textarea label="Isi Pesan" value={f.messageText} onChange={(e) => set("messageText", e.target.value)} hint="Teks yang dikirim apa adanya. Boleh pakai {{1}} untuk personalisasi (mis. nama)." />
+        </>
+      ) : (
+        <>
+          <Select label="Template Tersimpan" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />
+          {selectedTpl && selectedTpl.status !== "approved" ? <Notice kind="info">Template ini berstatus <strong>{selectedTpl.status}</strong>. Pastikan sudah disetujui Meta sebelum benar-benar dikirim.</Notice> : null}
+          <Input label="Nama / ID Template" value={f.templateName} onChange={(e) => set("templateName", e.target.value)} hint="Terisi otomatis bila memilih template tersimpan. Manual: hello_world (Meta) / Template ID (Qontak)" />
+          <Input label="Bahasa Template" value={f.templateLang} onChange={(e) => set("templateLang", e.target.value)} hint="id / en_US" />
+          <Input label="Parameter (pisah koma, opsional)" value={f.bodyParams} onChange={(e) => set("bodyParams", e.target.value)} hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel" />
+          <Textarea label="Preview Pesan (audit)" value={f.messageText} onChange={(e) => set("messageText", e.target.value)} />
+        </>
+      )}
       <Input label="Jadwal (opsional)" type="datetime-local" value={f.schedule} onChange={(e) => set("schedule", e.target.value)} />
 
       {recipients > 0 ? (
@@ -157,7 +168,7 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
         <Button variant="ghost" onClick={onClose}>Batal</Button>
-        <Button icon="send" onClick={submit} disabled={!f.segmentId || !f.templateName.trim() || saving}>{saving ? "Mengirim..." : "Kirim Blast"}</Button>
+        <Button icon="send" onClick={submit} disabled={!f.segmentId || (isBaileys ? !f.messageText.trim() : !f.templateName.trim()) || saving}>{saving ? "Mengirim..." : "Kirim Blast"}</Button>
       </div>
     </Modal>
   );

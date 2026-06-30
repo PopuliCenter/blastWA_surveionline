@@ -12,6 +12,7 @@ export type BlastJob = {
   templateName: string;
   templateLang: string;
   bodyParams: string[];
+  text?: string; // teks final (dipakai vendor templateless mis. Baileys)
   flowToken?: string; // broadcast Flow: korelasi balasan flow ke survei
 };
 

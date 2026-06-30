@@ -69,6 +69,11 @@ export const api = {
   setVendorActive: (vendor, active) =>
     request(`/api/vendors/${vendor}/active`, { method: "PUT", body: { active } }),
 
+  // WhatsApp Langsung (Baileys / scan QR)
+  baileysStatus: () => request("/api/baileys/status"),
+  baileysConnect: () => request("/api/baileys/connect", { method: "POST" }),
+  baileysLogout: () => request("/api/baileys/logout", { method: "POST" }),
+
   // Reports
   stats: () => request("/api/stats"),
   webhookLogs: (limit = 100) => request(`/api/webhook-logs?limit=${limit}`),

@@ -33,12 +33,16 @@ export async function blastRoutes(app: FastifyInstance): Promise<void> {
       .object({
         surveyId: z.string().optional(),
         segmentId: z.string(),
-        vendor: z.enum(["meta", "qontak"]).optional(),
-        templateName: z.string().min(1),
+        vendor: z.enum(["meta", "qontak", "baileys"]).optional(),
+        templateName: z.string().optional(), // wajib untuk meta/qontak; tidak dipakai baileys
         templateLang: z.string().optional(),
-        messageText: z.string().optional(),
+        messageText: z.string().optional(), // teks langsung (wajib untuk baileys)
         bodyParams: z.array(z.string()).optional(),
         scheduledAt: z.string().optional(),
+      })
+      // Baileys (templateless) butuh messageText; vendor resmi butuh templateName.
+      .refine((d) => (d.vendor === "baileys" ? Boolean(d.messageText && d.messageText.trim()) : Boolean(d.templateName && d.templateName.trim())), {
+        message: "Vendor resmi wajib 'templateName'; WhatsApp Langsung (baileys) wajib 'messageText'.",
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });

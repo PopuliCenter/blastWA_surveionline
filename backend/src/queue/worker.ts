@@ -37,7 +37,7 @@ async function main() {
   const worker = new Worker<BlastJob>(
     BLAST_QUEUE,
     async (job, token) => {
-      const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams, flowToken } = job.data;
+      const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams, text, flowToken } = job.data;
 
       // 1) Lewati kontak yang sudah opt-out (penting untuk blast terjadwal)
       const recipient = await prisma.blastRecipient.findUnique({
@@ -65,13 +65,16 @@ async function main() {
       }
 
       const provider = getProvider(vendor);
-      const result = await provider.sendTemplate({
-        to,
-        templateName,
-        languageCode: templateLang,
-        bodyParams,
-        ...(flowToken ? { flowToken } : {}),
-      });
+      // Vendor templateless (mis. Baileys) → kirim teks final apa adanya.
+      const result = provider.templateless
+        ? await provider.sendText({ to, text: text ?? "" })
+        : await provider.sendTemplate({
+            to,
+            templateName,
+            languageCode: templateLang,
+            bodyParams,
+            ...(flowToken ? { flowToken } : {}),
+          });
 
       if (result.status === "failed") {
         await prisma.blastRecipient.update({

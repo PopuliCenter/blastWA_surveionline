@@ -3,6 +3,7 @@ import { prisma } from "../db.js";
 import { decryptJson } from "../lib/crypto.js";
 import { MetaCloudAdapter, type MetaConfig } from "./meta.js";
 import { QontakAdapter, type QontakConfig } from "./qontak.js";
+import { BaileysAdapter } from "./baileys.js";
 import type { MessagingProvider } from "./types.js";
 
 let providers: Record<string, MessagingProvider> = {};
@@ -22,6 +23,8 @@ function buildFromEnv(): Record<string, MessagingProvider> {
       channelIntegrationId: env.QONTAK_CHANNEL_INTEGRATION_ID,
       webhookSecret: env.QONTAK_WEBHOOK_SECRET,
     }),
+    // Gateway tidak resmi (scan QR). Tak punya kredensial DB — status dari socket/sesi.
+    baileys: new BaileysAdapter(),
   };
 }
 
