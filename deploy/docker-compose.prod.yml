@@ -22,7 +22,7 @@ services:
   backend:
     build: ../backend
     container_name: wa_backend
-    command: sh -c "npx prisma migrate deploy && node dist/server.js"
+    command: sh -c "npx -y prisma migrate deploy && node dist/server.js"
     env_file: [../backend/.env]
     environment:
       DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
