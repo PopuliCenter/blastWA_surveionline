@@ -19,3 +19,12 @@ services:
   nginx:
     volumes:
       - ./wa.risetcenter.com.conf:/etc/nginx/conf.d/wa.risetcenter.com.conf:ro
+    # Pastikan edge nginx TETAP tersambung ke network "web" walau di-recreate
+    # (web sebelumnya disambung manual → hilang saat compose recreate).
+    networks:
+      - default
+      - web
+
+networks:
+  web:
+    external: true
