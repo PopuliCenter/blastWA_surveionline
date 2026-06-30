@@ -162,19 +162,31 @@ class BaileysGateway {
         if (up.type !== "notify") return;
         const events: NormalizedInbound[] = [];
         for (const m of up.messages) {
-          const jid = m.key.remoteJid ?? "";
-          if (m.key.fromMe) { console.log(`[baileys] lewati fromMe (${jid})`); continue; }
-          if (!jid.endsWith("@s.whatsapp.net")) { console.log(`[baileys] lewati non-personal (${jid})`); continue; } // abaikan grup/broadcast/status
+          const key = m.key as { remoteJid?: string | null; fromMe?: boolean | null; id?: string | null; senderPn?: string | null; participantPn?: string | null };
+          const jid = key.remoteJid ?? "";
+          if (key.fromMe) { console.log(`[baileys] lewati fromMe (${jid})`); continue; }
+          // Abaikan grup / status / channel — terima chat pribadi (@s.whatsapp.net) & LID (@lid)
+          if (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) { console.log(`[baileys] lewati grup/status (${jid})`); continue; }
           const text = extractText(m.message);
           if (!text) { console.log(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`); continue; }
-          const from = jid.split("@")[0] ?? "";
+          // WhatsApp kini sering pakai LID (@lid) demi privasi → nomor asli ada di senderPn,
+          // participantPn, atau peta LID→PN milik socket.
+          let phoneJid = "";
+          if (jid.endsWith("@s.whatsapp.net")) phoneJid = jid;
+          else if (jid.endsWith("@lid")) {
+            phoneJid = key.senderPn || key.participantPn || "";
+            if (!phoneJid) { try { phoneJid = (sock as unknown as { signalRepository?: { lidMapping?: { getPNForLID?: (j: string) => string | undefined } } }).signalRepository?.lidMapping?.getPNForLID?.(jid) || ""; } catch { /* abaikan */ } }
+          } else phoneJid = jid;
+          const from = ((phoneJid || jid).split("@")[0] ?? "").replace(/\D/g, "");
+          console.log(`[baileys] masuk jid=${jid} senderPn=${key.senderPn ?? "-"} → nomor=${from || "(tak terdeteksi)"}`);
+          if (!from) { console.log("[baileys] lewati: nomor tak terdeteksi"); continue; }
           const tsNum = Number(m.messageTimestamp) || Math.floor(Date.now() / 1000);
           events.push({
             vendor: this.name,
             kind: "message",
             from,
             text,
-            messageId: m.key.id ?? undefined,
+            messageId: key.id ?? undefined,
             timestamp: new Date(tsNum * 1000).toISOString(),
             raw: m,
           });
