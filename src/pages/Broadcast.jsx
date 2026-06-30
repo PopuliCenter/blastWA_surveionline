@@ -132,8 +132,37 @@ function ManageSegmentModal({ segment, onClose }) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [waMap, setWaMap] = useState({}); // phone -> boolean (hasil cek WA)
+  const [checking, setChecking] = useState(false);
+  const [checkNote, setCheckNote] = useState("");
 
   const act = async (fn) => { setErr(""); try { await fn(); await reload(); } catch (e) { setErr(e.message); } finally { setBusy(""); } };
+
+  const checkWA = async () => {
+    const all = data?.contacts || [];
+    if (!all.length) return;
+    if (!window.confirm(`Cek ${all.length} nomor ke WhatsApp via jalur Baileys? Butuh WhatsApp Langsung terhubung. Untuk daftar besar prosesnya berjeda (anti-banned).`)) return;
+    setChecking(true); setErr(""); setCheckNote("");
+    try {
+      const res = await api.checkNumbersWA(all.map((c) => c.phone));
+      const map = {};
+      (res || []).forEach((r) => { map[r.phone] = r.onWhatsApp; });
+      setWaMap(map);
+      const noWa = Object.values(map).filter((v) => v === false).length;
+      setCheckNote(`Selesai: ${Object.values(map).filter(Boolean).length} ber-WA, ${noWa} tidak ber-WA.`);
+    } catch (e) { setErr(e.message); } finally { setChecking(false); }
+  };
+
+  const optOutNonWA = async () => {
+    const targets = (data?.contacts || []).filter((c) => waMap[c.phone] === false && c.subscribed);
+    if (!targets.length) return;
+    if (!window.confirm(`Tandai opt-out ${targets.length} nomor yang tidak ber-WA? (tetap tersimpan, dikecualikan dari blast)`)) return;
+    setErr("");
+    try {
+      for (const c of targets) await api.updateContact(c.id, { subscribed: false });
+      await reload();
+    } catch (e) { setErr(e.message); }
+  };
   const toggleSub = (c) => { setBusy(c.id); act(() => api.updateContact(c.id, { subscribed: !c.subscribed })); };
   const editName = (c) => { const name = window.prompt("Nama kontak:", c.name || ""); if (name !== null) { setBusy(c.id); act(() => api.updateContact(c.id, { name })); } };
   const removeFromSeg = (c) => { if (!window.confirm(`Keluarkan ${c.phone} dari segmen ini? (kontak tetap ada di sistem)`)) return; setBusy(c.id); act(() => api.removeSegmentContact(segment.id, c.id)); };
@@ -151,12 +180,18 @@ function ManageSegmentModal({ segment, onClose }) {
             <div style={{ fontSize: 12.5, color: theme.textMuted }}>{data?.contacts.length || 0} kontak{optedOut ? ` • ${optedOut} opt-out (dikecualikan dari blast)` : ""}</div>
             <div style={{ minWidth: 200 }}><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nomor / nama…" /></div>
           </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+            <Button variant="secondary" size="sm" icon="whatsapp" onClick={checkWA} disabled={checking || !data?.contacts.length}>{checking ? "Mengecek…" : "Cek Nomor WA"}</Button>
+            {Object.values(waMap).some((v) => v === false) ? <Button variant="ghost" size="sm" onClick={optOutNonWA}>Opt-out yang tak ber-WA</Button> : null}
+            {checkNote ? <span style={{ fontSize: 12, color: theme.green }}>{checkNote}</span> : null}
+          </div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginBottom: 10 }}>Cek WA memakai jalur <strong>WhatsApp Langsung (Baileys)</strong> — harus terhubung. Jalur Meta resmi tidak punya pengecekan ini.</div>
           {list.length ? (
             <div style={{ maxHeight: 380, overflow: "auto", border: `1px solid ${theme.border}`, borderRadius: 9 }}>
               {list.map((c, i) => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 11px", borderTop: i ? `1px solid ${theme.border}` : "none", opacity: busy === c.id ? 0.5 : 1 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: theme.text, fontWeight: 600 }}>{c.name || "(tanpa nama)"} {!c.subscribed ? <Badge tone="red">opt-out</Badge> : null}</div>
+                    <div style={{ fontSize: 13, color: theme.text, fontWeight: 600 }}>{c.name || "(tanpa nama)"} {!c.subscribed ? <Badge tone="red">opt-out</Badge> : null}{waMap[c.phone] === true ? <Badge tone="green">WA</Badge> : waMap[c.phone] === false ? <Badge tone="red">tdk ber-WA</Badge> : null}</div>
                     <div style={{ fontSize: 12, color: theme.textMuted, fontFamily: "monospace" }}>{c.phone}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>

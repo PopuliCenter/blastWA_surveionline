@@ -197,6 +197,29 @@ class BaileysGateway {
     }
   }
 
+  // Cek apakah tiap nomor terdaftar di WhatsApp (pakai onWhatsApp). Jeda kecil anti-banned.
+  async checkNumbers(phones: string[]): Promise<{ phone: string; onWhatsApp: boolean }[]> {
+    if (!this.sock || this.status !== "connected") {
+      throw new Error("WhatsApp Langsung belum terhubung — scan QR dulu.");
+    }
+    const sock = this.sock;
+    const out: { phone: string; onWhatsApp: boolean }[] = [];
+    for (const raw of phones) {
+      const phone = raw.replace(/\D/g, "");
+      if (!phone) continue;
+      try {
+        const res = await sock.onWhatsApp(phone);
+        const first = Array.isArray(res) ? res[0] : undefined;
+        out.push({ phone, onWhatsApp: first?.exists === true });
+      } catch {
+        out.push({ phone, onWhatsApp: false });
+      }
+      // jeda acak 300–700ms agar pola query tidak rapat (mengurangi risiko diblokir)
+      await new Promise((r) => setTimeout(r, 300 + Math.floor(Math.random() * 400)));
+    }
+    return out;
+  }
+
   async logout(): Promise<void> {
     try {
       await this.sock?.logout();
