@@ -1,15 +1,22 @@
 import { useCallback, useState } from "react";
 import { api, apiBase } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Notice, Loading, Empty, useLoader, theme, fmtDate } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
 
 export default function Webhook() {
   const logs = useLoader(useCallback(() => api.webhookLogs(100), []));
   const [testing, setTesting] = useState(false);
   const [note, setNote] = useState("");
+  const [publicBase, setPublicBase] = useState(() => localStorage.getItem("populi.publicBase") || "");
+  const [copied, setCopied] = useState("");
+
+  const base = (publicBase.trim() || apiBase).replace(/\/+$/, "");
+  const isLocal = /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(base);
+  const savePublic = () => { localStorage.setItem("populi.publicBase", publicBase.trim()); setNote("URL publik disimpan."); };
+  const copy = async (url) => { try { await navigator.clipboard.writeText(url); setCopied(url); setTimeout(() => setCopied(""), 1500); } catch { /* ignore */ } };
 
   const endpoints = [
-    { vendor: "Meta Cloud API", url: `${apiBase}/webhook/meta`, methods: "GET + POST" },
-    { vendor: "Qontak", url: `${apiBase}/webhook/qontak`, methods: "POST" },
+    { vendor: "Meta Cloud API", url: `${base}/webhook/meta`, methods: "GET + POST" },
+    { vendor: "Qontak", url: `${base}/webhook/qontak`, methods: "POST" },
   ];
 
   const sendTest = async () => {
@@ -31,18 +38,37 @@ export default function Webhook() {
       <Notice kind="info">{note}</Notice>
 
       <Card title="URL Webhook — daftarkan di Meta/Qontak" style={{ marginBottom: 16 }}>
+        {isLocal ? (
+          <div style={{ background: theme.yellowSoft, color: theme.yellow, borderRadius: 9, padding: "11px 13px", fontSize: 12.5, lineHeight: 1.55, marginBottom: 14 }}>
+            <strong>⚠ localhost tidak bisa dipakai untuk Meta/Qontak.</strong> URL <span style={{ fontFamily: "monospace" }}>localhost</span> hanya bisa diakses dari komputer ini — server Meta di internet tidak bisa menjangkaunya. Pakai <strong>URL publik</strong>:
+            <div style={{ marginTop: 6 }}>• <strong>Saat uji lokal:</strong> jalankan tunnel (mis. <span style={{ fontFamily: "monospace" }}>ngrok http 3000</span> atau <span style={{ fontFamily: "monospace" }}>cloudflared</span>), salin URL https-nya.</div>
+            <div>• <strong>Saat produksi:</strong> pakai domain server/hosting Anda (https).</div>
+            <div style={{ marginTop: 6 }}>Lalu tempel di kolom di bawah agar URL webhook lengkapnya otomatis terbentuk.</div>
+          </div>
+        ) : null}
+
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <Input label="Base URL publik server (opsional)" value={publicBase} onChange={(e) => setPublicBase(e.target.value)} placeholder="https://xxxx.ngrok-free.app  atau  https://api.domainanda.com" hint="Tanpa garis miring di akhir. Kosongkan untuk pakai alamat aplikasi saat ini." style={{ marginBottom: 0 }} />
+          </div>
+          <Button variant="secondary" onClick={savePublic}>Simpan</Button>
+        </div>
+
         <div style={{ display: "grid", gap: 10 }}>
           {endpoints.map((ep) => (
             <div key={ep.vendor} style={{ padding: 13, background: theme.surfaceAlt, borderRadius: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <strong style={{ fontSize: 13.5, color: theme.text }}>{ep.vendor}</strong>
-                <Badge tone="blue">{ep.methods}</Badge>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <Badge tone="blue">{ep.methods}</Badge>
+                  <Button variant="secondary" size="sm" icon={copied === ep.url ? "check" : "download"} onClick={() => copy(ep.url)}>{copied === ep.url ? "Disalin" : "Salin"}</Button>
+                </div>
               </div>
-              <div style={{ fontFamily: "monospace", fontSize: 12.5, marginTop: 7, color: theme.primary, wordBreak: "break-all" }}>{ep.url}</div>
+              <div style={{ fontFamily: "monospace", fontSize: 12.5, marginTop: 7, color: isLocal ? theme.textMuted : theme.primary, wordBreak: "break-all" }}>{ep.url}</div>
             </div>
           ))}
         </div>
-        <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 12 }}>Saat dev pakai tunnel publik (cloudflared/ngrok). Verify token & secret diatur di server.</div>
+        <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 12 }}>Verify Token (Meta) & Secret diatur di halaman <strong>Akun WhatsApp</strong>; samakan dengan yang Anda isi di Meta/Qontak.</div>
       </Card>
 
       <Card title="Log Webhook">
