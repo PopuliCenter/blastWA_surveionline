@@ -94,6 +94,14 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  // Hapus banyak respons survei (responden) sekaligus — beserta jawabannya.
+  app.post("/api/surveys/responses/bulk-delete", async (req, reply) => {
+    const parsed = z.object({ ids: z.array(z.string()).min(1).max(5000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const r = await prisma.surveyResponse.deleteMany({ where: { id: { in: parsed.data.ids } } });
+    return { ok: true, deleted: r.count };
+  });
+
   // Ambil data jawaban survei (per responden).
   app.get("/api/surveys/:id/responses", async (req) => {
     const id = (req.params as { id: string }).id;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { exportResponses } from "../lib/exportSurvey";
-import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Textarea, Select, Toggle, Modal, Notice, Loading, Empty, useLoader, useSelection, Checkbox, BulkBar, theme, fmtDate, Icon } from "../lib/ui";
 
 export default function Surveys() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
@@ -565,12 +565,23 @@ function QuestionItem({ q, index, total, onChange, onDelete, onMove }) {
 }
 
 function ResponsesModal({ survey, onClose }) {
-  const { data, loading, error } = useLoader(useCallback(() => api.surveyResponses(survey.id), [survey.id]));
+  const { data, loading, error, reload } = useLoader(useCallback(() => api.surveyResponses(survey.id), [survey.id]));
   const responses = data || [];
   const [upper, setUpper] = useState(false);
+  const sel = useSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [delErr, setDelErr] = useState("");
+  const bulkDelete = async () => {
+    if (!sel.size || !window.confirm(`Hapus ${sel.size} responden terpilih? Jawaban mereka ikut terhapus permanen.`)) return;
+    setBulkBusy(true); setDelErr("");
+    try { await api.bulkDeleteResponses(sel.list()); sel.clear(); await reload(); } catch (e) { setDelErr(e.message); } finally { setBulkBusy(false); }
+  };
   return (
     <Modal title={`Respons: ${survey.title}`} onClose={onClose} width={760}>
-      <Notice>{error}</Notice>
+      <Notice>{error || delErr}</Notice>
+      <BulkBar count={sel.size} total={responses.length} allSelected={responses.length > 0 && responses.every((r) => sel.has(r.id))} noun="responden" busy={bulkBusy}
+        onToggleAll={() => responses.every((r) => sel.has(r.id)) ? sel.clear() : sel.setAll(responses.map((r) => r.id))}
+        onClear={sel.clear} onDelete={bulkDelete} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, color: theme.textMuted }}>{responses.length} responden{responses.length ? ` • ${responses.filter((r) => r.completedAt).length} selesai` : ""}</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -584,9 +595,12 @@ function ResponsesModal({ survey, onClose }) {
       {loading ? <Loading /> : responses.length ? (
         <div style={{ display: "grid", gap: 12 }}>
           {responses.map((r) => (
-            <div key={r.id} style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14 }}>
+            <div key={r.id} style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, outline: sel.has(r.id) ? `2px solid ${theme.primary}` : "none" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <strong style={{ color: theme.text }}>{r.name || r.phone}</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <Checkbox checked={sel.has(r.id)} onChange={() => sel.toggle(r.id)} />
+                  <strong style={{ color: theme.text }}>{r.name || r.phone}</strong>
+                </div>
                 <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
               </div>
               <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 10 }}>{r.phone} • {fmtDate(r.startedAt)}</div>

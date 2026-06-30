@@ -67,4 +67,11 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
     await prisma.segment.delete({ where: { id } });
     return { ok: true };
   });
+
+  app.post("/api/segments/bulk-delete", async (req, reply) => {
+    const parsed = z.object({ ids: z.array(z.string()).min(1).max(1000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const r = await prisma.segment.deleteMany({ where: { id: { in: parsed.data.ids } } });
+    return { ok: true, deleted: r.count };
+  });
 }

@@ -56,4 +56,11 @@ export async function blastRoutes(app: FastifyInstance): Promise<void> {
     await prisma.blast.delete({ where: { id } });
     return { ok: true };
   });
+
+  app.post("/api/blasts/bulk-delete", async (req, reply) => {
+    const parsed = z.object({ ids: z.array(z.string()).min(1).max(1000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const r = await prisma.blast.deleteMany({ where: { id: { in: parsed.data.ids } } });
+    return { ok: true, deleted: r.count };
+  });
 }

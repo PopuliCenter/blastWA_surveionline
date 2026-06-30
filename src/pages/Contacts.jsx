@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Input, Modal, Notice, Loading, Empty, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Input, Modal, Notice, Loading, Empty, useLoader, useSelection, Checkbox, BulkBar, theme, fmtDate, Icon } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
 
 export default function Contacts() {
@@ -9,9 +9,18 @@ export default function Contacts() {
   const [modal, setModal] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [actionError, setActionError] = useState("");
+  const sel = useSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
   const contacts = (loader.data || []).filter((c) => `${c.phone} ${c.name || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const allSelected = contacts.length > 0 && contacts.every((c) => sel.has(c.id));
 
   const run = async (fn) => { setActionError(""); try { await fn(); await loader.reload(); } catch (e) { setActionError(e.message); } };
+
+  const bulkDelete = async () => {
+    if (!sel.size || !window.confirm(`Hapus ${sel.size} kontak terpilih? Tindakan ini permanen.`)) return;
+    setBulkBusy(true); setActionError("");
+    try { await api.bulkDeleteContacts(sel.list()); sel.clear(); await loader.reload(); } catch (e) { setActionError(e.message); } finally { setBulkBusy(false); }
+  };
 
   return (
     <div>
@@ -21,6 +30,9 @@ export default function Contacts() {
         <Button key="n" icon="plus" onClick={() => setModal({})}>Tambah Kontak</Button>,
       ]} />
       <Notice>{loader.error || actionError}</Notice>
+      <BulkBar count={sel.size} total={contacts.length} allSelected={allSelected} noun="kontak" busy={bulkBusy}
+        onToggleAll={() => allSelected ? sel.clear() : sel.setAll(contacts.map((c) => c.id))}
+        onClear={sel.clear} onDelete={bulkDelete} />
       <Card pad={0}>
         <div style={{ padding: 14, borderBottom: `1px solid ${theme.border}`, position: "relative" }}>
           <span style={{ position: "absolute", left: 26, top: 24, color: theme.textMuted }}><Icon name="search" size={16} /></span>
@@ -29,8 +41,9 @@ export default function Contacts() {
         {loader.loading ? <Loading /> : contacts.length ? (
           <div>
             {contacts.map((c, i) => (
-              <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 18px", borderTop: i ? `1px solid ${theme.border}` : "none" }}>
+              <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 18px", borderTop: i ? `1px solid ${theme.border}` : "none", background: sel.has(c.id) ? theme.primarySoft : "transparent" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: theme.primarySoft, color: theme.primary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{(c.name || c.phone).slice(0, 1).toUpperCase()}</div>
                   <div>
                     <div style={{ fontWeight: 600, color: theme.text, fontSize: 13.5, display: "flex", alignItems: "center", gap: 7 }}>

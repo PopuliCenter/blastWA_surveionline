@@ -292,6 +292,32 @@ export function useLoader(loader) {
   return { data, loading, error, reload, setData };
 }
 
+// Hook seleksi banyak item (pilih untuk hapus massal)
+export function useSelection() {
+  const [ids, setIds] = useState(() => new Set());
+  const toggle = (id) => setIds((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const setAll = (list) => setIds(new Set(list));
+  const clear = () => setIds(new Set());
+  return { ids, has: (id) => ids.has(id), size: ids.size, toggle, setAll, clear, list: () => [...ids] };
+}
+
+export function Checkbox({ checked, onChange, onClick }) {
+  return <input type="checkbox" checked={checked} onChange={onChange} onClick={onClick} style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.primary, flexShrink: 0 }} />;
+}
+
+// Bar aksi massal — muncul saat ada item terpilih
+export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDelete, noun = "item", busy }) {
+  if (!count) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 13px", background: theme.primarySoft, border: `1px solid ${theme.primary}33`, borderRadius: 10, marginBottom: 12, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>{count} {noun} dipilih</span>
+      {onToggleAll ? <button onClick={onToggleAll} style={{ border: "none", background: "transparent", color: theme.primary, fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>{allSelected ? "Batalkan semua" : `Pilih semua (${total})`}</button> : null}
+      <button onClick={onClear} style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 12.5, cursor: "pointer" }}>Bersihkan</button>
+      <Button variant="danger" size="sm" icon="trash" onClick={onDelete} disabled={busy} style={{ marginLeft: "auto" }}>{busy ? "Menghapus..." : `Hapus ${count}`}</Button>
+    </div>
+  );
+}
+
 export function fmtDate(d) {
   try { return new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }); } catch { return String(d); }
 }

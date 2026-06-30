@@ -47,17 +47,20 @@ export const api = {
   updateSurvey: (id, data) => request(`/api/surveys/${id}`, { method: "PUT", body: data }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),
   surveyResponses: (id) => request(`/api/surveys/${id}/responses`),
+  bulkDeleteResponses: (ids) => request("/api/surveys/responses/bulk-delete", { method: "POST", body: { ids } }),
   surveyFlowJson: (id) => request(`/api/surveys/${id}/flow-json`),
 
   // Segments
   listSegments: () => request("/api/segments"),
   createSegment: (data) => request("/api/segments", { method: "POST", body: data }),
   deleteSegment: (id) => request(`/api/segments/${id}`, { method: "DELETE" }),
+  bulkDeleteSegments: (ids) => request("/api/segments/bulk-delete", { method: "POST", body: { ids } }),
 
   // Blasts
   listBlasts: () => request("/api/blasts"),
   createBlast: (data) => request("/api/blasts", { method: "POST", body: data }),
   deleteBlast: (id) => request(`/api/blasts/${id}`, { method: "DELETE" }),
+  bulkDeleteBlasts: (ids) => request("/api/blasts/bulk-delete", { method: "POST", body: { ids } }),
 
   // Vendors
   listVendors: () => request("/api/vendors"),
@@ -82,6 +85,8 @@ export const api = {
   bulkContacts: (contacts) => request("/api/contacts/bulk", { method: "POST", body: { contacts } }),
   updateContact: (id, data) => request(`/api/contacts/${id}`, { method: "PUT", body: data }),
   deleteContact: (id) => request(`/api/contacts/${id}`, { method: "DELETE" }),
+  bulkDeleteContacts: (ids) => request("/api/contacts/bulk-delete", { method: "POST", body: { ids } }),
+  bulkDeleteConversations: (ids) => request("/api/conversations/bulk-delete", { method: "POST", body: { ids } }),
 
   // Chat
   conversations: () => request("/api/conversations"),

@@ -86,6 +86,22 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  // Hapus banyak kontak sekaligus
+  app.post("/api/contacts/bulk-delete", async (req, reply) => {
+    const parsed = z.object({ ids: z.array(z.string()).min(1).max(5000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const r = await prisma.contact.deleteMany({ where: { id: { in: parsed.data.ids } } });
+    return { ok: true, deleted: r.count };
+  });
+
+  // Hapus banyak percakapan (riwayat pesan) sekaligus — kontak tetap ada
+  app.post("/api/conversations/bulk-delete", async (req, reply) => {
+    const parsed = z.object({ ids: z.array(z.string()).min(1).max(5000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const r = await prisma.message.deleteMany({ where: { contactId: { in: parsed.data.ids } } });
+    return { ok: true, deleted: r.count };
+  });
+
   // === Chat / Inbox ===
 
   // Daftar percakapan (kontak yang punya pesan) + status sesi 24 jam, belum-dibalas, selesai

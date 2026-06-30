@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, Tabs, useLoader, theme, fmtDate, Icon } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, Tabs, useLoader, useSelection, Checkbox, BulkBar, theme, fmtDate, Icon } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
 import { TopUpGuide } from "../lib/topup";
 
@@ -14,8 +14,24 @@ export default function Broadcast() {
   const [showSeg, setShowSeg] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
+  const selBlast = useSelection();
+  const selSeg = useSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const blastList = blasts.data || [];
+  const segList = segments.data || [];
 
   const run = async (fn, reloaders = []) => { setErr(""); try { await fn(); await Promise.all(reloaders.map((r) => r())); } catch (e) { setErr(e.message); } };
+
+  const bulkDel = async (which) => {
+    const s = which === "blasts" ? selBlast : selSeg;
+    if (!s.size || !window.confirm(`Hapus ${s.size} ${which === "blasts" ? "blast" : "segmen"} terpilih? Tindakan ini permanen.`)) return;
+    setBulkBusy(true); setErr("");
+    try {
+      if (which === "blasts") { await api.bulkDeleteBlasts(s.list()); await blasts.reload(); }
+      else { await api.bulkDeleteSegments(s.list()); await segments.reload(); }
+      s.clear();
+    } catch (e) { setErr(e.message); } finally { setBulkBusy(false); }
+  };
 
   return (
     <div>
@@ -31,14 +47,21 @@ export default function Broadcast() {
       {tab === "cost" ? (
         <CostSimulator segments={segments.data || []} />
       ) : tab === "blasts" ? (
-        blasts.loading ? <Loading /> : (blasts.data || []).length ? (
+        blasts.loading ? <Loading /> : blastList.length ? (
+          <>
+          <BulkBar count={selBlast.size} total={blastList.length} allSelected={blastList.every((b) => selBlast.has(b.id))} noun="blast" busy={bulkBusy}
+            onToggleAll={() => blastList.every((b) => selBlast.has(b.id)) ? selBlast.clear() : selBlast.setAll(blastList.map((b) => b.id))}
+            onClear={selBlast.clear} onDelete={() => bulkDel("blasts")} />
           <div style={{ display: "grid", gap: 14 }}>
-            {(blasts.data || []).map((b) => (
-              <Card key={b.id}>
+            {blastList.map((b) => (
+              <Card key={b.id} style={selBlast.has(b.id) ? { outline: `2px solid ${theme.primary}` } : undefined}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                  <div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ paddingTop: 2 }}><Checkbox checked={selBlast.has(b.id)} onChange={() => selBlast.toggle(b.id)} /></div>
+                    <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>{b.surveyTitle}</div>
                     <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 4 }}>{b.segmentName} • vendor {b.vendor} • template {b.message || "-"} • {fmtDate(b.sentAt)}</div>
+                    </div>
                   </div>
                   <Badge tone={b.status === "completed" ? "green" : b.status === "failed" ? "red" : b.status === "scheduled" ? "yellow" : "blue"}>{b.status}</Badge>
                 </div>
@@ -52,19 +75,28 @@ export default function Broadcast() {
               </Card>
             ))}
           </div>
+          </>
         ) : <Card><Empty icon="broadcast" title="Belum ada blast" /></Card>
       ) : (
-        segments.loading ? <Loading /> : (segments.data || []).length ? (
+        segments.loading ? <Loading /> : segList.length ? (
+          <>
+          <BulkBar count={selSeg.size} total={segList.length} allSelected={segList.every((s) => selSeg.has(s.id))} noun="segmen" busy={bulkBusy}
+            onToggleAll={() => segList.every((s) => selSeg.has(s.id)) ? selSeg.clear() : selSeg.setAll(segList.map((s) => s.id))}
+            onClear={selSeg.clear} onDelete={() => bulkDel("segments")} />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 }}>
-            {(segments.data || []).map((s) => (
-              <Card key={s.id}>
-                <div style={{ fontWeight: 700, color: theme.text }}>{s.name}</div>
+            {segList.map((s) => (
+              <Card key={s.id} style={selSeg.has(s.id) ? { outline: `2px solid ${theme.primary}` } : undefined}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <Checkbox checked={selSeg.has(s.id)} onChange={() => selSeg.toggle(s.id)} />
+                  <div style={{ fontWeight: 700, color: theme.text }}>{s.name}</div>
+                </div>
                 <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 4 }}>{s.contacts.length} kontak</div>
                 <div style={{ marginTop: 10, background: theme.surfaceAlt, borderRadius: 9, padding: 10, fontSize: 12, color: theme.textMuted }}>{s.contacts.slice(0, 5).join(", ")}{s.contacts.length > 5 ? "…" : ""}</div>
                 <div style={{ marginTop: 12 }}><Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSegment(s.id), [segments.reload])}>Hapus</Button></div>
               </Card>
             ))}
           </div>
+          </>
         ) : <Card><Empty icon="contacts" title="Belum ada segmen" /></Card>
       )}
 

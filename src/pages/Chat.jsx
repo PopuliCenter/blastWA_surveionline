@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { PageHeader, Card, Button, Badge, Modal, Notice, Loading, Empty, useLoader, useIsMobile, useMediaQuery, theme, Icon, fmtDate } from "../lib/ui";
+import { PageHeader, Card, Button, Badge, Modal, Notice, Loading, Empty, useLoader, useSelection, Checkbox, BulkBar, useIsMobile, useMediaQuery, theme, Icon, fmtDate } from "../lib/ui";
 
 // ── Helper sesi & waktu ────────────────────────────────────────────────────
 function sessionInfo(convo) {
@@ -49,9 +49,22 @@ export default function Chat() {
   const [sortNewest, setSortNewest] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [actionErr, setActionErr] = useState("");
+  const sel = useSelection();
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const all = convos.data || [];
   const active = all.find((c) => c.id === activeId) || null;
+
+  const bulkDeleteConvos = async () => {
+    if (!sel.size || !window.confirm(`Hapus ${sel.size} percakapan terpilih? Riwayat pesannya akan dihapus (kontak tetap ada).`)) return;
+    setBulkBusy(true); setActionErr("");
+    try {
+      const ids = sel.list();
+      await api.bulkDeleteConversations(ids);
+      if (ids.includes(activeId)) setActiveId(null);
+      sel.clear(); await convos.reload();
+    } catch (e) { setActionErr(e.message); } finally { setBulkBusy(false); }
+  };
 
   const counts = useMemo(() => {
     const o = {};
@@ -97,12 +110,18 @@ export default function Chat() {
         </div>
       </div>
 
+      {sel.size ? <div style={{ padding: "8px 12px 0" }}><BulkBar count={sel.size} total={list.length} allSelected={list.length > 0 && list.every((c) => sel.has(c.id))} noun="percakapan" busy={bulkBusy}
+        onToggleAll={() => list.every((c) => sel.has(c.id)) ? sel.clear() : sel.setAll(list.map((c) => c.id))}
+        onClear={sel.clear} onDelete={bulkDeleteConvos} /></div> : null}
+
       {/* List */}
       <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
         {convos.loading ? <Loading /> : list.length ? list.map((c) => {
           const sess = sessionInfo(c);
           return (
-            <button key={c.id} onClick={() => { setActiveId(c.id); setShowDetails(false); }} style={{ display: "flex", gap: 10, width: "100%", textAlign: "left", padding: "11px 13px", border: "none", borderBottom: `1px solid ${theme.border}`, background: activeId === c.id ? theme.primarySoft : "transparent", cursor: "pointer" }}>
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 13px", borderBottom: `1px solid ${theme.border}`, background: sel.has(c.id) ? theme.primarySoft : activeId === c.id ? theme.primarySoft : "transparent" }}>
+            <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />
+            <button onClick={() => { setActiveId(c.id); setShowDetails(false); }} style={{ display: "flex", gap: 10, flex: 1, minWidth: 0, textAlign: "left", padding: "11px 0", border: "none", background: "transparent", cursor: "pointer" }}>
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <div style={{ width: 40, height: 40, borderRadius: "50%", background: theme.surfaceAlt, color: theme.text, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15 }}>{(c.name || c.phone).slice(0, 1).toUpperCase()}</div>
                 {sess.active ? <span style={{ position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: "50%", background: theme.green, border: `2px solid ${theme.surface}` }} /> : null}
@@ -120,6 +139,7 @@ export default function Chat() {
                 </div>
               </div>
             </button>
+            </div>
           );
         }) : <Empty icon="chat" title="Tidak ada percakapan" note={filter !== "all" ? "Coba filter lain." : undefined} />}
       </div>
