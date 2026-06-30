@@ -55,6 +55,8 @@ export const api = {
   createSegment: (data) => request("/api/segments", { method: "POST", body: data }),
   renameSegment: (id, name) => request(`/api/segments/${id}`, { method: "PUT", body: { name } }),
   addSegmentContacts: (id, contacts) => request(`/api/segments/${id}/contacts`, { method: "POST", body: { contacts } }),
+  segmentContacts: (id) => request(`/api/segments/${id}/contacts`),
+  removeSegmentContact: (id, contactId) => request(`/api/segments/${id}/contacts/${contactId}`, { method: "DELETE" }),
   deleteSegment: (id) => request(`/api/segments/${id}`, { method: "DELETE" }),
   bulkDeleteSegments: (ids) => request("/api/segments/bulk-delete", { method: "POST", body: { ids } }),
 

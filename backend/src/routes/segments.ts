@@ -96,6 +96,38 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, added, skipped, total };
   });
 
+  // Daftar anggota segmen (detail kontak) — untuk kelola di dalam segmen
+  app.get("/api/segments/:id/contacts", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const segment = await prisma.segment.findUnique({
+      where: { id },
+      include: { contacts: { include: { contact: true }, orderBy: { contact: { createdAt: "desc" } } } },
+    });
+    if (!segment) return reply.code(404).send({ error: "segmen tidak ditemukan" });
+    return {
+      id: segment.id,
+      name: segment.name,
+      contacts: segment.contacts.map((sc) => ({
+        id: sc.contact.id,
+        phone: sc.contact.phone,
+        name: sc.contact.name,
+        subscribed: sc.contact.subscribed,
+        optOutAt: sc.contact.optOutAt,
+        attributes: sc.contact.attributes,
+      })),
+    };
+  });
+
+  // Keluarkan 1 kontak dari segmen (kontaknya TIDAK dihapus, hanya lepas dari segmen ini)
+  app.delete("/api/segments/:id/contacts/:contactId", async (req, reply) => {
+    const { id, contactId } = req.params as { id: string; contactId: string };
+    await prisma.segmentContact.delete({ where: { segmentId_contactId: { segmentId: id, contactId } } }).catch(() => {
+      return reply.code(404).send({ error: "kontak tidak ada di segmen ini" });
+    });
+    const total = await prisma.segmentContact.count({ where: { segmentId: id } });
+    return { ok: true, total };
+  });
+
   app.delete("/api/segments/:id", async (req) => {
     const id = (req.params as { id: string }).id;
     await prisma.segment.delete({ where: { id } });

@@ -17,6 +17,7 @@ export default function Broadcast() {
   const [note, setNote] = useState("");
   const [reportBlast, setReportBlast] = useState(null);
   const [addSeg, setAddSeg] = useState(null);
+  const [manageSeg, setManageSeg] = useState(null);
   const selBlast = useSelection();
   const selSeg = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -104,7 +105,8 @@ export default function Broadcast() {
                 <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 4 }}>{s.contacts.length} kontak</div>
                 <div style={{ marginTop: 10, background: theme.surfaceAlt, borderRadius: 9, padding: 10, fontSize: 12, color: theme.textMuted }}>{s.contacts.slice(0, 5).join(", ")}{s.contacts.length > 5 ? "…" : ""}</div>
                 <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Button variant="secondary" size="sm" icon="plus" onClick={() => setAddSeg(s)}>Tambah Kontak</Button>
+                  <Button variant="secondary" size="sm" icon="contacts" onClick={() => setManageSeg(s)}>Kelola Kontak</Button>
+                  <Button variant="secondary" size="sm" icon="plus" onClick={() => setAddSeg(s)}>Tambah</Button>
                   <Button variant="ghost" size="sm" icon="edit" onClick={() => renameSeg(s)}>Ganti Nama</Button>
                   <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSegment(s.id), [segments.reload])}>Hapus</Button>
                 </div>
@@ -118,8 +120,61 @@ export default function Broadcast() {
       {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} templates={templates.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(async () => { setNote(""); const r = await api.createBlast(d); setNote(r?.excludedOptOut ? `Blast dibuat. ${r.excludedOptOut} kontak opt-out otomatis dikecualikan.` : "Blast dibuat & sedang dikirim."); }, [blasts.reload]).then(() => setShowBlast(false))} /> : null}
       {showSeg ? <SegmentModal onClose={() => setShowSeg(false)} onSave={(d) => run(() => api.createSegment(d), [segments.reload]).then(() => setShowSeg(false))} /> : null}
       {addSeg ? <AddContactsModal segment={addSeg} onClose={() => setAddSeg(null)} onDone={() => { setAddSeg(null); segments.reload(); }} /> : null}
+      {manageSeg ? <ManageSegmentModal segment={manageSeg} onClose={() => { setManageSeg(null); segments.reload(); }} /> : null}
       {reportBlast ? <BlastReportModal blast={reportBlast} onClose={() => setReportBlast(null)} /> : null}
     </div>
+  );
+}
+
+// Kelola anggota segmen: opt-out/opt-in, edit nama, keluarkan dari segmen, hapus kontak.
+function ManageSegmentModal({ segment, onClose }) {
+  const { data, loading, error, reload } = useLoader(useCallback(() => api.segmentContacts(segment.id), [segment.id]));
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+
+  const act = async (fn) => { setErr(""); try { await fn(); await reload(); } catch (e) { setErr(e.message); } finally { setBusy(""); } };
+  const toggleSub = (c) => { setBusy(c.id); act(() => api.updateContact(c.id, { subscribed: !c.subscribed })); };
+  const editName = (c) => { const name = window.prompt("Nama kontak:", c.name || ""); if (name !== null) { setBusy(c.id); act(() => api.updateContact(c.id, { name })); } };
+  const removeFromSeg = (c) => { if (!window.confirm(`Keluarkan ${c.phone} dari segmen ini? (kontak tetap ada di sistem)`)) return; setBusy(c.id); act(() => api.removeSegmentContact(segment.id, c.id)); };
+  const deleteContact = (c) => { if (!window.confirm(`HAPUS kontak ${c.phone} permanen dari SEMUA segmen & riwayat? Tindakan ini tidak bisa dibatalkan.`)) return; setBusy(c.id); act(() => api.deleteContact(c.id)); };
+
+  const list = (data?.contacts || []).filter((c) => !q || c.phone.includes(q) || (c.name || "").toLowerCase().includes(q.toLowerCase()));
+  const optedOut = (data?.contacts || []).filter((c) => !c.subscribed).length;
+
+  return (
+    <Modal title={`Kelola — ${segment.name}`} onClose={onClose} width={640}>
+      <Notice>{error || err}</Notice>
+      {loading ? <Loading /> : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12.5, color: theme.textMuted }}>{data?.contacts.length || 0} kontak{optedOut ? ` • ${optedOut} opt-out (dikecualikan dari blast)` : ""}</div>
+            <div style={{ minWidth: 200 }}><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nomor / nama…" /></div>
+          </div>
+          {list.length ? (
+            <div style={{ maxHeight: 380, overflow: "auto", border: `1px solid ${theme.border}`, borderRadius: 9 }}>
+              {list.map((c, i) => (
+                <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 11px", borderTop: i ? `1px solid ${theme.border}` : "none", opacity: busy === c.id ? 0.5 : 1 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: theme.text, fontWeight: 600 }}>{c.name || "(tanpa nama)"} {!c.subscribed ? <Badge tone="red">opt-out</Badge> : null}</div>
+                    <div style={{ fontSize: 12, color: theme.textMuted, fontFamily: "monospace" }}>{c.phone}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <Button variant="ghost" size="sm" onClick={() => toggleSub(c)} title={c.subscribed ? "Tandai tidak mau terima (opt-out)" : "Aktifkan kembali"}>{c.subscribed ? "Opt-out" : "Opt-in"}</Button>
+                    <Button variant="ghost" size="sm" icon="edit" onClick={() => editName(c)} title="Ubah nama" />
+                    <Button variant="ghost" size="sm" onClick={() => removeFromSeg(c)} title="Keluarkan dari segmen ini">Keluarkan</Button>
+                    <Button variant="danger" size="sm" icon="trash" onClick={() => deleteContact(c)} title="Hapus kontak permanen" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <Empty icon="contacts" title={q ? "Tidak ada yang cocok" : "Segmen kosong"} />}
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 10, lineHeight: 1.5 }}>
+            <strong>Opt-out</strong> = kontak tetap tersimpan tapi otomatis dikecualikan dari blast. <strong>Keluarkan</strong> = lepas dari segmen ini saja. <strong>Hapus</strong> (🗑) = hapus kontak dari seluruh sistem.
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 
