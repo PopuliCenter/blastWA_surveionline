@@ -53,12 +53,15 @@ export const api = {
   // Segments
   listSegments: () => request("/api/segments"),
   createSegment: (data) => request("/api/segments", { method: "POST", body: data }),
+  renameSegment: (id, name) => request(`/api/segments/${id}`, { method: "PUT", body: { name } }),
+  addSegmentContacts: (id, contacts) => request(`/api/segments/${id}/contacts`, { method: "POST", body: { contacts } }),
   deleteSegment: (id) => request(`/api/segments/${id}`, { method: "DELETE" }),
   bulkDeleteSegments: (ids) => request("/api/segments/bulk-delete", { method: "POST", body: { ids } }),
 
   // Blasts
   listBlasts: () => request("/api/blasts"),
   createBlast: (data) => request("/api/blasts", { method: "POST", body: data }),
+  blastReport: (id) => request(`/api/blasts/${id}/report`),
   deleteBlast: (id) => request(`/api/blasts/${id}`, { method: "DELETE" }),
   bulkDeleteBlasts: (ids) => request("/api/blasts/bulk-delete", { method: "POST", body: { ids } }),
 

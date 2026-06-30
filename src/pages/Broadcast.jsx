@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import * as XLSX from "xlsx";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, Tabs, useLoader, useSelection, Checkbox, BulkBar, theme, fmtDate, Icon } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
@@ -14,6 +15,8 @@ export default function Broadcast() {
   const [showSeg, setShowSeg] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
+  const [reportBlast, setReportBlast] = useState(null);
+  const [addSeg, setAddSeg] = useState(null);
   const selBlast = useSelection();
   const selSeg = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -21,6 +24,11 @@ export default function Broadcast() {
   const segList = segments.data || [];
 
   const run = async (fn, reloaders = []) => { setErr(""); try { await fn(); await Promise.all(reloaders.map((r) => r())); } catch (e) { setErr(e.message); } };
+
+  const renameSeg = async (s) => {
+    const name = window.prompt("Nama baru segmen:", s.name);
+    if (name && name.trim() && name.trim() !== s.name) await run(() => api.renameSegment(s.id, name.trim()), [segments.reload]);
+  };
 
   const bulkDel = async (which) => {
     const s = which === "blasts" ? selBlast : selSeg;
@@ -71,7 +79,10 @@ export default function Broadcast() {
                   <StatCard label="Dibaca" value={b.opened} tone="purple" />
                   <StatCard label="Gagal" value={b.failed} tone="yellow" />
                 </div>
-                <div style={{ marginTop: 12 }}><Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteBlast(b.id), [blasts.reload])}>Hapus</Button></div>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Button variant="secondary" size="sm" icon="report" onClick={() => setReportBlast(b)}>Laporan</Button>
+                  <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteBlast(b.id), [blasts.reload])}>Hapus</Button>
+                </div>
               </Card>
             ))}
           </div>
@@ -92,7 +103,11 @@ export default function Broadcast() {
                 </div>
                 <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 4 }}>{s.contacts.length} kontak</div>
                 <div style={{ marginTop: 10, background: theme.surfaceAlt, borderRadius: 9, padding: 10, fontSize: 12, color: theme.textMuted }}>{s.contacts.slice(0, 5).join(", ")}{s.contacts.length > 5 ? "…" : ""}</div>
-                <div style={{ marginTop: 12 }}><Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSegment(s.id), [segments.reload])}>Hapus</Button></div>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Button variant="secondary" size="sm" icon="plus" onClick={() => setAddSeg(s)}>Tambah Kontak</Button>
+                  <Button variant="ghost" size="sm" icon="edit" onClick={() => renameSeg(s)}>Ganti Nama</Button>
+                  <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSegment(s.id), [segments.reload])}>Hapus</Button>
+                </div>
               </Card>
             ))}
           </div>
@@ -102,7 +117,117 @@ export default function Broadcast() {
 
       {showBlast ? <BlastModal surveys={surveys.data || []} segments={segments.data || []} templates={templates.data || []} onClose={() => setShowBlast(false)} onSave={(d) => run(async () => { setNote(""); const r = await api.createBlast(d); setNote(r?.excludedOptOut ? `Blast dibuat. ${r.excludedOptOut} kontak opt-out otomatis dikecualikan.` : "Blast dibuat & sedang dikirim."); }, [blasts.reload]).then(() => setShowBlast(false))} /> : null}
       {showSeg ? <SegmentModal onClose={() => setShowSeg(false)} onSave={(d) => run(() => api.createSegment(d), [segments.reload]).then(() => setShowSeg(false))} /> : null}
+      {addSeg ? <AddContactsModal segment={addSeg} onClose={() => setAddSeg(null)} onDone={() => { setAddSeg(null); segments.reload(); }} /> : null}
+      {reportBlast ? <BlastReportModal blast={reportBlast} onClose={() => setReportBlast(null)} /> : null}
     </div>
+  );
+}
+
+// Tambah kontak ke segmen yang sudah ada (upload file / tempel nomor).
+function AddContactsModal({ segment, onClose, onDone }) {
+  const [contacts, setContacts] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null);
+  const submit = async () => {
+    setSaving(true); setErr("");
+    try {
+      const r = await api.addSegmentContacts(segment.id, contacts);
+      setResult(r); // { added, skipped, total }
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  };
+  return (
+    <Modal title={`Tambah Kontak — ${segment.name}`} onClose={onClose} width={540}>
+      <Notice>{err}</Notice>
+      {result ? (
+        <div>
+          <div style={{ background: theme.greenSoft, color: theme.green, borderRadius: 10, padding: "12px 14px", fontSize: 13 }}>
+            ✓ {result.added} kontak ditambahkan{result.skipped ? `, ${result.skipped} dilewati (duplikat/invalid)` : ""}. Total segmen sekarang: <strong>{result.total}</strong>.
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}><Button onClick={onDone}>Selesai</Button></div>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 10 }}>Nomor yang sudah ada di segmen ini otomatis dilewati (tidak dobel).</div>
+          <ContactImporter onContacts={setContacts} />
+          <div style={{ color: theme.textMuted, fontSize: 12.5, margin: "6px 0 14px" }}>{contacts.length} kontak akan ditambahkan (nomor dinormalisasi ke 62…).</div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Button variant="ghost" onClick={onClose}>Batal</Button>
+            <Button onClick={submit} disabled={!contacts.length || saving}>{saving ? "Menambahkan..." : `Tambahkan (${contacts.length})`}</Button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// Laporan rinci 1 blast: total penerima, rincian status, daftar nomor gagal + ekspor.
+function BlastReportModal({ blast, onClose }) {
+  const { data, loading, error } = useLoader(useCallback(() => api.blastReport(blast.id), [blast.id]));
+  const t = data?.totals;
+  const pct = (n) => (t?.recipients ? Math.round((n / t.recipients) * 100) : 0);
+
+  const exportFailed = () => {
+    const rows = (data?.failed || []).map((f) => ({ Nomor: f.phone, Nama: f.name || "", Alasan: f.error, Waktu: f.updatedAt }));
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Nomor: "", Nama: "", Alasan: "(tidak ada yang gagal)", Waktu: "" }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Gagal");
+    XLSX.writeFile(wb, `laporan-blast-${blast.id.slice(0, 8)}-gagal.xlsx`);
+  };
+
+  const Stat = ({ label, value, tone }) => (
+    <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: tone }}>{value ?? 0}</div>
+      <div style={{ fontSize: 11.5, color: theme.textMuted }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <Modal title="Laporan Blast" onClose={onClose} width={620}>
+      <Notice>{error}</Notice>
+      {loading ? <Loading /> : data ? (
+        <div>
+          <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 14 }}>
+            {data.surveyTitle ? <span><strong style={{ color: theme.text }}>{data.surveyTitle}</strong> • </span> : null}
+            Segmen {data.segmentName || "-"} • vendor {data.vendor} • status {data.status} • {fmtDate(data.createdAt)}
+            {data.messageText ? <div style={{ marginTop: 6, background: theme.surfaceAlt, borderRadius: 8, padding: "8px 11px" }}>{data.messageText}</div> : null}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(90px,1fr))", gap: 10, marginBottom: 6 }}>
+            <Stat label="Total penerima" value={t.recipients} tone={theme.text} />
+            <Stat label="Terkirim" value={t.sent} tone={theme.primary} />
+            <Stat label="Sampai" value={t.delivered} tone={theme.green} />
+            <Stat label="Dibaca" value={t.read} tone={theme.purple} />
+            <Stat label="Gagal" value={t.failed} tone={theme.red} />
+            <Stat label="Antri" value={t.queued} tone={theme.yellow} />
+          </div>
+          <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 14 }}>
+            Sampai {pct(t.delivered)}% • Dibaca {pct(t.read)}% • Gagal {pct(t.failed)}% dari total penerima.
+          </div>
+
+          {data.vendor === "baileys" ? (
+            <div style={{ fontSize: 12, color: theme.yellow, background: theme.yellowSoft, borderRadius: 8, padding: "8px 11px", marginBottom: 14 }}>
+              Catatan: status "Sampai/Dibaca" untuk WhatsApp Langsung bergantung pada tanda terima yang dikirim WhatsApp; bisa terlambat atau tidak muncul untuk sebagian penerima.
+            </div>
+          ) : null}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: theme.text }}>Nomor gagal ({data.failed.length})</span>
+            <Button variant="secondary" size="sm" icon="download" onClick={exportFailed} disabled={!data.failed.length}>Ekspor Excel</Button>
+          </div>
+          {data.failed.length ? (
+            <div style={{ maxHeight: 240, overflow: "auto", border: `1px solid ${theme.border}`, borderRadius: 9 }}>
+              {data.failed.map((f, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 11px", borderTop: i ? `1px solid ${theme.border}` : "none", fontSize: 12.5 }}>
+                  <span style={{ color: theme.text, fontWeight: 600, fontFamily: "monospace" }}>{f.phone}{f.name ? ` · ${f.name}` : ""}</span>
+                  <span style={{ color: theme.red, textAlign: "right", maxWidth: "60%" }}>{f.error}</span>
+                </div>
+              ))}
+            </div>
+          ) : <div style={{ color: theme.textMuted, fontSize: 12.5 }}>Tidak ada penerima yang gagal. 🎉</div>}
+        </div>
+      ) : null}
+    </Modal>
   );
 }
 

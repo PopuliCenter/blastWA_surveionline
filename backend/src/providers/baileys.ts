@@ -163,6 +163,21 @@ class BaileysGateway {
           await this.onInbound(events).catch((e) => console.error("Baileys inbound gagal:", e));
         }
       });
+
+      // Status pengiriman pesan keluar (untuk laporan blast): 2=sent 3=delivered 4=read 5=played.
+      sock.ev.on("messages.update", async (updates) => {
+        const events: NormalizedInbound[] = [];
+        for (const u of updates) {
+          if (!u.key?.fromMe || !u.key?.id) continue;
+          const code = Number(u.update?.status);
+          const deliveryStatus = code >= 5 ? "read" : code === 4 ? "read" : code === 3 ? "delivered" : code === 2 ? "sent" : undefined;
+          if (!deliveryStatus) continue;
+          events.push({ vendor: this.name, kind: "status", refMessageId: u.key.id, deliveryStatus, timestamp: new Date().toISOString(), raw: u });
+        }
+        if (events.length && this.onInbound) {
+          await this.onInbound(events).catch((e) => console.error("Baileys status gagal:", e));
+        }
+      });
     } finally {
       this.starting = false;
     }

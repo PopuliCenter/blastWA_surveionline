@@ -55,6 +55,53 @@ export async function blastRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  // Laporan rinci 1 blast: total penerima, rincian per status, daftar nomor gagal + alasan.
+  app.get("/api/blasts/:id/report", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const blast = await prisma.blast.findUnique({
+      where: { id },
+      include: { survey: { select: { title: true } }, segment: { select: { name: true } } },
+    });
+    if (!blast) return reply.code(404).send({ error: "blast tidak ditemukan" });
+
+    const grouped = await prisma.blastRecipient.groupBy({ by: ["status"], where: { blastId: id }, _count: true });
+    const byStatus: Record<string, number> = { queued: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+    for (const g of grouped) byStatus[g.status] = g._count;
+    const recipients = Object.values(byStatus).reduce((a, b) => a + b, 0);
+
+    const failedRows = await prisma.blastRecipient.findMany({
+      where: { blastId: id, status: "failed" },
+      include: { contact: { select: { phone: true, name: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 1000,
+    });
+
+    return {
+      id: blast.id,
+      surveyTitle: blast.survey?.title ?? null,
+      segmentName: blast.segment?.name ?? null,
+      vendor: blast.vendor,
+      status: blast.status,
+      messageText: blast.messageText,
+      createdAt: blast.createdAt,
+      scheduledAt: blast.scheduledAt,
+      totals: {
+        recipients,
+        queued: byStatus.queued,
+        sent: byStatus.sent,
+        delivered: byStatus.delivered,
+        read: byStatus.read,
+        failed: byStatus.failed,
+      },
+      failed: failedRows.map((r) => ({
+        phone: r.contact?.phone ?? "-",
+        name: r.contact?.name ?? null,
+        error: r.error ?? "(tanpa keterangan)",
+        updatedAt: r.updatedAt,
+      })),
+    };
+  });
+
   app.delete("/api/blasts/:id", async (req) => {
     const id = (req.params as { id: string }).id;
     await prisma.blast.delete({ where: { id } });
