@@ -30,7 +30,26 @@ import type {
 type GwStatus = "disconnected" | "connecting" | "qr" | "connected" | "logged_out";
 type InboundHandler = (events: NormalizedInbound[]) => Promise<void>;
 
-function extractText(msg: WAMessageContent | null | undefined): string | undefined {
+// Buka pembungkus umum (disappearing/ephemeral, view-once, edited, dokumen+caption).
+function unwrapMessage(msg: WAMessageContent | null | undefined): WAMessageContent | null | undefined {
+  let m: any = msg;
+  for (let i = 0; i < 4 && m; i++) {
+    const inner =
+      m.ephemeralMessage?.message ??
+      m.viewOnceMessage?.message ??
+      m.viewOnceMessageV2?.message ??
+      m.viewOnceMessageV2Extension?.message ??
+      m.documentWithCaptionMessage?.message ??
+      m.editedMessage?.message ??
+      m.deviceSentMessage?.message;
+    if (!inner) break;
+    m = inner;
+  }
+  return m;
+}
+
+function extractText(raw: WAMessageContent | null | undefined): string | undefined {
+  const msg: any = unwrapMessage(raw);
   if (!msg) return undefined;
   return (
     msg.conversation ??
@@ -139,14 +158,15 @@ class BaileysGateway {
       });
 
       sock.ev.on("messages.upsert", async (up) => {
+        console.log(`[baileys] messages.upsert type=${up.type} jumlah=${up.messages.length}`);
         if (up.type !== "notify") return;
         const events: NormalizedInbound[] = [];
         for (const m of up.messages) {
-          if (m.key.fromMe) continue;
           const jid = m.key.remoteJid ?? "";
-          if (!jid.endsWith("@s.whatsapp.net")) continue; // abaikan grup/broadcast/status
+          if (m.key.fromMe) { console.log(`[baileys] lewati fromMe (${jid})`); continue; }
+          if (!jid.endsWith("@s.whatsapp.net")) { console.log(`[baileys] lewati non-personal (${jid})`); continue; } // abaikan grup/broadcast/status
           const text = extractText(m.message);
-          if (!text) continue; // v1: hanya pesan teks
+          if (!text) { console.log(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`); continue; }
           const from = jid.split("@")[0] ?? "";
           const tsNum = Number(m.messageTimestamp) || Math.floor(Date.now() / 1000);
           events.push({
@@ -159,6 +179,7 @@ class BaileysGateway {
             raw: m,
           });
         }
+        if (events.length) console.log(`[baileys] ${events.length} pesan masuk diproses → ${events.map((e) => e.from).join(", ")}`);
         if (events.length && this.onInbound) {
           await this.onInbound(events).catch((e) => console.error("Baileys inbound gagal:", e));
         }
