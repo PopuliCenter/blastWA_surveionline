@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Secrets / environment (jangan commit kredensial)
+.env
+.env.local
+
+# Data uji / unggahan responden (jangan commit data)
+*.xlsx
+*.xls
+*.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
