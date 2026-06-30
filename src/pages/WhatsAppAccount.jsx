@@ -241,7 +241,20 @@ function SendingSafety({ isMobile }) {
             <Button variant="secondary" size="sm" icon="refresh" onClick={checkQuality} disabled={qLoading}>{qLoading ? "Cek..." : "Cek Status"}</Button>
           </div>
           {quality ? (
-            quality.error ? <Notice>{quality.error}</Notice> : (
+            quality.error ? (
+              <>
+                <Notice>{quality.error}</Notice>
+                {/(access token|expired|session has expired|kedaluwarsa|oauth)/i.test(quality.error) ? (
+                  <div style={{ background: theme.yellowSoft, color: theme.yellow, borderRadius: 9, padding: "10px 12px", fontSize: 12.5, lineHeight: 1.55, marginBottom: 14 }}>
+                    <strong>Token Meta kedaluwarsa.</strong> Token sementara hanya berlaku beberapa jam/hari. Solusinya pakai <strong>token permanen</strong>:
+                    <div style={{ marginTop: 6 }}>1. Buka <a href="https://business.facebook.com/settings" target="_blank" rel="noopener noreferrer" style={{ color: theme.primary, fontWeight: 600 }}>Meta Business Settings</a> → Users → <strong>System Users</strong>.</div>
+                    <div>2. Pilih/buat system user → <strong>Generate new token</strong> → pilih aplikasi Anda → centang izin <em>whatsapp_business_messaging</em> &amp; <em>whatsapp_business_management</em> → <strong>jangan</strong> set masa berlaku (token permanen).</div>
+                    <div>3. Salin token → tempel ke kolom <strong>Access Token</strong> di kartu Meta di atas → <strong>Simpan Meta</strong> → klik <strong>Cek Status</strong> lagi.</div>
+                    <div style={{ marginTop: 6 }}>Detail langkah ada di tombol <strong>Panduan Koneksi</strong> (langkah 4).</div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
               <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 12.5, display: "grid", gap: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: theme.textMuted }}>Rating kualitas</span><Badge tone={(QUALITY_MAP[quality.quality_rating] || QUALITY_MAP.UNKNOWN)[0]}>{(QUALITY_MAP[quality.quality_rating] || QUALITY_MAP.UNKNOWN)[1]}</Badge></div>
                 {quality.messaging_limit_tier ? <Row k="Tier limit" v={String(quality.messaging_limit_tier).replace("TIER_", "")} /> : null}
