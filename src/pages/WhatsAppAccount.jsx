@@ -270,6 +270,12 @@ function SetupGuide({ metaCallback }) {
 }
 
 // ── Pengaman pengiriman (anti-banned) ───────────────────────────────────────
+// Preset cepat untuk batas harian + jeda antar pesan.
+const SENDING_PRESETS = [
+  { key: "baileys", label: "Baileys (hati-hati)", dailyLimit: 40, jitterMinMs: 8000, jitterMaxMs: 30000, hint: "Jalur QR tidak resmi / nomor baru: pelan & sebar (8–30 dtk, 40/hari). Naikkan bertahap." },
+  { key: "official", label: "Resmi (Meta/Qontak)", dailyLimit: 500, jitterMinMs: 800, jitterMaxMs: 2500, hint: "Jalur resmi dengan template: lebih longgar (0,8–2,5 dtk, 500/hari)." },
+];
+
 const QUALITY_MAP = {
   GREEN: ["green", "Tinggi (Hijau)"],
   YELLOW: ["yellow", "Sedang (Kuning)"],
@@ -317,6 +323,14 @@ function SendingSafety({ isMobile }) {
           {!f ? <Loading /> : (
             <>
               <div style={{ marginBottom: 12 }}><Toggle checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} label="Aktifkan pembatasan" /></div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 6 }}>Preset cepat (isi otomatis, lalu klik Simpan):</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {SENDING_PRESETS.map((p) => (
+                    <Button key={p.key} variant="secondary" size="sm" onClick={() => setF({ ...f, enabled: true, dailyLimit: p.dailyLimit, jitterMinMs: p.jitterMinMs, jitterMaxMs: p.jitterMaxMs })} title={p.hint}>{p.label}</Button>
+                  ))}
+                </div>
+              </div>
               <div style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted, marginBottom: 4 }}>
                   <span>Terpakai hari ini</span><span>{used} / {limit}</span>
