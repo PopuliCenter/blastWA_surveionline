@@ -1,0 +1,21 @@
+# Override untuk EDGE nginx (stack survey-populicenter) — TANPA mengubah
+# docker-compose.yml yang sudah ada. Docker Compose otomatis menggabungkan
+# docker-compose.override.yml dengan docker-compose.yml di folder yang sama.
+#
+# Tujuan: menambah 1 mount server-block wa.risetcenter.com ke kontainer nginx.
+# Compose menggabungkan (append) daftar volumes → mount lama (certs, default.conf,
+# survei.conf, dll.) TETAP ada, cuma ditambah baris wa di bawah.
+#
+# Pasang di VPS:
+#   cp /var/www/survei-wa/deploy/wa.risetcenter.com.conf      /var/www/survey-populicenter/
+#   cp /var/www/survei-wa/deploy/edge-nginx.override.yml      /var/www/survey-populicenter/docker-compose.override.yml
+#   cd /var/www/survey-populicenter
+#   docker compose config        # PREVIEW hasil merge — pastikan mount lama masih ada
+#   docker compose up -d nginx   # recreate nginx (baca mount baru)
+#   docker exec survey-populicenter-nginx-1 nginx -t   # harus "syntax is ok / successful"
+#
+# Catatan: nama service di stack itu = "nginx" (kontainer survey-populicenter-nginx-1).
+services:
+  nginx:
+    volumes:
+      - ./wa.risetcenter.com.conf:/etc/nginx/conf.d/wa.risetcenter.com.conf:ro
