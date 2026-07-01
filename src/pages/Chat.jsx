@@ -201,11 +201,17 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState("");
-  const endRef = useRef(null);
+  const scrollRef = useRef(null);
   const msgs = data || [];
   const sess = sessionInfo(convo);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+  // Gulung HANYA kotak pesan ke bawah (bukan seluruh halaman) saat jumlah pesan berubah /
+  // saat membuka percakapan. Memakai scrollTop container, bukan scrollIntoView (yang menggulung
+  // seluruh dokumen sehingga header ikut terdorong).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs.length, convo.id]);
 
   // Auto-update senyap: segarkan pesan thread ini tiap 4 detik (balasan masuk muncul otomatis).
   useEffect(() => {
@@ -251,7 +257,7 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 16, background: theme.surfaceAlt }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: 16, background: theme.surfaceAlt }}>
         {loading ? <Loading /> : error ? <Notice>{error}</Notice> : msgs.length ? msgs.map((m) => (
           <div key={m.id} style={{ display: "flex", justifyContent: m.direction === "out" ? "flex-end" : "flex-start", marginBottom: 8 }}>
             <div style={{ maxWidth: "78%", padding: "8px 12px", borderRadius: m.direction === "out" ? "12px 4px 12px 12px" : "4px 12px 12px 12px", fontSize: 13.5, background: m.direction === "out" ? (m.isBot ? "#e2f0ff" : "#dcf8c6") : theme.surface, color: theme.text, border: m.direction === "out" ? "none" : `1px solid ${theme.border}`, boxShadow: "0 1px 1px rgba(0,0,0,.06)" }}>
@@ -265,7 +271,6 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
             </div>
           </div>
         )) : <Empty icon="chat" title="Belum ada pesan" />}
-        <div ref={endRef} />
       </div>
 
       {/* Composer */}
