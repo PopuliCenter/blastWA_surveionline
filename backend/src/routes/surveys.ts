@@ -20,6 +20,7 @@ const surveySchema = z.object({
   mode: z.enum(["chat", "flow"]).default("chat"),
   flowId: z.string().optional().nullable(),
   flowCta: z.string().optional().nullable(),
+  closingMessage: z.string().max(2000).optional().nullable(),
   questions: z.array(questionSchema).default([]),
 });
 

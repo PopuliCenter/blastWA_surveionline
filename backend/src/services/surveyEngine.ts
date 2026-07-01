@@ -83,7 +83,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   });
   if (active) {
     if (active.survey.mode === "flow") return; // menunggu pengisian formulir flow, abaikan teks
-    await advanceSurvey(active.id, active.currentStep, active.survey.questions as QLite[], contact.id, phone, ev.vendor, ev);
+    await advanceSurvey(active.id, active.currentStep, active.survey.questions as QLite[], contact.id, phone, ev.vendor, ev, active.survey.closingMessage);
     return;
   }
 
@@ -180,18 +180,20 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
   const answers = parseFlowAnswers(resp as Record<string, unknown>, surveyResponse.survey.questions as QLite[]);
   for (const a of answers) await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
   await prisma.surveyResponse.update({ where: { id: surveyResponse.id }, data: { completedAt: new Date(), currentStep: surveyResponse.survey.questions.length } });
-  await reply(vendor, phone, "Terima kasih, jawaban survei Anda sudah kami terima. 🙏", contactId);
+  await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
 }
 
-async function advanceSurvey(responseId: string, step: number, questions: QLite[], contactId: string, phone: string, vendor: string, ev: NormalizedInbound): Promise<void> {
+async function advanceSurvey(responseId: string, step: number, questions: QLite[], contactId: string, phone: string, vendor: string, ev: NormalizedInbound, closingMessage?: string | null): Promise<void> {
   const current = questions[step];
   if (!current) { await prisma.surveyResponse.update({ where: { id: responseId }, data: { completedAt: new Date() } }); return; }
 
   const text = (ev.text ?? "").trim();
 
   // Skip (pertanyaan opsional)
+  let savedValue: string;
   if (!current.required && SKIP_WORDS.includes(text.toLowerCase())) {
-    await saveAnswer(responseId, current.id, "[dilewati]");
+    savedValue = "[dilewati]";
+    await saveAnswer(responseId, current.id, savedValue);
   } else {
     const v = validateAnswer(current, ev);
     if (!v.ok) {
@@ -199,18 +201,41 @@ async function advanceSurvey(responseId: string, step: number, questions: QLite[
       await reply(vendor, phone, `${v.error}\n\n${formatQuestion(current)}`, contactId);
       return;
     }
-    await saveAnswer(responseId, current.id, v.value);
+    savedValue = v.value;
+    await saveAnswer(responseId, current.id, savedValue);
   }
 
-  const nextStep = step + 1;
+  // Skip logic: pertanyaan berikutnya bisa dilompati / survei diakhiri sesuai jawaban.
+  const nextStep = nextStepWithBranch(current, step, savedValue, questions.length);
   const next = questions[nextStep];
   if (next) {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep } });
     await reply(vendor, phone, formatQuestion(next), contactId);
   } else {
-    await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep, completedAt: new Date() } });
-    await reply(vendor, phone, "Terima kasih, semua jawaban Anda sudah kami terima. 🙏", contactId);
+    await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: questions.length, completedAt: new Date() } });
+    await reply(vendor, phone, closingText(closingMessage), contactId);
   }
+}
+
+// Kata penutup: pakai custom bila diisi, selain itu default.
+function closingText(custom?: string | null): string {
+  const c = (custom ?? "").trim();
+  return c || "Terima kasih, semua jawaban Anda sudah kami terima. 🙏";
+}
+
+// Tentukan langkah berikutnya berdasarkan aturan percabangan (options.branches) pada pertanyaan.
+// branches: [{ value: "<jawaban>", goto: "end" | <indeks pertanyaan 0-based> }]. Lompat hanya MAJU.
+function nextStepWithBranch(current: QLite, step: number, savedValue: string, total: number): number {
+  const def = step + 1;
+  const branches = (current.options as { branches?: { value: string; goto: string | number }[] } | null)?.branches;
+  if (!Array.isArray(branches) || !savedValue || savedValue === "[dilewati]") return def;
+  const sv = savedValue.trim().toLowerCase();
+  const m = branches.find((b) => String(b.value ?? "").trim().toLowerCase() === sv);
+  if (!m) return def;
+  if (m.goto === "end" || m.goto === -1) return total; // akhiri survei lebih awal
+  const g = Number(m.goto);
+  if (Number.isInteger(g) && g > step && g < total) return g; // lompat maju ke pertanyaan g
+  return def;
 }
 
 function ratingRange(q: QLite): { min: number; max: number } {

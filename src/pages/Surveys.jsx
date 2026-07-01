@@ -330,6 +330,7 @@ function SurveyModal({ survey, onClose, onSave }) {
   const [mode, setMode] = useState(survey?.mode || "chat");
   const [flowId, setFlowId] = useState(survey?.flowId || "");
   const [flowCta, setFlowCta] = useState(survey?.flowCta || "Isi Survei");
+  const [closingMessage, setClosingMessage] = useState(survey?.closingMessage || "");
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -357,7 +358,7 @@ function SurveyModal({ survey, onClose, onSave }) {
 
   const submit = async () => {
     setSaving(true);
-    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, mode, flowId: mode === "flow" ? flowId.trim() : null, flowCta: mode === "flow" ? (flowCta.trim() || "Isi Survei") : null, questions: questions.map((q) => ({ id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined, text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
+    try { await onSave({ title, description, status, triggerEnabled, triggerKeywords, mode, flowId: mode === "flow" ? flowId.trim() : null, flowCta: mode === "flow" ? (flowCta.trim() || "Isi Survei") : null, closingMessage: closingMessage.trim() || null, questions: questions.map((q) => ({ id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined, text: q.text, type: q.type || "text", required: q.required ?? true, options: q.options })) }); }
     finally { setSaving(false); }
   };
 
@@ -434,6 +435,7 @@ function SurveyModal({ survey, onClose, onSave }) {
             index={i}
             total={questions.length}
             qtypeOptions={qtypeOptions}
+            allQuestions={questions}
             onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
             onDelete={() => setQuestions(questions.filter((_, j) => j !== i))}
             onMove={(dir) => {
@@ -464,6 +466,10 @@ function SurveyModal({ survey, onClose, onSave }) {
           <Textarea label="Pilihan (satu per baris atau pisah koma)" value={c.choices} onChange={(e) => setCk("choices", e.target.value)} placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"} />
         ) : null}
         <Button icon="plus" onClick={addQuestion} disabled={!c.text.trim()}>Tambah Pertanyaan</Button>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <Textarea label="Kata penutup (opsional)" value={closingMessage} onChange={(e) => setClosingMessage(e.target.value)} placeholder="Terima kasih, semua jawaban Anda sudah kami terima. 🙏" hint="Pesan yang dikirim saat responden menyelesaikan survei. Kosongkan untuk pakai teks default." />
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
@@ -508,22 +514,42 @@ function FlowJsonModal({ surveyId, onClose }) {
 }
 
 // Satu pertanyaan: mode lihat (bisa naik/turun, edit, hapus) & mode edit inline.
-function QuestionItem({ q, index, total, onChange, onDelete, onMove, qtypeOptions = QTYPE_OPTIONS }) {
+function QuestionItem({ q, index, total, onChange, onDelete, onMove, qtypeOptions = QTYPE_OPTIONS, allQuestions = [] }) {
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState(null);
   const setDk = (k, v) => setD((p) => ({ ...p, [k]: v }));
 
   const startEdit = () => {
-    setD({ text: q.text || "", type: q.type || "text", required: q.required ?? true, min: q.options?.min ?? 1, max: q.options?.max ?? 5, choices: (q.options?.choices || []).join("\n") });
+    const branchMap = {};
+    (q.options?.branches || []).forEach((b) => { branchMap[b.value] = String(b.goto); });
+    setD({ text: q.text || "", type: q.type || "text", required: q.required ?? true, min: q.options?.min ?? 1, max: q.options?.max ?? 5, choices: (q.options?.choices || []).join("\n"), branches: branchMap });
     setEditing(true);
   };
   const saveEdit = () => {
     let options;
     if (d.type === "rating") options = { min: Number(d.min) || 1, max: Number(d.max) || 5 };
     if (d.type === "choice") options = { choices: d.choices.split(/[\n,]/).map((s) => s.trim()).filter(Boolean) };
+    // Skip logic: kumpulkan aturan percabangan dari jawaban → target.
+    if (d.type === "choice" || d.type === "boolean") {
+      const vals = d.type === "boolean" ? ["Ya", "Tidak"] : (options?.choices || []);
+      const branches = [];
+      for (const v of vals) {
+        const g = d.branches?.[v];
+        if (g && g !== "") branches.push({ value: v, goto: g === "end" ? "end" : Number(g) });
+      }
+      if (branches.length) options = { ...(options || {}), branches };
+    }
     onChange({ ...q, text: d.text.trim(), type: d.type, required: d.required, options });
     setEditing(false);
   };
+
+  // Nilai jawaban yang bisa dicabangkan + daftar target (pertanyaan setelahnya / Selesai).
+  const branchValues = d ? (d.type === "boolean" ? ["Ya", "Tidak"] : d.choices.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)) : [];
+  const targetOptions = [
+    { value: "", label: "→ lanjut normal" },
+    { value: "end", label: "→ Selesai survei" },
+    ...allQuestions.map((qq, i) => (i > index ? { value: String(i), label: `→ ${i + 1}. ${(qq.text || "").slice(0, 28)}${(qq.text || "").length > 28 ? "…" : ""}` } : null)).filter(Boolean),
+  ];
 
   if (editing) {
     return (
@@ -541,6 +567,20 @@ function QuestionItem({ q, index, total, onChange, onDelete, onMove, qtypeOption
         ) : null}
         {d.type === "choice" ? (
           <Textarea label="Pilihan (satu per baris atau pisah koma)" value={d.choices} onChange={(e) => setDk("choices", e.target.value)} placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"} />
+        ) : null}
+        {(d.type === "choice" || d.type === "boolean") && branchValues.length ? (
+          <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: 11, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>Skip logic (opsional)</div>
+            <div style={{ fontSize: 11.5, color: theme.textMuted, margin: "3px 0 9px", lineHeight: 1.5 }}>Berdasarkan jawaban, lompat ke pertanyaan lain atau akhiri survei. Hanya lompat <strong>maju</strong>. (Hanya mode Chatbot; cek ulang bila urutan diubah.)</div>
+            <div style={{ display: "grid", gap: 7 }}>
+              {branchValues.map((v) => (
+                <div key={v} style={{ display: "grid", gridTemplateColumns: "minmax(70px,110px) 1fr", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 12.5, color: theme.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={v}>Jika “{v}”</span>
+                  <Select value={d.branches?.[v] || ""} onChange={(e) => setDk("branches", { ...(d.branches || {}), [v]: e.target.value })} options={targetOptions} />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Batal</Button>
