@@ -40,6 +40,8 @@ export const api = {
   login: (username, password) =>
     request("/api/auth/login", { method: "POST", auth: false, body: { username, password } }),
   me: () => request("/api/auth/me"),
+  changePassword: (currentPassword, newPassword) =>
+    request("/api/auth/change-password", { method: "POST", body: { currentPassword, newPassword } }),
 
   // Surveys
   listSurveys: () => request("/api/surveys"),

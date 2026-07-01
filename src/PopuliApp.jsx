@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
-import { theme, fontStack, card, Icon, Button, Input, PasswordInput, Loading, useIsMobile } from "./lib/ui";
+import { theme, fontStack, card, Icon, Button, Input, PasswordInput, Modal, Notice, Loading, useIsMobile } from "./lib/ui";
 import { LegalModal } from "./lib/legal";
 import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
@@ -84,7 +84,7 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, collapsed, onToggleCollapse, unread = 0 }) {
+function Sidebar({ active, setActive, currentUser, onLogout, onChangePassword, mobile, onClose, collapsed, onToggleCollapse, unread = 0 }) {
   const mini = !mobile && collapsed;
   const asideStyle = mobile
     ? { width: "100%", background: theme.surface, padding: "16px 14px", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: "100vh" }
@@ -133,6 +133,7 @@ function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, co
           <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name || currentUser.username}</div>
           <div style={{ fontSize: 11.5, color: theme.textMuted }}>{currentUser.role}</div>
         </div> : null}
+        <button onClick={onChangePassword} title="Ganti password" style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="settings" size={17} /></button>
         <button onClick={onLogout} title="Keluar" style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="logout" size={18} /></button>
       </div>
     </aside>
@@ -145,6 +146,7 @@ export default function PopuliApp() {
   const [active, setActive] = useState(() => localStorage.getItem("populi.activePage") || "dashboard");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("populi.sidebarCollapsed") === "1");
+  const [showChangePw, setShowChangePw] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => { localStorage.setItem("populi.activePage", active); }, [active]);
@@ -178,6 +180,7 @@ export default function PopuliApp() {
   }, [currentUser]);
 
   const logout = () => { setToken(null); setCurrentUser(null); setActive("dashboard"); };
+  const openChangePw = () => { setShowChangePw(true); setDrawerOpen(false); };
   const selectPage = (id) => { setActive(id); setDrawerOpen(false); };
 
   const pages = useMemo(() => ({
@@ -215,20 +218,69 @@ export default function PopuliApp() {
           <>
             <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 50 }} />
             <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 270, maxWidth: "84vw", background: theme.surface, zIndex: 55, boxShadow: "2px 0 18px rgba(15,23,42,0.18)", overflowY: "auto" }}>
-              <Sidebar active={active} setActive={selectPage} currentUser={currentUser} onLogout={logout} mobile onClose={() => setDrawerOpen(false)} unread={unreadTotal} />
+              <Sidebar active={active} setActive={selectPage} currentUser={currentUser} onLogout={logout} onChangePassword={openChangePw} mobile onClose={() => setDrawerOpen(false)} unread={unreadTotal} />
             </div>
           </>
         ) : null}
 
         <main style={{ padding: "16px 14px", minWidth: 0 }}>{pages[active] || pages.dashboard}</main>
+        {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
-      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} unread={unreadTotal} />
+      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} onChangePassword={openChangePw} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} unread={unreadTotal} />
       <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>{pages[active] || pages.dashboard}</main>
+      {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
     </div>
+  );
+}
+
+function ChangePasswordModal({ onClose }) {
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setErr("");
+    if (next.length < 8) return setErr("Password baru minimal 8 karakter.");
+    if (next !== confirm) return setErr("Konfirmasi password tidak sama.");
+    if (next === cur) return setErr("Password baru harus berbeda dari yang lama.");
+    setSaving(true);
+    try {
+      await api.changePassword(cur, next);
+      setOk(true);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="Ganti Password" onClose={onClose} width={440}>
+      {ok ? (
+        <div>
+          <Notice kind="success">Password berhasil diganti. Gunakan password baru saat login berikutnya.</Notice>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}><Button onClick={onClose}>Tutup</Button></div>
+        </div>
+      ) : (
+        <div>
+          <Notice>{err}</Notice>
+          <PasswordInput label="Password lama" value={cur} onChange={(e) => setCur(e.target.value)} autoFocus />
+          <PasswordInput label="Password baru (min. 8 karakter)" value={next} onChange={(e) => setNext(e.target.value)} />
+          <PasswordInput label="Ulangi password baru" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+            <Button variant="ghost" onClick={onClose}>Batal</Button>
+            <Button onClick={submit} disabled={!cur || !next || !confirm || saving}>{saving ? "Menyimpan..." : "Simpan"}</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
