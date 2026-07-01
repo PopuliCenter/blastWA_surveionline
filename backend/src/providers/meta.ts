@@ -11,6 +11,7 @@ import type {
 export type MetaConfig = {
   accessToken?: string;
   phoneNumberId?: string;
+  wabaId?: string; // WhatsApp Business Account ID — untuk ambil daftar template
   appSecret?: string;
   verifyToken?: string;
   graphVersion: string;
@@ -89,6 +90,24 @@ export class MetaCloudAdapter implements MessagingProvider {
       type: "text",
       text: { body: input.text },
     });
+  }
+
+  // Ambil daftar template dari Meta (WABA) — untuk dipilih saat broadcast (hindari salah nama/bahasa).
+  async listTemplates(): Promise<Record<string, unknown>> {
+    if (!this.cfg.accessToken) return { error: "Access Token Meta belum diisi." };
+    if (!this.cfg.wabaId) return { error: "WABA ID belum diisi — isi 'WhatsApp Business Account ID' di kartu Meta." };
+    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates?fields=name,language,status,category&limit=250`;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) return { error: json?.error?.message ?? "Gagal mengambil template", raw: json };
+      const data = Array.isArray(json?.data) ? json.data : [];
+      return {
+        templates: data.map((t: any) => ({ name: t.name, language: t.language, status: t.status, category: t.category })),
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Gagal menghubungi Graph API" };
+    }
   }
 
   // Tandai pesan masuk sebagai dibaca → pelanggan melihat centang biru.

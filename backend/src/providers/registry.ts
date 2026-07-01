@@ -13,6 +13,7 @@ function buildFromEnv(): Record<string, MessagingProvider> {
     meta: new MetaCloudAdapter({
       accessToken: env.META_ACCESS_TOKEN,
       phoneNumberId: env.META_PHONE_NUMBER_ID,
+      wabaId: env.META_WABA_ID,
       appSecret: env.META_APP_SECRET,
       verifyToken: env.META_WEBHOOK_VERIFY_TOKEN,
       graphVersion: env.META_GRAPH_VERSION,
@@ -44,6 +45,7 @@ export async function loadProviders(): Promise<void> {
         providers.meta = new MetaCloudAdapter({
           accessToken: creds.accessToken ?? env.META_ACCESS_TOKEN,
           phoneNumberId: creds.phoneNumberId ?? env.META_PHONE_NUMBER_ID,
+          wabaId: creds.wabaId ?? env.META_WABA_ID,
           appSecret: creds.appSecret ?? env.META_APP_SECRET,
           verifyToken: creds.verifyToken ?? env.META_WEBHOOK_VERIFY_TOKEN,
           graphVersion: creds.graphVersion ?? env.META_GRAPH_VERSION,

@@ -43,6 +43,14 @@ export async function sendingRoutes(app: FastifyInstance): Promise<void> {
     return meta.getPhoneQuality();
   });
 
+  // Daftar template WhatsApp dari Meta (untuk dipilih saat broadcast)
+  app.get("/api/wa/templates", async () => {
+    await loadProviders();
+    const meta = getProvider("meta") as unknown as { listTemplates?: () => Promise<Record<string, unknown>> };
+    if (typeof meta.listTemplates !== "function") return { error: "Tidak didukung vendor ini" };
+    return meta.listTemplates();
+  });
+
   // Cek koneksi Qontak (validitas token + reachability API)
   app.get("/api/qontak/check", async () => {
     await loadProviders();

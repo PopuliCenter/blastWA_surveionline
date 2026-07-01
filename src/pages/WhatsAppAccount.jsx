@@ -8,7 +8,7 @@ export default function WhatsAppAccount() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listVendors(), []));
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
-  const [meta, setMeta] = useState({ accessToken: "", phoneNumberId: "", appSecret: "", verifyToken: "", graphVersion: "v23.0" });
+  const [meta, setMeta] = useState({ accessToken: "", phoneNumberId: "", wabaId: "", appSecret: "", verifyToken: "", graphVersion: "v23.0" });
   const [qontak, setQontak] = useState({ accessToken: "", channelIntegrationId: "", webhookSecret: "", baseUrl: "https://service-chat.qontak.com/api/open/v1" });
   const [guideOpen, setGuideOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
@@ -92,6 +92,7 @@ export default function WhatsAppAccount() {
           <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12 }}>Jalur resmi WhatsApp. Cocok untuk broadcast template & survei. <span style={{ color: theme.primary, cursor: "pointer", fontWeight: 600 }} onClick={() => setGuideOpen(true)}>Lihat langkahnya →</span></div>
           <PasswordInput label="Access Token (System User)" value={meta.accessToken} onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "EAAG..."} hint="Meta Business › System Users › Generate token (akses WhatsApp). Pakai token permanen." />
           <Input label="Phone Number ID" value={meta.phoneNumberId} onChange={(e) => setMeta({ ...meta, phoneNumberId: e.target.value })} hint="WhatsApp Manager › API Setup › di bawah nomor Anda." />
+          <Input label="WhatsApp Business Account ID (WABA)" value={meta.wabaId} onChange={(e) => setMeta({ ...meta, wabaId: e.target.value })} placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "mis. 1027483456718760"} hint="Untuk mengambil daftar template dari Meta saat broadcast. WhatsApp Manager › Account tools / API Setup." />
           <PasswordInput label="App Secret" value={meta.appSecret} onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })} hint="Meta for Developers › App › Settings › Basic › App Secret. Untuk verifikasi webhook." />
           <PasswordInput label="Webhook Verify Token" value={meta.verifyToken} onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })} hint="Buat sendiri (bebas). Isikan sama persis di kolom Verify Token milik Meta." />
           <Input label="Graph API Version" value={meta.graphVersion} onChange={(e) => setMeta({ ...meta, graphVersion: e.target.value })} hint="Default v23.0 — biarkan bila ragu." />

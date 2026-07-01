@@ -327,6 +327,24 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const [rates] = useState(loadRates);
   const set = (k, v) => setF({ ...f, [k]: v });
 
+  // Ambil daftar template approved langsung dari Meta (hindari salah nama/bahasa).
+  const [metaTpls, setMetaTpls] = useState(null);
+  const [tplLoading, setTplLoading] = useState(false);
+  const [tplErr, setTplErr] = useState("");
+  const loadMetaTpls = async () => {
+    setTplLoading(true); setTplErr(""); setMetaTpls(null);
+    try {
+      const r = await api.getWaTemplates();
+      if (r.error) setTplErr(r.error);
+      else setMetaTpls((r.templates || []).filter((t) => String(t.status).toUpperCase() === "APPROVED"));
+    } catch (e) { setTplErr(e.message); } finally { setTplLoading(false); }
+  };
+  const pickMetaTpl = (val) => {
+    if (!val) return;
+    const [name, language] = val.split("|");
+    setF({ ...f, templateName: name, templateLang: language || "id", templateId: "" });
+  };
+
   const pickTemplate = (id) => {
     const t = templates.find((x) => x.id === id);
     if (!t) { setF({ ...f, templateId: "", templateName: "", bodyParams: "" }); return; }
@@ -364,7 +382,21 @@ function BlastModal({ surveys, segments, templates, onClose, onSave }) {
         </>
       ) : (
         <>
-          <Select label="Template Tersimpan" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />
+          {f.vendor === "meta" ? (
+            <div style={{ background: theme.primarySoft, borderRadius: 10, padding: "11px 12px", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: theme.primary }}>Template dari Meta (Approved)</span>
+                <Button variant="secondary" size="sm" icon="refresh" onClick={loadMetaTpls} disabled={tplLoading}>{tplLoading ? "Memuat…" : "Ambil dari Meta"}</Button>
+              </div>
+              {tplErr ? <Notice>{tplErr}</Notice> : null}
+              {metaTpls ? (
+                metaTpls.length ? (
+                  <Select value={f.templateName ? `${f.templateName}|${f.templateLang}` : ""} onChange={(e) => pickMetaTpl(e.target.value)} options={[{ value: "", label: `— pilih (${metaTpls.length} approved) —` }, ...metaTpls.map((t) => ({ value: `${t.name}|${t.language}`, label: `${t.name} · ${t.language}${t.category ? ` · ${t.category}` : ""}` }))]} />
+                ) : <div style={{ fontSize: 12.5, color: theme.textMuted }}>Belum ada template <strong>Approved</strong>. Buat & setujui dulu di Meta WhatsApp Manager.</div>
+              ) : <div style={{ fontSize: 12, color: theme.textMuted, lineHeight: 1.5 }}>Klik <strong>Ambil dari Meta</strong> untuk memuat template approved. Butuh <strong>WABA ID</strong> terisi di menu Akun WhatsApp.</div>}
+            </div>
+          ) : null}
+          <Select label="Template Tersimpan (lokal)" value={f.templateId} onChange={(e) => pickTemplate(e.target.value)} options={[{ value: "", label: "— ketik manual —" }, ...templates.map((t) => ({ value: t.id, label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})` }))]} />
           {selectedTpl && selectedTpl.status !== "approved" ? <Notice kind="info">Template ini berstatus <strong>{selectedTpl.status}</strong>. Pastikan sudah disetujui Meta sebelum benar-benar dikirim.</Notice> : null}
           <Input label="Nama / ID Template" value={f.templateName} onChange={(e) => set("templateName", e.target.value)} hint="Terisi otomatis bila memilih template tersimpan. Manual: hello_world (Meta) / Template ID (Qontak)" />
           <Input label="Bahasa Template" value={f.templateLang} onChange={(e) => set("templateLang", e.target.value)} hint="id / en_US" />
