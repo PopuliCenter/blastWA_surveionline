@@ -181,12 +181,12 @@ export default function Chat() {
       <Notice>{convos.error || actionErr}</Notice>
       <div style={{ ...cardWrap, display: "grid", gridTemplateColumns: cols, height: "calc(100vh - 170px)", minHeight: 480 }}>
         {listPanel}
-        <div style={{ minWidth: 0, borderRight: detailsInline ? `1px solid ${theme.border}` : "none" }}>
+        <div style={{ minWidth: 0, minHeight: 0, height: "100%", overflow: "hidden", borderRight: detailsInline ? `1px solid ${theme.border}` : "none" }}>
           {active
             ? <Conversation convo={active} onReload={convos.reload} onResolve={resolve} onShowDetails={detailsInline ? null : () => setShowDetails(true)} />
             : <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: theme.textMuted, fontSize: 13.5 }}>Pilih percakapan untuk mulai membalas</div>}
         </div>
-        {detailsInline ? <div style={{ overflowY: "auto" }}>{detailsPanel || <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: theme.textMuted, fontSize: 12.5, padding: 16, textAlign: "center" }}>Detail kontak muncul di sini</div>}</div> : null}
+        {detailsInline ? <div style={{ minHeight: 0, height: "100%", overflowY: "auto" }}>{detailsPanel || <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: theme.textMuted, fontSize: 12.5, padding: 16, textAlign: "center" }}>Detail kontak muncul di sini</div>}</div> : null}
       </div>
       {!detailsInline && showDetails && active ? <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420}><DetailsPanel convo={active} onResolve={resolve} bare /></Modal> : null}
     </div>
