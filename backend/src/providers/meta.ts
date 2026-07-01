@@ -91,6 +91,20 @@ export class MetaCloudAdapter implements MessagingProvider {
     });
   }
 
+  // Tandai pesan masuk sebagai dibaca → pelanggan melihat centang biru.
+  async markRead(messageId: string): Promise<void> {
+    if (!this.isConfigured() || !messageId) return;
+    try {
+      await fetch(this.endpoint(), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.cfg.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: messageId }),
+      });
+    } catch {
+      /* abaikan — read receipt bersifat best-effort */
+    }
+  }
+
   // Kirim pesan interaktif WhatsApp Flow (formulir native). Hanya valid dalam sesi 24 jam.
   async sendFlow(input: SendFlowInput): Promise<SendResult> {
     return this.post({

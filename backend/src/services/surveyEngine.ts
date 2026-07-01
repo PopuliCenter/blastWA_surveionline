@@ -48,6 +48,12 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     data: { contactId: contact.id, direction: "in", vendor: ev.vendor, vendorMessageId: ev.messageId, text: storedText, payload: ev.raw as object },
   });
 
+  // Tandai pesan dibaca (centang biru untuk pelanggan) — best-effort, tak memblokir alur.
+  if (ev.messageId) {
+    const prov = getProvider(ev.vendor);
+    if (prov.markRead) prov.markRead(ev.messageId).catch(() => {});
+  }
+
   // Balasan WhatsApp Flow (formulir terkirim) → simpan jawaban & selesaikan survei
   if (ev.interactiveType === "nfm_reply" && ev.flowResponse) { await handleFlowReply(ev, contact.id, phone, ev.vendor); return; }
 

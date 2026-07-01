@@ -61,6 +61,8 @@ export interface MessagingProvider {
 
   sendTemplate(input: SendTemplateInput): Promise<SendResult>;
   sendText(input: { to: string; text: string }): Promise<SendResult>;
+  /** Tandai pesan masuk sebagai "dibaca" (centang biru untuk pelanggan). Opsional per vendor. */
+  markRead?(messageId: string): Promise<void>;
   /** Kirim pesan interaktif WhatsApp Flow (opsional; hanya vendor yang mendukung). */
   sendFlow?(input: SendFlowInput): Promise<SendResult>;
 
