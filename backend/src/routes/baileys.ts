@@ -38,6 +38,14 @@ export async function baileysRoutes(app: FastifyInstance): Promise<void> {
       return baileysGateway.getState();
     });
 
+    // Status "sedang mengetik" kontak (jalur Baileys). Sekaligus langganan presence.
+    r.get("/api/baileys/typing/:phone", async (req) => {
+      const phone = (req.params as { phone: string }).phone;
+      if (!baileysGateway.isConnected()) return { typing: false };
+      baileysGateway.subscribePresence(phone); // idempotent — agar event mengetik diterima
+      return { typing: baileysGateway.isTyping(phone) };
+    });
+
     // Cek apakah daftar nomor terdaftar di WhatsApp (butuh Baileys terhubung).
     r.post("/api/baileys/check-numbers", async (req, reply) => {
       const parsed = z.object({ phones: z.array(z.string()).min(1).max(1000) }).safeParse(req.body);

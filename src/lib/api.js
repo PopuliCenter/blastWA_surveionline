@@ -79,6 +79,7 @@ export const api = {
   baileysConnect: () => request("/api/baileys/connect", { method: "POST" }),
   baileysLogout: () => request("/api/baileys/logout", { method: "POST" }),
   checkNumbersWA: (phones) => request("/api/baileys/check-numbers", { method: "POST", body: { phones } }),
+  baileysTyping: (phone) => request(`/api/baileys/typing/${encodeURIComponent(phone)}`),
 
   // Reports
   stats: () => request("/api/stats"),

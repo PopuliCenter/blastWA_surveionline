@@ -215,6 +215,17 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
     return () => clearInterval(id);
   }, [convo.id, setData]);
 
+  // Typing indicator (khusus jalur Baileys — Meta tak mengirim status mengetik).
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    if (convo.vendor !== "baileys") { setTyping(false); return; }
+    let alive = true;
+    const tick = () => api.baileysTyping(convo.phone).then((r) => { if (alive) setTyping(!!r.typing); }).catch(() => {});
+    tick();
+    const id = setInterval(tick, 2500);
+    return () => { alive = false; clearInterval(id); };
+  }, [convo.vendor, convo.phone]);
+
   const send = async () => {
     if (!text.trim()) return;
     setSending(true); setSendErr("");
@@ -231,7 +242,7 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
         <div style={{ width: 38, height: 38, borderRadius: "50%", background: theme.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: theme.text, flexShrink: 0 }}>{(convo.name || convo.phone).slice(0, 1).toUpperCase()}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{convo.name || convo.phone}</div>
-          <div style={{ fontSize: 11.5, color: sess.tone === "green" ? theme.green : theme.textMuted }}>{convo.phone} • {sess.label}</div>
+          <div style={{ fontSize: 11.5, color: typing ? theme.green : sess.tone === "green" ? theme.green : theme.textMuted }}>{convo.phone} • {typing ? "sedang menulis…" : sess.label}</div>
         </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
           <Button variant={convo.resolved ? "secondary" : "success"} size="sm" icon={convo.resolved ? "refresh" : "check"} onClick={() => onResolve(convo.id, !convo.resolved)}>{convo.resolved ? "Buka" : "Selesai"}</Button>

@@ -70,6 +70,7 @@ class BaileysGateway {
   private me: { id: string; name?: string } | null = null;
   private starting = false;
   private owner = false; // true hanya di proses backend (pemilik socket)
+  private typing = new Map<string, number>(); // phone → kapan status "mengetik" kedaluwarsa (ms)
   private onInbound: InboundHandler | null = null;
   private readonly authDir = env.BAILEYS_AUTH_DIR;
 
@@ -211,9 +212,35 @@ class BaileysGateway {
           await this.onInbound(events).catch((e) => console.error("Baileys status gagal:", e));
         }
       });
+
+      // Presence (sedang mengetik). Perlu presenceSubscribe(jid) dulu agar event diterima.
+      sock.ev.on("presence.update", ({ id, presences }) => {
+        const phone = (id?.split("@")[0] ?? "").replace(/\D/g, "");
+        if (!phone) return;
+        const states = Object.values(presences ?? {}).map((p) => p?.lastKnownPresence);
+        const isTyping = states.some((s) => s === "composing" || s === "recording");
+        if (isTyping) this.typing.set(phone, Date.now() + 12000);
+        else this.typing.delete(phone);
+      });
     } finally {
       this.starting = false;
     }
+  }
+
+  /** Langganan presence kontak (panggil saat membuka percakapan) agar menerima status mengetik. */
+  subscribePresence(phone: string): void {
+    const jid = `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
+    try {
+      this.sock?.presenceSubscribe(jid);
+    } catch {
+      /* abaikan */
+    }
+  }
+
+  /** True bila kontak sedang mengetik (dalam 12 detik terakhir). */
+  isTyping(phone: string): boolean {
+    const exp = this.typing.get(phone.replace(/\D/g, ""));
+    return exp != null && exp > Date.now();
   }
 
   async sendText(to: string, text: string): Promise<SendResult> {
