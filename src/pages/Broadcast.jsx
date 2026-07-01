@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import * as XLSX from "xlsx";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Badge, StatCard, Input, Textarea, Select, Modal, Notice, Loading, Empty, Tabs, useLoader, useSelection, Checkbox, BulkBar, theme, fmtDate, Icon } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
@@ -269,7 +268,8 @@ function BlastReportModal({ blast, onClose }) {
   const t = data?.totals;
   const pct = (n) => (t?.recipients ? Math.round((n / t.recipients) * 100) : 0);
 
-  const exportFailed = () => {
+  const exportFailed = async () => {
+    const XLSX = await import("xlsx");
     const rows = (data?.failed || []).map((f) => ({ Nomor: f.phone, Nama: f.name || "", Alasan: f.error, Waktu: f.updatedAt }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Nomor: "", Nama: "", Alasan: "(tidak ada yang gagal)", Waktu: "" }]);
     const wb = XLSX.utils.book_new();

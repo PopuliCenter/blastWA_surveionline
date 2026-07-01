@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+// xlsx (SheetJS) dimuat lewat dynamic import saat ekspor saja (code-splitting).
 
 // Atribut internal chat yang tidak ikut diekspor sebagai kolom pembobot
 export const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"]);
@@ -6,7 +6,8 @@ export const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"
 // Ekspor respons survei → tabel ramping: pembobot (dari kontak) + jawaban chatbot.
 // Hanya identitas + pembobot + 1 kolom/pertanyaan (tanpa status/tanggal) agar siap diolah sendiri.
 // opts.upper = ubah semua nilai jadi HURUF KAPITAL. Spasi berlebih selalu dirapikan (cleaning ringan).
-export function exportResponses(survey, responses, format, opts = {}) {
+export async function exportResponses(survey, responses, format, opts = {}) {
+  const XLSX = await import("xlsx");
   const questions = (survey.questions || []).map((q) => q.text);
   // Kumpulkan kolom pembobot sesuai urutan kemunculan
   const attrKeys = [];

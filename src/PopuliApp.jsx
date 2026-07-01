@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { theme, fontStack, card, Icon, Button, Input, PasswordInput, Modal, Notice, Loading, useIsMobile } from "./lib/ui";
 import { LegalModal } from "./lib/legal";
-import Dashboard from "./pages/Dashboard";
-import Contacts from "./pages/Contacts";
-import Chat from "./pages/Chat";
-import Broadcast from "./pages/Broadcast";
-import Templates from "./pages/Templates";
-import Surveys from "./pages/Surveys";
-import Reports from "./pages/Reports";
-import AutoReply from "./pages/AutoReply";
-import AiAgent from "./pages/AiAgent";
-import WhatsAppAccount from "./pages/WhatsAppAccount";
-import Webhook from "./pages/Webhook";
-import Admin from "./pages/Admin";
-import ComingSoon from "./pages/ComingSoon";
+import ComingSoon from "./pages/ComingSoon"; // kecil & dipakai beberapa menu → biarkan statis
+
+// Halaman berat dimuat saat dibuka saja (code-splitting) → bundle awal ringan di HP.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Contacts = lazy(() => import("./pages/Contacts"));
+const Chat = lazy(() => import("./pages/Chat"));
+const Broadcast = lazy(() => import("./pages/Broadcast"));
+const Templates = lazy(() => import("./pages/Templates"));
+const Surveys = lazy(() => import("./pages/Surveys"));
+const Reports = lazy(() => import("./pages/Reports"));
+const AutoReply = lazy(() => import("./pages/AutoReply"));
+const AiAgent = lazy(() => import("./pages/AiAgent"));
+const WhatsAppAccount = lazy(() => import("./pages/WhatsAppAccount"));
+const Webhook = lazy(() => import("./pages/Webhook"));
+const Admin = lazy(() => import("./pages/Admin"));
 
 const NAV = [
   { group: "Utama", items: [
@@ -223,7 +225,7 @@ export default function PopuliApp() {
           </>
         ) : null}
 
-        <main style={{ padding: "16px 14px", minWidth: 0 }}>{pages[active] || pages.dashboard}</main>
+        <main style={{ padding: "16px 14px", minWidth: 0 }}><Suspense fallback={<Loading />}>{pages[active] || pages.dashboard}</Suspense></main>
         {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
       </div>
     );
@@ -232,7 +234,7 @@ export default function PopuliApp() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
       <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} onChangePassword={openChangePw} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} unread={unreadTotal} />
-      <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>{pages[active] || pages.dashboard}</main>
+      <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}><Suspense fallback={<Loading />}>{pages[active] || pages.dashboard}</Suspense></main>
       {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
     </div>
   );

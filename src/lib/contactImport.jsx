@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import * as XLSX from "xlsx";
 import { Button, Textarea, theme, Icon } from "./ui";
+
+// xlsx (SheetJS) berat (~400 kB) → dimuat lewat dynamic import HANYA saat impor/unduh,
+// bukan di bundle awal (code-splitting agar app ringan dibuka di HP).
 
 // ===== Parsing =====
 export function parseTextContacts(raw) {
@@ -16,7 +18,7 @@ export function parseTextContacts(raw) {
   }).filter(Boolean);
 }
 
-export function parseExcelContacts(workbook) {
+export function parseExcelContacts(XLSX, workbook) {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
   if (!rows.length) return [];
@@ -55,7 +57,8 @@ export function parseExcelContacts(workbook) {
 
 // ===== Template unduhan =====
 // Pembobot: kolom demografi standar (cocok dengan dataset responden + integrasi hasil survei)
-export function downloadTemplatePembobot() {
+export async function downloadTemplatePembobot() {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   const data = [
     ["Nama", "No hp", "Jenis Kelamin", "Umur", "Agama", "Pendidikan", "Pekerjaan", "Provinsi", "Kab/Kota"],
@@ -70,7 +73,8 @@ export function downloadTemplatePembobot() {
 }
 
 // Biasa: hanya Nama + No hp (untuk blast cepat tanpa data pembobot)
-export function downloadTemplateBiasa() {
+export async function downloadTemplateBiasa() {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   const data = [
     ["Nama", "No hp"],
@@ -102,10 +106,11 @@ export function ContactImporter({ onContacts }) {
     if (!file) return;
     setErr(""); setContacts([]); setFileName(file.name);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
+        const XLSX = await import("xlsx");
         const wb = XLSX.read(new Uint8Array(ev.target.result), { type: "array" });
-        const parsed = parseExcelContacts(wb);
+        const parsed = parseExcelContacts(XLSX, wb);
         setContacts(parsed);
         if (!parsed.length) setErr("Tidak ada kontak valid. Pastikan ada kolom 'Nama' dan 'No hp'.");
       } catch { setErr("Gagal membaca file. Pastikan format .xlsx / .xls / .csv."); }
