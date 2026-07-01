@@ -5,6 +5,7 @@ const bullConnection = connection as unknown as ConnectionOptions;
 import { prisma } from "../db.js";
 import { loadProviders, getProvider } from "../providers/registry.js";
 import { BLAST_QUEUE, type BlastJob } from "./blastQueue.js";
+import { logError, logErrorSync, installProcessErrorHandlers } from "../lib/errorLog.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
 // Pengaman anti-banned: lewati kontak opt-out, batas harian + jitter (warm-up).
@@ -32,6 +33,7 @@ async function maybeComplete(blastId: string): Promise<void> {
 }
 
 async function main() {
+  installProcessErrorHandlers("worker");
   await loadProviders();
 
   const worker = new Worker<BlastJob>(
@@ -104,6 +106,8 @@ async function main() {
   worker.on("failed", (job, err) => {
     console.error(`Job ${job?.id} gagal:`, err.message);
   });
+  // Error tingkat worker (mis. koneksi Redis putus) → catat ke file log.
+  worker.on("error", (err) => logError("worker", err, { scope: "worker" }));
   worker.on("completed", (job) => {
     console.log(`Job ${job.id} selesai → ${job.returnvalue}`);
   });
@@ -113,5 +117,6 @@ async function main() {
 
 main().catch((err) => {
   console.error("Worker gagal start:", err);
+  logErrorSync("worker", err, { kind: "startupFailure" });
   process.exit(1);
 });

@@ -21,10 +21,20 @@ import { templateRoutes } from "./routes/templates.js";
 import { baileysRoutes } from "./routes/baileys.js";
 import { baileysGateway } from "./providers/baileys.js";
 import { handleInboundEvents } from "./services/surveyEngine.js";
+import { logError, logErrorSync, installProcessErrorHandlers } from "./lib/errorLog.js";
 
 async function main() {
+  // Catat error tingkat proses (unhandledRejection / uncaughtException) ke file log.
+  installProcessErrorHandlers("backend");
+
   // trustProxy: di belakang Cloudflare + edge nginx → req.ip = IP klien asli (untuk rate-limit).
   const app = Fastify({ logger: true, trustProxy: true });
+
+  // Catat hanya error server (5xx) ke file log — abaikan error klien (400/401/429) agar tidak berisik.
+  app.addHook("onError", async (req, _reply, err) => {
+    const status = (err as { statusCode?: number }).statusCode ?? 500;
+    if (status >= 500) logError("backend", err, { method: req.method, url: req.url, ip: req.ip });
+  });
 
   // Simpan body mentah (rawBody) untuk verifikasi signature webhook.
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
@@ -77,5 +87,6 @@ async function main() {
 
 main().catch((err) => {
   console.error("Server gagal start:", err);
+  logErrorSync("backend", err, { kind: "startupFailure" });
   process.exit(1);
 });

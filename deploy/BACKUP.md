@@ -26,7 +26,30 @@ Default: simpan di `/var/backups/populi-wa/`, tahan **14 hari** (atur via `KEEP_
 
 > 💡 Idealnya salin backup ke **luar VPS** juga (mis. `rclone` ke Google Drive/S3)
 > agar aman bila VPS bermasalah. Backup di server yang sama tidak melindungi dari
-> kehilangan server itu sendiri.
+> kehilangan server itu sendiri. → lihat §1b.
+
+## 1b. Salin backup ke luar VPS (rclone — sangat disarankan)
+
+Skrip sudah mendukung salin otomatis: bila env `RCLONE_REMOTE` diset, tiap backup
+langsung disalin ke sana (dan salinan luar ikut dirotasi `KEEP_DAYS`).
+
+**Pasang & konfigurasi rclone sekali:**
+```bash
+curl https://rclone.org/install.sh | sudo bash
+rclone config          # buat remote, mis. Google Drive → beri nama "gdrive"
+rclone lsd gdrive:     # uji koneksi
+```
+
+**Aktifkan di backup** — tambahkan `RCLONE_REMOTE` pada perintah/cron:
+```bash
+# uji manual:
+STACK_DIR=/var/www/survei-wa RCLONE_REMOTE=gdrive:populi-wa-backup /var/www/survei-wa/deploy/backup-db.sh
+
+# cron harian 02:00 dengan offsite:
+0 2 * * * STACK_DIR=/var/www/survei-wa RCLONE_REMOTE=gdrive:populi-wa-backup /var/www/survei-wa/deploy/backup-db.sh >> /var/log/populi-wa-backup.log 2>&1
+```
+Tanpa `RCLONE_REMOTE`, skrip tetap jalan normal (hanya backup lokal). Contoh tujuan lain:
+`s3:nama-bucket/populi-wa`, `b2:bucket/path`, `dropbox:populi-wa`.
 
 ## 2. Restore
 

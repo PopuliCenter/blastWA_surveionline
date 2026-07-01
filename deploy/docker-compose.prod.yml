@@ -28,8 +28,10 @@ services:
       DATABASE_URL: postgresql://populi:populi@postgres:5432/populi?schema=public
       REDIS_URL: redis://redis:6379
       BAILEYS_AUTH_DIR: /app/.baileys-auth
+      ERROR_LOG_FILE: /app/logs/backend.log
     volumes:
       - baileys_auth:/app/.baileys-auth # sesi WhatsApp Langsung (QR) — bertahan saat restart
+      - /var/log/populi-wa:/app/logs # log error terstruktur — bisa di-tail dari host
     restart: unless-stopped
     networks: [internal]
     depends_on:
@@ -46,6 +48,9 @@ services:
       REDIS_URL: redis://redis:6379
       # Blast Baileys: worker tak punya socket → teruskan kirim ke backend (pemilik socket).
       INTERNAL_API_URL: http://wa_backend:3000
+      ERROR_LOG_FILE: /app/logs/worker.log
+    volumes:
+      - /var/log/populi-wa:/app/logs # log error terstruktur — bisa di-tail dari host
     restart: unless-stopped
     networks: [internal]
     depends_on:

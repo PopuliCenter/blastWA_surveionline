@@ -36,3 +36,20 @@ echo "[$(date)] OK: $OUT ($(du -h "$OUT" | cut -f1))"
 # Rotasi: hapus backup lebih tua dari KEEP_DAYS hari.
 find "$BACKUP_DIR" -name 'populi-wa_*.sql.gz' -mtime +"$KEEP_DAYS" -delete
 echo "[$(date)] Rotasi selesai (simpan $KEEP_DAYS hari terakhir)."
+
+# Salin ke penyimpanan LUAR VPS (opsional tapi sangat disarankan).
+# Set RCLONE_REMOTE ke tujuan rclone, mis. "gdrive:populi-wa-backup" atau "s3:bucket/path".
+# Backup di server yang sama tidak melindungi bila server itu sendiri hilang.
+if [ -n "${RCLONE_REMOTE:-}" ]; then
+  if command -v rclone >/dev/null 2>&1; then
+    if rclone copy "$OUT" "$RCLONE_REMOTE"; then
+      echo "[$(date)] Offsite OK: tersalin ke $RCLONE_REMOTE"
+      # Rotasi salinan luar juga (best-effort; abaikan bila remote tak mendukung).
+      rclone delete --min-age "${KEEP_DAYS}d" "$RCLONE_REMOTE" 2>/dev/null || true
+    else
+      echo "[$(date)] PERINGATAN: gagal menyalin ke $RCLONE_REMOTE." >&2
+    fi
+  else
+    echo "[$(date)] PERINGATAN: RCLONE_REMOTE diset tapi 'rclone' belum terpasang." >&2
+  fi
+fi

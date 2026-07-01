@@ -9,6 +9,7 @@ export default defineConfig({
       DATABASE_URL: "postgresql://test:test@localhost:5432/test",
       JWT_SECRET: "test_jwt_secret_minimal_16",
       CREDENTIALS_ENC_KEY: "0".repeat(64),
+      ERROR_LOG_FILE: "./logs/test-error.log",
     },
   },
 });
