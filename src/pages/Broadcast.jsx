@@ -132,9 +132,20 @@ function ManageSegmentModal({ segment, onClose }) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
-  const [waMap, setWaMap] = useState({}); // phone -> boolean (hasil cek WA)
+  const [waMap, setWaMap] = useState({}); // phone -> boolean (hasil cek WA, Baileys)
+  const [fmtMap, setFmtMap] = useState({}); // phone -> boolean (validasi format, jalur apa pun)
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState("");
+
+  // Validasi format nomor (bukan status WA): sudah dinormalisasi ke 62…, cek panjang wajar.
+  const isPhoneFormatValid = (p) => { const d = String(p || "").replace(/\D/g, ""); return d.length >= 9 && d.length <= 15 && !d.startsWith("0"); };
+  const checkFormat = () => {
+    const map = {};
+    (data?.contacts || []).forEach((c) => { map[c.phone] = isPhoneFormatValid(c.phone); });
+    setFmtMap(map);
+    const bad = Object.values(map).filter((v) => v === false).length;
+    setCheckNote(`Format: ${Object.values(map).filter(Boolean).length} valid${bad ? `, ${bad} perlu dicek` : ""}.`);
+  };
 
   const act = async (fn) => { setErr(""); try { await fn(); await reload(); } catch (e) { setErr(e.message); } finally { setBusy(""); } };
 
@@ -181,17 +192,18 @@ function ManageSegmentModal({ segment, onClose }) {
             <div style={{ minWidth: 200 }}><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nomor / nama…" /></div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-            <Button variant="secondary" size="sm" icon="whatsapp" onClick={checkWA} disabled={checking || !data?.contacts.length}>{checking ? "Mengecek…" : "Cek Nomor WA"}</Button>
+            <Button variant="secondary" size="sm" icon="whatsapp" onClick={checkWA} disabled={checking || !data?.contacts.length}>{checking ? "Mengecek…" : "Cek Nomor WA (Baileys)"}</Button>
+            <Button variant="ghost" size="sm" icon="check" onClick={checkFormat} disabled={!data?.contacts.length}>Cek Format</Button>
             {Object.values(waMap).some((v) => v === false) ? <Button variant="ghost" size="sm" onClick={optOutNonWA}>Opt-out yang tak ber-WA</Button> : null}
             {checkNote ? <span style={{ fontSize: 12, color: theme.green }}>{checkNote}</span> : null}
           </div>
-          <div style={{ fontSize: 11.5, color: theme.textMuted, marginBottom: 10 }}>Cek WA memakai jalur <strong>WhatsApp Langsung (Baileys)</strong> — harus terhubung. Jalur Meta resmi tidak punya pengecekan ini.</div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginBottom: 10, lineHeight: 1.5 }}><strong>Cek Nomor WA</strong> (status ber-WA sungguhan) hanya via <strong>WhatsApp Langsung (Baileys)</strong> — Meta/Qontak resmi tak punya pengecekan ini. <strong>Cek Format</strong> berlaku untuk semua jalur, tapi hanya memeriksa <em>bentuk nomor</em>, bukan status WA.</div>
           {list.length ? (
             <div style={{ maxHeight: 380, overflow: "auto", border: `1px solid ${theme.border}`, borderRadius: 9 }}>
               {list.map((c, i) => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 11px", borderTop: i ? `1px solid ${theme.border}` : "none", opacity: busy === c.id ? 0.5 : 1 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: theme.text, fontWeight: 600 }}>{c.name || "(tanpa nama)"} {!c.subscribed ? <Badge tone="red">opt-out</Badge> : null}{waMap[c.phone] === true ? <Badge tone="green">WA</Badge> : waMap[c.phone] === false ? <Badge tone="red">tdk ber-WA</Badge> : null}</div>
+                    <div style={{ fontSize: 13, color: theme.text, fontWeight: 600 }}>{c.name || "(tanpa nama)"} {!c.subscribed ? <Badge tone="red">opt-out</Badge> : null}{waMap[c.phone] === true ? <Badge tone="green">WA</Badge> : waMap[c.phone] === false ? <Badge tone="red">tdk ber-WA</Badge> : null}{fmtMap[c.phone] === false ? <Badge tone="yellow">format?</Badge> : null}</div>
                     <div style={{ fontSize: 12, color: theme.textMuted, fontFamily: "monospace" }}>{c.phone}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
