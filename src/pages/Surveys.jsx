@@ -580,6 +580,12 @@ function ResponsesModal({ survey, onClose }) {
     setBulkBusy(true); setDelErr("");
     try { await api.bulkDeleteResponses(sel.list()); sel.clear(); await reload(); } catch (e) { setDelErr(e.message); } finally { setBulkBusy(false); }
   };
+  const [busyId, setBusyId] = useState("");
+  const deleteOne = async (r) => {
+    if (!window.confirm(`Hapus respons dari ${r.name || r.phone}? Jawabannya terhapus permanen. (mis. tertukar setelah revisi soal)`)) return;
+    setBusyId(r.id); setDelErr("");
+    try { await api.bulkDeleteResponses([r.id]); await reload(); } catch (e) { setDelErr(e.message); } finally { setBusyId(""); }
+  };
   return (
     <Modal title={`Respons: ${survey.title}`} onClose={onClose} width={760}>
       <Notice>{error || delErr}</Notice>
@@ -605,7 +611,10 @@ function ResponsesModal({ survey, onClose }) {
                   <Checkbox checked={sel.has(r.id)} onChange={() => sel.toggle(r.id)} />
                   <strong style={{ color: theme.text }}>{r.name || r.phone}</strong>
                 </div>
-                <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
+                  <Button variant="danger" size="sm" icon="trash" onClick={() => deleteOne(r)} disabled={busyId === r.id}>{busyId === r.id ? "…" : "Hapus"}</Button>
+                </div>
               </div>
               <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 10 }}>{r.phone} • {fmtDate(r.startedAt)}</div>
               {r.answers.length ? r.answers.map((a, i) => (
