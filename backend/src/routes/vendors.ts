@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { encryptJson } from "../lib/crypto.js";
+import { encryptJson, decryptJson } from "../lib/crypto.js";
 import { listProviders, loadProviders } from "../providers/registry.js";
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
@@ -27,10 +27,23 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z.record(z.string(), z.string()).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "credentials harus object string->string" });
 
+    // Gabung dengan kredensial lama: field yang TIDAK dikirim (kosong) tetap dipertahankan,
+    // supaya menyimpan sebagian (mis. hanya Verify Token) tidak menghapus Access Token/Phone Number ID.
+    const existing = await prisma.vendorConfig.findUnique({ where: { vendor } });
+    let merged: Record<string, string> = parsed.data;
+    if (existing?.credentials) {
+      try {
+        const old = decryptJson<Record<string, string>>(existing.credentials);
+        merged = { ...old, ...parsed.data };
+      } catch {
+        // kredensial lama tak bisa didekripsi (mis. CREDENTIALS_ENC_KEY berubah) → pakai yang baru saja
+      }
+    }
+
     await prisma.vendorConfig.upsert({
       where: { vendor },
-      update: { credentials: encryptJson(parsed.data) },
-      create: { vendor, credentials: encryptJson(parsed.data) },
+      update: { credentials: encryptJson(merged) },
+      create: { vendor, credentials: encryptJson(merged) },
     });
     await loadProviders(); // segarkan adapter dengan kredensial baru
     return { ok: true };
