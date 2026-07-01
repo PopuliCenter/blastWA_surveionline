@@ -75,7 +75,7 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, collapsed, onToggleCollapse }) {
+function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, collapsed, onToggleCollapse, unread = 0 }) {
   const mini = !mobile && collapsed;
   const asideStyle = mobile
     ? { width: "100%", background: theme.surface, padding: "16px 14px", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: "100vh" }
@@ -107,6 +107,9 @@ function Sidebar({ active, setActive, currentUser, onLogout, mobile, onClose, co
                       {!mini ? <span style={{ flex: 1 }}>{it.label}</span> : null}
                       {!mini && it.soon ? <span style={{ fontSize: 9.5, color: theme.yellow, background: theme.yellowSoft, padding: "2px 6px", borderRadius: 6, fontWeight: 700 }}>SOON</span> : null}
                       {mini && it.soon ? <span style={{ position: "absolute", top: 6, right: 12, width: 6, height: 6, borderRadius: "50%", background: theme.yellow }} /> : null}
+                      {/* Badge notifikasi pesan belum dibalas pada menu Chat */}
+                      {!mini && it.id === "chat" && unread > 0 ? <span style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, background: theme.red, color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{unread > 99 ? "99+" : unread}</span> : null}
+                      {mini && it.id === "chat" && unread > 0 ? <span style={{ position: "absolute", top: 6, right: 12, width: 8, height: 8, borderRadius: "50%", background: theme.red, border: `2px solid ${theme.surface}` }} /> : null}
                     </button>
                   );
                 })}
@@ -152,6 +155,19 @@ export default function PopuliApp() {
   // Tutup drawer otomatis saat berpindah ke layar lebar
   useEffect(() => { if (!isMobile) setDrawerOpen(false); }, [isMobile]);
 
+  // Badge notifikasi global: hitung total pesan belum dibalas, poll tiap 10 detik.
+  const [unreadTotal, setUnreadTotal] = useState(0);
+  useEffect(() => {
+    if (!currentUser) return;
+    let alive = true;
+    const tick = () => api.conversations()
+      .then((cs) => { if (alive) setUnreadTotal((cs || []).reduce((n, c) => n + (c.resolved ? 0 : (c.unread || 0)), 0)); })
+      .catch(() => {});
+    tick();
+    const id = setInterval(tick, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, [currentUser]);
+
   const logout = () => { setToken(null); setCurrentUser(null); setActive("dashboard"); };
   const selectPage = (id) => { setActive(id); setDrawerOpen(false); };
 
@@ -190,7 +206,7 @@ export default function PopuliApp() {
           <>
             <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 50 }} />
             <div style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 270, maxWidth: "84vw", background: theme.surface, zIndex: 55, boxShadow: "2px 0 18px rgba(15,23,42,0.18)", overflowY: "auto" }}>
-              <Sidebar active={active} setActive={selectPage} currentUser={currentUser} onLogout={logout} mobile onClose={() => setDrawerOpen(false)} />
+              <Sidebar active={active} setActive={selectPage} currentUser={currentUser} onLogout={logout} mobile onClose={() => setDrawerOpen(false)} unread={unreadTotal} />
             </div>
           </>
         ) : null}
@@ -202,7 +218,7 @@ export default function PopuliApp() {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: theme.bg, color: theme.text, fontFamily: fontStack }}>
-      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} />
+      <Sidebar active={active} setActive={setActive} currentUser={currentUser} onLogout={logout} collapsed={collapsed} onToggleCollapse={() => setCollapsed((c) => !c)} unread={unreadTotal} />
       <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>{pages[active] || pages.dashboard}</main>
     </div>
   );

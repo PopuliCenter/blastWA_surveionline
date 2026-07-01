@@ -55,6 +55,15 @@ export default function Chat() {
   const all = convos.data || [];
   const active = all.find((c) => c.id === activeId) || null;
 
+  // Auto-update senyap: segarkan daftar percakapan tiap 5 detik (pesan masuk & badge
+  // ter-update otomatis tanpa klik Refresh). Pakai setData agar tidak memunculkan spinner.
+  useEffect(() => {
+    const id = setInterval(() => {
+      api.conversations().then((d) => convos.setData(d)).catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [convos.setData]);
+
   const bulkDeleteConvos = async () => {
     if (!sel.size || !window.confirm(`Hapus ${sel.size} percakapan terpilih? Riwayat pesannya akan dihapus (kontak tetap ada).`)) return;
     setBulkBusy(true); setActionErr("");
@@ -188,7 +197,7 @@ const cardWrap = { background: theme.surface, border: `1px solid ${theme.border}
 
 // ── Percakapan (tengah) ─────────────────────────────────────────────────────
 function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMobile }) {
-  const { data, loading, error, reload } = useLoader(useCallback(() => api.contactMessages(convo.id), [convo.id]));
+  const { data, loading, error, reload, setData } = useLoader(useCallback(() => api.contactMessages(convo.id), [convo.id]));
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState("");
@@ -197,6 +206,14 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
   const sess = sessionInfo(convo);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
+
+  // Auto-update senyap: segarkan pesan thread ini tiap 4 detik (balasan masuk muncul otomatis).
+  useEffect(() => {
+    const id = setInterval(() => {
+      api.contactMessages(convo.id).then((d) => setData(d)).catch(() => {});
+    }, 4000);
+    return () => clearInterval(id);
+  }, [convo.id, setData]);
 
   const send = async () => {
     if (!text.trim()) return;
