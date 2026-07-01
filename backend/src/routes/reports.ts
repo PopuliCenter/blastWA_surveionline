@@ -20,9 +20,11 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/stats", async () => {
-    const [surveys, responses, contacts, segments, blastAgg] = await Promise.all([
+    const [surveys, activeSurveys, responses, responsesCompleted, contacts, segments, blastAgg] = await Promise.all([
       prisma.survey.count(),
+      prisma.survey.count({ where: { status: "active" } }),
       prisma.surveyResponse.count(),
+      prisma.surveyResponse.count({ where: { completedAt: { not: null } } }),
       prisma.contact.count(),
       prisma.segment.count(),
       prisma.blast.aggregate({
@@ -31,7 +33,9 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
     ]);
     return {
       surveys,
+      activeSurveys,
       responses,
+      responsesCompleted,
       contacts,
       segments,
       sent: blastAgg._sum.sentCount ?? 0,
