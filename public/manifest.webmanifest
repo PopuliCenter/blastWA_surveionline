@@ -1,0 +1,15 @@
+{
+  "name": "Populi WA — Survei & Broadcast WhatsApp",
+  "short_name": "Populi WA",
+  "description": "Platform survei & broadcast WhatsApp Populi Center.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#2563eb",
+  "theme_color": "#ea580c",
+  "icons": [
+    { "src": "/logopopuli.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logopopuli.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,5 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import { env } from "./env.js";
 import { registerAuth } from "./plugins/authPlugin.js";
 import { loadProviders } from "./providers/registry.js";
@@ -21,7 +23,8 @@ import { baileysGateway } from "./providers/baileys.js";
 import { handleInboundEvents } from "./services/surveyEngine.js";
 
 async function main() {
-  const app = Fastify({ logger: true });
+  // trustProxy: di belakang Cloudflare + edge nginx → req.ip = IP klien asli (untuk rate-limit).
+  const app = Fastify({ logger: true, trustProxy: true });
 
   // Simpan body mentah (rawBody) untuk verifikasi signature webhook.
   app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
@@ -34,6 +37,10 @@ async function main() {
   });
 
   await app.register(cors, { origin: env.FRONTEND_ORIGIN, credentials: true });
+  // Security headers. CSP dimatikan (backend hanya sajikan JSON; CSP diatur di edge/nginx frontend).
+  await app.register(helmet, { contentSecurityPolicy: false });
+  // Rate limit global (anti brute-force / abuse). Login dibatasi lebih ketat via config per-route.
+  await app.register(rateLimit, { global: true, max: 300, timeWindow: "1 minute" });
   await registerAuth(app);
 
   // Muat kredensial vendor dari DB (timpa env)

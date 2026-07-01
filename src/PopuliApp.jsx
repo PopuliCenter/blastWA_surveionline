@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { theme, fontStack, card, Icon, Button, Input, PasswordInput, Loading, useIsMobile } from "./lib/ui";
+import { LegalModal } from "./lib/legal";
 import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import Chat from "./pages/Chat";
@@ -49,6 +50,7 @@ function LoginPage({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [legal, setLegal] = useState(null); // "privacy" | "terms" | null
 
   const handleLogin = async () => {
     setLoading(true); setError("");
@@ -70,7 +72,14 @@ function LoginPage({ onLogin }) {
         </div>
         <Button onClick={handleLogin} disabled={loading || !username || !password} style={{ width: "100%" }}>{loading ? "Memverifikasi..." : "Masuk"}</Button>
         <div style={{ marginTop: 14, fontSize: 12, color: theme.textMuted, textAlign: "center" }}>Default: <strong style={{ color: theme.text }}>populi / populi13!</strong></div>
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${theme.border}`, fontSize: 11.5, color: theme.textMuted, textAlign: "center" }}>
+          © 2026 Populi Center · v1.0.0<br />
+          <span onClick={() => setLegal("privacy")} style={{ color: theme.primary, cursor: "pointer" }}>Kebijakan Privasi</span>
+          {" · "}
+          <span onClick={() => setLegal("terms")} style={{ color: theme.primary, cursor: "pointer" }}>Syarat &amp; Ketentuan</span>
+        </div>
       </div>
+      {legal ? <LegalModal initialTab={legal} onClose={() => setLegal(null)} /> : null}
     </div>
   );
 }

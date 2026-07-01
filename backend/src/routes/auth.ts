@@ -4,7 +4,8 @@ import { prisma } from "../db.js";
 import { verifyPassword } from "../lib/auth.js";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/auth/login", async (req, reply) => {
+  // Login dibatasi ketat: maks 10 percobaan / menit per IP (anti brute-force).
+  app.post("/api/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const body = z.object({ username: z.string(), password: z.string() }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "input tidak valid" });
 
