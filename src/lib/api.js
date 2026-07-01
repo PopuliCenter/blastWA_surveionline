@@ -123,6 +123,8 @@ export const api = {
   createTemplate: (data) => request("/api/templates", { method: "POST", body: data }),
   updateTemplate: (id, data) => request(`/api/templates/${id}`, { method: "PUT", body: data }),
   deleteTemplate: (id) => request(`/api/templates/${id}`, { method: "DELETE" }),
+  submitTemplate: (id) => request(`/api/templates/${id}/submit`, { method: "POST" }),
+  syncTemplates: () => request("/api/templates/sync", { method: "POST" }),
 
   // Pengaman pengiriman (anti-banned)
   getSendingPolicy: () => request("/api/sending-policy"),

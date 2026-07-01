@@ -110,6 +110,64 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
   }
 
+  // Ajukan template ke Meta untuk direview (POST message_templates). Header media belum didukung.
+  async createTemplate(input: {
+    name: string; language: string; category: string;
+    headerType?: string; headerText?: string | null;
+    bodyText: string; footerText?: string | null;
+    buttons?: { type: string; text: string; url?: string | null; phone?: string | null }[];
+    sampleParams?: string[];
+  }): Promise<{ ok: boolean; id?: string; status?: string; error?: string; raw?: unknown }> {
+    if (!this.cfg.accessToken) return { ok: false, error: "Access Token Meta belum diisi." };
+    if (!this.cfg.wabaId) return { ok: false, error: "WABA ID belum diisi di kartu Meta." };
+    if (input.headerType && ["image", "document", "video"].includes(input.headerType)) {
+      return { ok: false, error: "Header media (gambar/dokumen/video) belum didukung untuk pengajuan otomatis. Pakai header Teks / None, atau ajukan manual di WhatsApp Manager." };
+    }
+
+    const maxVar = (s: string) => {
+      let m = 0; const re = /\{\{(\d+)\}\}/g; let x;
+      while ((x = re.exec(s || ""))) m = Math.max(m, Number(x[1]) || 0);
+      return m;
+    };
+    const sample = (i: number) => input.sampleParams?.[i] ?? `Contoh${i + 1}`;
+
+    const components: unknown[] = [];
+    if (input.headerType === "text" && input.headerText) {
+      const comp: any = { type: "HEADER", format: "TEXT", text: input.headerText };
+      if (maxVar(input.headerText) > 0) comp.example = { header_text: [sample(0)] };
+      components.push(comp);
+    }
+    const body: any = { type: "BODY", text: input.bodyText };
+    const bv = maxVar(input.bodyText);
+    if (bv > 0) body.example = { body_text: [Array.from({ length: bv }, (_, i) => sample(i))] };
+    components.push(body);
+    if (input.footerText) components.push({ type: "FOOTER", text: input.footerText });
+    if (input.buttons && input.buttons.length) {
+      components.push({
+        type: "BUTTONS",
+        buttons: input.buttons.map((b) => {
+          if (b.type === "URL") return { type: "URL", text: b.text, url: b.url ?? "" };
+          if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone ?? "" };
+          return { type: "QUICK_REPLY", text: b.text };
+        }),
+      });
+    }
+
+    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.cfg.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: input.name, language: input.language, category: input.category, components }),
+      });
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) return { ok: false, error: json?.error?.error_user_msg || json?.error?.message || "Gagal mengajukan template", raw: json };
+      return { ok: true, id: json?.id, status: json?.status };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Gagal menghubungi Graph API" };
+    }
+  }
+
   // Tandai pesan masuk sebagai dibaca → pelanggan melihat centang biru.
   async markRead(messageId: string): Promise<void> {
     if (!this.isConfigured() || !messageId) return;
