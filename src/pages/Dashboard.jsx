@@ -140,6 +140,7 @@ export default function Dashboard() {
 
   // Inbox
   const cs = convos.data || [];
+  // eslint-disable-next-line react-hooks/purity -- sengaja baca waktu sekarang untuk hitung sesi 24 jam aktif
   const now = Date.now();
   const inbox = {
     total: cs.length,

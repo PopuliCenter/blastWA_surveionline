@@ -16,10 +16,9 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      # Lint informatif (belum blocking — masih ada temuan lama yang perlu dibersihkan bertahap).
+      # Lint blocking: 0 error (aturan DX/opini di-set 'warn' di eslint.config.js).
       - name: Lint
         run: npm run lint
-        continue-on-error: true
       - name: Build frontend
         run: npm run build
 
