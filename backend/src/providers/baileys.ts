@@ -19,13 +19,7 @@ import makeWASocket, {
   type WAMessageContent,
 } from "@whiskeysockets/baileys";
 import { env } from "../env.js";
-import type {
-  MessagingProvider,
-  NormalizedInbound,
-  SendResult,
-  SendTemplateInput,
-  WebhookRequest,
-} from "./types.js";
+import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 type GwStatus = "disconnected" | "connecting" | "qr" | "connected" | "logged_out";
 type InboundHandler = (events: NormalizedInbound[]) => Promise<void>;
@@ -104,7 +98,8 @@ class BaileysGateway {
 
   async start({ force = false }: { force?: boolean } = {}): Promise<void> {
     if (this.starting) return;
-    if (this.sock && !force && (this.status === "connected" || this.status === "connecting" || this.status === "qr")) return;
+    if (this.sock && !force && (this.status === "connected" || this.status === "connecting" || this.status === "qr"))
+      return;
     this.starting = true;
     try {
       mkdirSync(this.authDir, { recursive: true });
@@ -163,24 +158,55 @@ class BaileysGateway {
         if (up.type !== "notify") return;
         const events: NormalizedInbound[] = [];
         for (const m of up.messages) {
-          const key = m.key as { remoteJid?: string | null; fromMe?: boolean | null; id?: string | null; senderPn?: string | null; participantPn?: string | null };
+          const key = m.key as {
+            remoteJid?: string | null;
+            fromMe?: boolean | null;
+            id?: string | null;
+            senderPn?: string | null;
+            participantPn?: string | null;
+          };
           const jid = key.remoteJid ?? "";
-          if (key.fromMe) { console.log(`[baileys] lewati fromMe (${jid})`); continue; }
+          if (key.fromMe) {
+            console.log(`[baileys] lewati fromMe (${jid})`);
+            continue;
+          }
           // Abaikan grup / status / channel — terima chat pribadi (@s.whatsapp.net) & LID (@lid)
-          if (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) { console.log(`[baileys] lewati grup/status (${jid})`); continue; }
+          if (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) {
+            console.log(`[baileys] lewati grup/status (${jid})`);
+            continue;
+          }
           const text = extractText(m.message);
-          if (!text) { console.log(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`); continue; }
+          if (!text) {
+            console.log(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`);
+            continue;
+          }
           // WhatsApp kini sering pakai LID (@lid) demi privasi → nomor asli ada di senderPn,
           // participantPn, atau peta LID→PN milik socket.
           let phoneJid = "";
           if (jid.endsWith("@s.whatsapp.net")) phoneJid = jid;
           else if (jid.endsWith("@lid")) {
             phoneJid = key.senderPn || key.participantPn || "";
-            if (!phoneJid) { try { phoneJid = (sock as unknown as { signalRepository?: { lidMapping?: { getPNForLID?: (j: string) => string | undefined } } }).signalRepository?.lidMapping?.getPNForLID?.(jid) || ""; } catch { /* abaikan */ } }
+            if (!phoneJid) {
+              try {
+                phoneJid =
+                  (
+                    sock as unknown as {
+                      signalRepository?: { lidMapping?: { getPNForLID?: (j: string) => string | undefined } };
+                    }
+                  ).signalRepository?.lidMapping?.getPNForLID?.(jid) || "";
+              } catch {
+                /* abaikan */
+              }
+            }
           } else phoneJid = jid;
           const from = ((phoneJid || jid).split("@")[0] ?? "").replace(/\D/g, "");
-          console.log(`[baileys] masuk jid=${jid} senderPn=${key.senderPn ?? "-"} → nomor=${from || "(tak terdeteksi)"}`);
-          if (!from) { console.log("[baileys] lewati: nomor tak terdeteksi"); continue; }
+          console.log(
+            `[baileys] masuk jid=${jid} senderPn=${key.senderPn ?? "-"} → nomor=${from || "(tak terdeteksi)"}`,
+          );
+          if (!from) {
+            console.log("[baileys] lewati: nomor tak terdeteksi");
+            continue;
+          }
           const tsNum = Number(m.messageTimestamp) || Math.floor(Date.now() / 1000);
           events.push({
             vendor: this.name,
@@ -192,7 +218,8 @@ class BaileysGateway {
             raw: m,
           });
         }
-        if (events.length) console.log(`[baileys] ${events.length} pesan masuk diproses → ${events.map((e) => e.from).join(", ")}`);
+        if (events.length)
+          console.log(`[baileys] ${events.length} pesan masuk diproses → ${events.map((e) => e.from).join(", ")}`);
         if (events.length && this.onInbound) {
           await this.onInbound(events).catch((e) => console.error("Baileys inbound gagal:", e));
         }
@@ -204,9 +231,17 @@ class BaileysGateway {
         for (const u of updates) {
           if (!u.key?.fromMe || !u.key?.id) continue;
           const code = Number(u.update?.status);
-          const deliveryStatus = code >= 5 ? "read" : code === 4 ? "read" : code === 3 ? "delivered" : code === 2 ? "sent" : undefined;
+          const deliveryStatus =
+            code >= 5 ? "read" : code === 4 ? "read" : code === 3 ? "delivered" : code === 2 ? "sent" : undefined;
           if (!deliveryStatus) continue;
-          events.push({ vendor: this.name, kind: "status", refMessageId: u.key.id, deliveryStatus, timestamp: new Date().toISOString(), raw: u });
+          events.push({
+            vendor: this.name,
+            kind: "status",
+            refMessageId: u.key.id,
+            deliveryStatus,
+            timestamp: new Date().toISOString(),
+            raw: u,
+          });
         }
         if (events.length && this.onInbound) {
           await this.onInbound(events).catch((e) => console.error("Baileys status gagal:", e));
@@ -245,7 +280,11 @@ class BaileysGateway {
 
   async sendText(to: string, text: string): Promise<SendResult> {
     if (!this.sock || this.status !== "connected") {
-      return { vendorMessageId: "", status: "failed", raw: { error: "WhatsApp belum terhubung — scan QR dulu di menu Akun WhatsApp." } };
+      return {
+        vendorMessageId: "",
+        status: "failed",
+        raw: { error: "WhatsApp belum terhubung — scan QR dulu di menu Akun WhatsApp." },
+      };
     }
     const jid = `${to.replace(/\D/g, "")}@s.whatsapp.net`;
     try {
@@ -343,7 +382,11 @@ export class BaileysAdapter implements MessagingProvider {
       if (!res.ok) return { vendorMessageId: "", status: "failed", raw: json };
       return json;
     } catch (e) {
-      return { vendorMessageId: "", status: "failed", raw: { error: e instanceof Error ? e.message : "forward ke backend gagal" } };
+      return {
+        vendorMessageId: "",
+        status: "failed",
+        raw: { error: e instanceof Error ? e.message : "forward ke backend gagal" },
+      };
     }
   }
 

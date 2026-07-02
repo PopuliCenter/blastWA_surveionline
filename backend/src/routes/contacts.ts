@@ -16,7 +16,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "desc" },
       take: 500,
     });
-    return contacts.map((c) => ({ id: c.id, phone: c.phone, name: c.name, attributes: c.attributes, subscribed: c.subscribed, optOutAt: c.optOutAt, consentSource: c.consentSource, createdAt: c.createdAt }));
+    return contacts.map((c) => ({
+      id: c.id,
+      phone: c.phone,
+      name: c.name,
+      attributes: c.attributes,
+      subscribed: c.subscribed,
+      optOutAt: c.optOutAt,
+      consentSource: c.consentSource,
+      createdAt: c.createdAt,
+    }));
   });
 
   app.post("/api/contacts", async (req, reply) => {
@@ -25,7 +34,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const phone = normalizePhone(parsed.data.phone);
     const existing = await prisma.contact.findUnique({ where: { phone } });
     if (existing) return reply.code(409).send({ error: "nomor sudah ada" });
-    const c = await prisma.contact.create({ data: { phone, name: parsed.data.name, consentSource: "manual", consentAt: new Date() } });
+    const c = await prisma.contact.create({
+      data: { phone, name: parsed.data.name, consentSource: "manual", consentAt: new Date() },
+    });
     return reply.code(201).send(c);
   });
 
@@ -36,29 +47,54 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z
       .object({
         contacts: z
-          .array(z.object({ phone: z.string().min(5), name: z.string().optional(), attributes: z.record(z.any()).optional() }))
+          .array(
+            z.object({
+              phone: z.string().min(5),
+              name: z.string().optional(),
+              attributes: z.record(z.any()).optional(),
+            }),
+          )
           .min(1)
           .max(5000),
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "format tidak valid" });
 
-    let created = 0, updated = 0, skipped = 0;
+    let created = 0,
+      updated = 0,
+      skipped = 0;
     const seen = new Set<string>();
     for (const item of parsed.data.contacts) {
       const phone = normalizePhone(item.phone);
-      if (!phone || phone.length < 8 || seen.has(phone)) { skipped++; continue; }
+      if (!phone || phone.length < 8 || seen.has(phone)) {
+        skipped++;
+        continue;
+      }
       seen.add(phone);
       const hasAttrs = item.attributes && Object.keys(item.attributes).length > 0;
       const existing = await prisma.contact.findUnique({ where: { phone } });
       if (existing) {
         const data: Record<string, unknown> = {};
         if (item.name && item.name !== existing.name) data.name = item.name;
-        if (hasAttrs) data.attributes = { ...((existing.attributes as Record<string, unknown> | null) ?? {}), ...item.attributes } as object;
-        if (Object.keys(data).length) { await prisma.contact.update({ where: { phone }, data }); updated++; }
-        else skipped++;
+        if (hasAttrs)
+          data.attributes = {
+            ...((existing.attributes as Record<string, unknown> | null) ?? {}),
+            ...item.attributes,
+          } as object;
+        if (Object.keys(data).length) {
+          await prisma.contact.update({ where: { phone }, data });
+          updated++;
+        } else skipped++;
       } else {
-        await prisma.contact.create({ data: { phone, name: item.name, attributes: hasAttrs ? (item.attributes as object) : undefined, consentSource: "import", consentAt: new Date() } });
+        await prisma.contact.create({
+          data: {
+            phone,
+            name: item.name,
+            attributes: hasAttrs ? (item.attributes as object) : undefined,
+            consentSource: "import",
+            consentAt: new Date(),
+          },
+        });
         created++;
       }
     }
@@ -67,7 +103,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
   app.put("/api/contacts/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const parsed = z.object({ name: z.string().optional(), phone: z.string().optional(), subscribed: z.boolean().optional() }).safeParse(req.body);
+    const parsed = z
+      .object({ name: z.string().optional(), phone: z.string().optional(), subscribed: z.boolean().optional() })
+      .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
@@ -115,12 +153,24 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const results = await Promise.all(
       contacts.map(async (c) => {
         const [lastInbound, lastOutbound] = await Promise.all([
-          prisma.message.findFirst({ where: { contactId: c.id, direction: "in" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
-          prisma.message.findFirst({ where: { contactId: c.id, direction: "out" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+          prisma.message.findFirst({
+            where: { contactId: c.id, direction: "in" },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
+          prisma.message.findFirst({
+            where: { contactId: c.id, direction: "out" },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
         ]);
         // "Belum dibalas" = pesan masuk yang lebih baru dari balasan terakhir kita
         const unread = await prisma.message.count({
-          where: { contactId: c.id, direction: "in", ...(lastOutbound ? { createdAt: { gt: lastOutbound.createdAt } } : {}) },
+          where: {
+            contactId: c.id,
+            direction: "in",
+            ...(lastOutbound ? { createdAt: { gt: lastOutbound.createdAt } } : {}),
+          },
         });
         const attrs = (c.attributes as Record<string, unknown> | null) ?? {};
         const sessionExpiresAt = lastInbound ? new Date(new Date(lastInbound.createdAt).getTime() + SESSION_MS) : null;
@@ -138,7 +188,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
           unread,
           resolved: attrs.chatResolved === true,
         };
-      })
+      }),
     );
     return results.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
   });
@@ -189,7 +239,14 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "asc" },
       take: 200,
     });
-    return messages.map((m) => ({ id: m.id, direction: m.direction, text: m.text, vendor: m.vendor, isBot: m.isBot, createdAt: m.createdAt }));
+    return messages.map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      text: m.text,
+      vendor: m.vendor,
+      isBot: m.isBot,
+      createdAt: m.createdAt,
+    }));
   });
 
   // Kirim pesan teks ke kontak (hanya valid dalam jendela 24 jam sesi)
@@ -216,7 +273,8 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         payload: result.raw as object,
       },
     });
-    if (result.status === "failed") return reply.code(502).send({ error: "gagal kirim", detail: result.raw, message: msg });
+    if (result.status === "failed")
+      return reply.code(502).send({ error: "gagal kirim", detail: result.raw, message: msg });
     return reply.code(201).send(msg);
   });
 }

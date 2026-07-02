@@ -31,48 +31,272 @@ export const fontStack = "'Inter','Segoe UI',system-ui,sans-serif";
 
 // ===== Ikon (stroke SVG) =====
 export function Icon({ name, size = 18 }) {
-  const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  const c = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  };
   const I = {
-    dashboard: <svg {...c}><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></svg>,
-    whatsapp: <svg {...c}><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.4A8.5 8.5 0 1 1 21 11.5Z" /><path d="M8.5 9c0 4 2.5 6.5 6.5 6.5" /></svg>,
-    instagram: <svg {...c}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" /></svg>,
-    contacts: <svg {...c}><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M21 21v-2a4 4 0 0 0-3-3.9" /></svg>,
-    chat: <svg {...c}><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></svg>,
-    broadcast: <svg {...c}><circle cx="6" cy="12" r="2" /><path d="M11 8a6 6 0 0 1 0 8" /><path d="M14 5a10 10 0 0 1 0 14" /></svg>,
-    story: <svg {...c}><circle cx="12" cy="12" r="9" strokeDasharray="3 3" /><circle cx="12" cy="12" r="3.5" /></svg>,
-    survey: <svg {...c}><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg>,
-    autoreply: <svg {...c}><path d="M9 17H7A4 4 0 0 1 7 9h1" /><path d="M15 7h2a4 4 0 0 1 0 8h-1" /><path d="M8 13h8" /></svg>,
-    leads: <svg {...c}><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 5-6" /></svg>,
-    ai: <svg {...c}><rect x="4" y="7" width="16" height="12" rx="3" /><path d="M12 7V4" /><circle cx="9" cy="13" r="1" fill="currentColor" /><circle cx="15" cy="13" r="1" fill="currentColor" /></svg>,
-    invoice: <svg {...c}><path d="M6 2h9l4 4v16l-2-1-2 1-2-1-2 1-2-1-2 1V2Z" /><path d="M9 7h5M9 11h6M9 15h4" /></svg>,
-    webhook: <svg {...c}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>,
-    settings: <svg {...c}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" /></svg>,
-    admin: <svg {...c}><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6Z" /><path d="M9 12l2 2 4-4" /></svg>,
-    plus: <svg {...c}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
-    edit: <svg {...c}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>,
-    trash: <svg {...c}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
-    search: <svg {...c}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
-    send: <svg {...c}><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>,
-    refresh: <svg {...c}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15" /></svg>,
-    logout: <svg {...c}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>,
-    close: <svg {...c}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
-    check: <svg {...c}><polyline points="20 6 9 17 4 12" /></svg>,
-    sparkle: <svg {...c}><path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8Z" /></svg>,
-    upload: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
-    download: <svg {...c}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
-    eye: <svg {...c}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
-    eyeOff: <svg {...c}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>,
-    sidebar: <svg {...c}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></svg>,
-    up: <svg {...c}><polyline points="18 15 12 9 6 15" /></svg>,
-    down: <svg {...c}><polyline points="6 9 12 15 18 9" /></svg>,
-    menu: <svg {...c}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
-    back: <svg {...c}><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>,
-    report: <svg {...c}><line x1="3" y1="21" x2="21" y2="21" /><rect x="4" y="11" width="4" height="7" /><rect x="10" y="6" width="4" height="12" /><rect x="16" y="9" width="4" height="9" /></svg>,
-    template: <svg {...c}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>,
-    image: <svg {...c}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>,
-    doc: <svg {...c}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>,
-    link: <svg {...c}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>,
-    phone: <svg {...c}><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z" /></svg>,
+    dashboard: (
+      <svg {...c}>
+        <rect x="3" y="3" width="7" height="9" rx="1" />
+        <rect x="14" y="3" width="7" height="5" rx="1" />
+        <rect x="14" y="12" width="7" height="9" rx="1" />
+        <rect x="3" y="16" width="7" height="5" rx="1" />
+      </svg>
+    ),
+    whatsapp: (
+      <svg {...c}>
+        <path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.4A8.5 8.5 0 1 1 21 11.5Z" />
+        <path d="M8.5 9c0 4 2.5 6.5 6.5 6.5" />
+      </svg>
+    ),
+    instagram: (
+      <svg {...c}>
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" />
+      </svg>
+    ),
+    contacts: (
+      <svg {...c}>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="10" cy="7" r="4" />
+        <path d="M21 21v-2a4 4 0 0 0-3-3.9" />
+      </svg>
+    ),
+    chat: (
+      <svg {...c}>
+        <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+      </svg>
+    ),
+    broadcast: (
+      <svg {...c}>
+        <circle cx="6" cy="12" r="2" />
+        <path d="M11 8a6 6 0 0 1 0 8" />
+        <path d="M14 5a10 10 0 0 1 0 14" />
+      </svg>
+    ),
+    story: (
+      <svg {...c}>
+        <circle cx="12" cy="12" r="9" strokeDasharray="3 3" />
+        <circle cx="12" cy="12" r="3.5" />
+      </svg>
+    ),
+    survey: (
+      <svg {...c}>
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+        <rect x="9" y="3" width="6" height="4" rx="1" />
+        <path d="M9 12h6M9 16h4" />
+      </svg>
+    ),
+    autoreply: (
+      <svg {...c}>
+        <path d="M9 17H7A4 4 0 0 1 7 9h1" />
+        <path d="M15 7h2a4 4 0 0 1 0 8h-1" />
+        <path d="M8 13h8" />
+      </svg>
+    ),
+    leads: (
+      <svg {...c}>
+        <path d="M3 3v18h18" />
+        <path d="M7 14l3-3 3 3 5-6" />
+      </svg>
+    ),
+    ai: (
+      <svg {...c}>
+        <rect x="4" y="7" width="16" height="12" rx="3" />
+        <path d="M12 7V4" />
+        <circle cx="9" cy="13" r="1" fill="currentColor" />
+        <circle cx="15" cy="13" r="1" fill="currentColor" />
+      </svg>
+    ),
+    invoice: (
+      <svg {...c}>
+        <path d="M6 2h9l4 4v16l-2-1-2 1-2-1-2 1-2-1-2 1V2Z" />
+        <path d="M9 7h5M9 11h6M9 15h4" />
+      </svg>
+    ),
+    webhook: (
+      <svg {...c}>
+        <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+        <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+      </svg>
+    ),
+    settings: (
+      <svg {...c}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
+      </svg>
+    ),
+    admin: (
+      <svg {...c}>
+        <path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6Z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+    plus: (
+      <svg {...c}>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    ),
+    edit: (
+      <svg {...c}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    ),
+    trash: (
+      <svg {...c}>
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      </svg>
+    ),
+    search: (
+      <svg {...c}>
+        <circle cx="11" cy="11" r="7" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
+    send: (
+      <svg {...c}>
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </svg>
+    ),
+    refresh: (
+      <svg {...c}>
+        <polyline points="23 4 23 10 17 10" />
+        <polyline points="1 20 1 14 7 14" />
+        <path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15" />
+      </svg>
+    ),
+    logout: (
+      <svg {...c}>
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+    ),
+    close: (
+      <svg {...c}>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    ),
+    check: (
+      <svg {...c}>
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    ),
+    sparkle: (
+      <svg {...c}>
+        <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8Z" />
+      </svg>
+    ),
+    upload: (
+      <svg {...c}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    ),
+    download: (
+      <svg {...c}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+    ),
+    eye: (
+      <svg {...c}>
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+    eyeOff: (
+      <svg {...c}>
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    ),
+    sidebar: (
+      <svg {...c}>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="9" y1="3" x2="9" y2="21" />
+      </svg>
+    ),
+    up: (
+      <svg {...c}>
+        <polyline points="18 15 12 9 6 15" />
+      </svg>
+    ),
+    down: (
+      <svg {...c}>
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    ),
+    menu: (
+      <svg {...c}>
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <line x1="3" y1="12" x2="21" y2="12" />
+        <line x1="3" y1="18" x2="21" y2="18" />
+      </svg>
+    ),
+    back: (
+      <svg {...c}>
+        <line x1="19" y1="12" x2="5" y2="12" />
+        <polyline points="12 19 5 12 12 5" />
+      </svg>
+    ),
+    report: (
+      <svg {...c}>
+        <line x1="3" y1="21" x2="21" y2="21" />
+        <rect x="4" y="11" width="4" height="7" />
+        <rect x="10" y="6" width="4" height="12" />
+        <rect x="16" y="9" width="4" height="9" />
+      </svg>
+    ),
+    template: (
+      <svg {...c}>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="3" y1="9" x2="21" y2="9" />
+        <line x1="9" y1="21" x2="9" y2="9" />
+      </svg>
+    ),
+    image: (
+      <svg {...c}>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path d="M21 15l-5-5L5 21" />
+      </svg>
+    ),
+    doc: (
+      <svg {...c}>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="8" y1="13" x2="16" y2="13" />
+        <line x1="8" y1="17" x2="13" y2="17" />
+      </svg>
+    ),
+    link: (
+      <svg {...c}>
+        <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+        <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+      </svg>
+    ),
+    phone: (
+      <svg {...c}>
+        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2Z" />
+      </svg>
+    ),
   };
   return I[name] || <span style={{ width: size, display: "inline-block" }} />;
 }
@@ -87,7 +311,23 @@ export function Badge({ tone = "default", children }) {
     purple: [theme.purpleSoft, theme.purple],
   };
   const [bg, fg] = map[tone] || map.default;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: bg, color: fg }}>{children}</span>;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "3px 9px",
+        borderRadius: 999,
+        fontSize: 11.5,
+        fontWeight: 600,
+        background: bg,
+        color: fg,
+      }}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function Button({ children, icon, variant = "primary", size = "md", ...props }) {
@@ -100,7 +340,25 @@ export function Button({ children, icon, variant = "primary", size = "md", ...pr
   };
   const pad = size === "sm" ? "7px 11px" : "10px 15px";
   return (
-    <button {...props} style={{ padding: pad, borderRadius: 9, fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: props.disabled ? "not-allowed" : "pointer", opacity: props.disabled ? 0.55 : 1, transition: "filter .15s", fontFamily: fontStack, ...variants[variant], ...(props.style || {}) }}>
+    <button
+      {...props}
+      style={{
+        padding: pad,
+        borderRadius: 9,
+        fontSize: 13,
+        fontWeight: 600,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 7,
+        cursor: props.disabled ? "not-allowed" : "pointer",
+        opacity: props.disabled ? 0.55 : 1,
+        transition: "filter .15s",
+        fontFamily: fontStack,
+        ...variants[variant],
+        ...(props.style || {}),
+      }}
+    >
       {icon ? <Icon name={icon} size={16} /> : null}
       {children}
     </button>
@@ -110,7 +368,9 @@ export function Button({ children, icon, variant = "primary", size = "md", ...pr
 export function Field({ label, error, hint, children }) {
   return (
     <label style={{ display: "block", marginBottom: 14 }}>
-      {label ? <div style={{ fontSize: 12.5, color: theme.text, fontWeight: 600, marginBottom: 6 }}>{label}</div> : null}
+      {label ? (
+        <div style={{ fontSize: 12.5, color: theme.text, fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      ) : null}
       {children}
       {hint && !error ? <div style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 5 }}>{hint}</div> : null}
       {error ? <div style={{ color: theme.red, fontSize: 11.5, marginTop: 5 }}>{error}</div> : null}
@@ -119,13 +379,24 @@ export function Field({ label, error, hint, children }) {
 }
 
 const inputStyle = (error) => ({
-  width: "100%", padding: "10px 12px", background: theme.surface, color: theme.text,
-  border: `1px solid ${error ? theme.red : theme.border}`, borderRadius: 9, fontSize: 13.5,
-  boxSizing: "border-box", fontFamily: fontStack, outline: "none",
+  width: "100%",
+  padding: "10px 12px",
+  background: theme.surface,
+  color: theme.text,
+  border: `1px solid ${error ? theme.red : theme.border}`,
+  borderRadius: 9,
+  fontSize: 13.5,
+  boxSizing: "border-box",
+  fontFamily: fontStack,
+  outline: "none",
 });
 
 export function Input({ label, error, hint, ...props }) {
-  return <Field label={label} error={error} hint={hint}><input {...props} style={{ ...inputStyle(error), ...(props.style || {}) }} /></Field>;
+  return (
+    <Field label={label} error={error} hint={hint}>
+      <input {...props} style={{ ...inputStyle(error), ...(props.style || {}) }} />
+    </Field>
+  );
 }
 // Input rahasia dengan tombol lihat/sembunyikan
 export function PasswordInput({ label, error, hint, ...props }) {
@@ -133,8 +404,29 @@ export function PasswordInput({ label, error, hint, ...props }) {
   return (
     <Field label={label} error={error} hint={hint}>
       <div style={{ position: "relative" }}>
-        <input {...props} type={show ? "text" : "password"} style={{ ...inputStyle(error), paddingRight: 42, ...(props.style || {}) }} />
-        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Sembunyikan" : "Tampilkan"} title={show ? "Sembunyikan" : "Tampilkan"} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex", padding: 5 }}>
+        <input
+          {...props}
+          type={show ? "text" : "password"}
+          style={{ ...inputStyle(error), paddingRight: 42, ...(props.style || {}) }}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? "Sembunyikan" : "Tampilkan"}
+          title={show ? "Sembunyikan" : "Tampilkan"}
+          style={{
+            position: "absolute",
+            right: 6,
+            top: "50%",
+            transform: "translateY(-50%)",
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            color: theme.textMuted,
+            display: "flex",
+            padding: 5,
+          }}
+        >
           <Icon name={show ? "eyeOff" : "eye"} size={17} />
         </button>
       </div>
@@ -142,13 +434,24 @@ export function PasswordInput({ label, error, hint, ...props }) {
   );
 }
 export function Textarea({ label, error, hint, ...props }) {
-  return <Field label={label} error={error} hint={hint}><textarea {...props} style={{ ...inputStyle(error), minHeight: 92, resize: "vertical", ...(props.style || {}) }} /></Field>;
+  return (
+    <Field label={label} error={error} hint={hint}>
+      <textarea
+        {...props}
+        style={{ ...inputStyle(error), minHeight: 92, resize: "vertical", ...(props.style || {}) }}
+      />
+    </Field>
+  );
 }
 export function Select({ label, error, options, ...props }) {
   return (
     <Field label={label} error={error}>
       <select {...props} style={{ ...inputStyle(error), cursor: "pointer", ...(props.style || {}) }}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
       </select>
     </Field>
   );
@@ -157,8 +460,31 @@ export function Select({ label, error, options, ...props }) {
 export function Toggle({ checked, onChange, label }) {
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-      <span onClick={() => onChange(!checked)} style={{ width: 40, height: 23, borderRadius: 999, background: checked ? theme.green : "#cbd5e1", position: "relative", transition: "background .15s", flexShrink: 0 }}>
-        <span style={{ position: "absolute", top: 2, left: checked ? 19 : 2, width: 19, height: 19, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
+      <span
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 40,
+          height: 23,
+          borderRadius: 999,
+          background: checked ? theme.green : "#cbd5e1",
+          position: "relative",
+          transition: "background .15s",
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 2,
+            left: checked ? 19 : 2,
+            width: 19,
+            height: 19,
+            borderRadius: "50%",
+            background: "#fff",
+            transition: "left .15s",
+            boxShadow: "0 1px 2px rgba(0,0,0,.2)",
+          }}
+        />
       </span>
       {label ? <span style={{ fontSize: 13, color: theme.text }}>{label}</span> : null}
     </label>
@@ -168,11 +494,38 @@ export function Toggle({ checked, onChange, label }) {
 // Segmented control / tab bar konsisten
 export function Tabs({ tabs, active, onChange, style }) {
   return (
-    <div style={{ display: "inline-flex", gap: 4, background: theme.surfaceAlt, padding: 4, borderRadius: 11, flexWrap: "wrap", ...style }}>
+    <div
+      style={{
+        display: "inline-flex",
+        gap: 4,
+        background: theme.surfaceAlt,
+        padding: 4,
+        borderRadius: 11,
+        flexWrap: "wrap",
+        ...style,
+      }}
+    >
       {tabs.map((t) => {
         const on = active === t.id;
         return (
-          <button key={t.id} onClick={() => onChange(t.id)} style={{ padding: "7px 15px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: on ? theme.surface : "transparent", color: on ? theme.primary : theme.textMuted, boxShadow: on ? "0 1px 2px rgba(16,24,40,0.10)" : "none", transition: "all .15s" }}>{t.label}</button>
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            style={{
+              padding: "7px 15px",
+              borderRadius: 8,
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 13,
+              background: on ? theme.surface : "transparent",
+              color: on ? theme.primary : theme.textMuted,
+              boxShadow: on ? "0 1px 2px rgba(16,24,40,0.10)" : "none",
+              transition: "all .15s",
+            }}
+          >
+            {t.label}
+          </button>
         );
       })}
     </div>
@@ -186,11 +539,34 @@ export function Modal({ title, children, onClose, width = 600 }) {
     ? { width: "100%", maxWidth: "100%", minHeight: "100vh", borderRadius: 0, padding: 20 }
     : { width: "100%", maxWidth: width, maxHeight: "86vh", padding: 22 };
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", justifyContent: "center", overflowY: "auto", zIndex: 60, ...overlay }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15,23,42,0.45)",
+        display: "flex",
+        justifyContent: "center",
+        overflowY: "auto",
+        zIndex: 60,
+        ...overlay,
+      }}
+    >
       <div onClick={(e) => e.stopPropagation()} style={{ ...card, overflow: "auto", ...box }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h3 style={{ margin: 0, fontSize: 17, color: theme.text }}>{title}</h3>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", color: theme.textMuted, display: "flex" }}><Icon name="close" /></button>
+          <button
+            onClick={onClose}
+            style={{
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              color: theme.textMuted,
+              display: "flex",
+            }}
+          >
+            <Icon name="close" />
+          </button>
         </div>
         {children}
       </div>
@@ -200,7 +576,16 @@ export function Modal({ title, children, onClose, width = 600 }) {
 
 export function PageHeader({ title, subtitle, actions }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 22, flexWrap: "wrap" }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 16,
+        alignItems: "flex-start",
+        marginBottom: 22,
+        flexWrap: "wrap",
+      }}
+    >
       <div>
         <h1 style={{ margin: 0, fontSize: 22, color: theme.text, fontWeight: 700 }}>{title}</h1>
         {subtitle ? <p style={{ color: theme.textMuted, margin: "5px 0 0", fontSize: 13.5 }}>{subtitle}</p> : null}
@@ -211,13 +596,33 @@ export function PageHeader({ title, subtitle, actions }) {
 }
 
 export function StatCard({ label, value, note, tone = "blue", icon }) {
-  const map = { blue: [theme.primarySoft, theme.primary], green: [theme.greenSoft, theme.green], yellow: [theme.yellowSoft, theme.yellow], purple: [theme.purpleSoft, theme.purple] };
+  const map = {
+    blue: [theme.primarySoft, theme.primary],
+    green: [theme.greenSoft, theme.green],
+    yellow: [theme.yellowSoft, theme.yellow],
+    purple: [theme.purpleSoft, theme.purple],
+  };
   const [bg, fg] = map[tone] || map.blue;
   return (
     <div style={{ ...card, padding: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ color: theme.textMuted, fontSize: 12.5, fontWeight: 500 }}>{label}</div>
-        {icon ? <span style={{ width: 32, height: 32, borderRadius: 8, background: bg, color: fg, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={icon} size={16} /></span> : null}
+        {icon ? (
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: bg,
+              color: fg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name={icon} size={16} />
+          </span>
+        ) : null}
       </div>
       <div style={{ fontSize: 27, fontWeight: 700, color: theme.text, marginTop: 10 }}>{value}</div>
       {note ? <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>{note}</div> : null}
@@ -228,8 +633,16 @@ export function StatCard({ label, value, note, tone = "blue", icon }) {
 export function Card({ title, actions, children, pad = 18, style }) {
   return (
     <div style={{ ...card, ...style }}>
-      {(title || actions) ? (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `14px ${pad}px`, borderBottom: `1px solid ${theme.border}` }}>
+      {title || actions ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: `14px ${pad}px`,
+            borderBottom: `1px solid ${theme.border}`,
+          }}
+        >
           <h3 style={{ margin: 0, fontSize: 15, color: theme.text }}>{title}</h3>
           {actions}
         </div>
@@ -241,9 +654,17 @@ export function Card({ title, actions, children, pad = 18, style }) {
 
 export function Notice({ kind = "error", children }) {
   if (!children) return null;
-  const map = { error: [theme.redSoft, theme.red], success: [theme.greenSoft, theme.green], info: [theme.primarySoft, theme.primary] };
+  const map = {
+    error: [theme.redSoft, theme.red],
+    success: [theme.greenSoft, theme.green],
+    info: [theme.primarySoft, theme.primary],
+  };
   const [bg, fg] = map[kind] || map.error;
-  return <div style={{ background: bg, color: fg, borderRadius: 9, padding: "10px 13px", marginBottom: 14, fontSize: 13 }}>{children}</div>;
+  return (
+    <div style={{ background: bg, color: fg, borderRadius: 9, padding: "10px 13px", marginBottom: 14, fontSize: 13 }}>
+      {children}
+    </div>
+  );
 }
 
 export function Loading({ children = "Memuat..." }) {
@@ -253,7 +674,21 @@ export function Loading({ children = "Memuat..." }) {
 export function Empty({ icon = "survey", title = "Belum ada data", note }) {
   return (
     <div style={{ textAlign: "center", padding: "40px 20px", color: theme.textMuted }}>
-      <div style={{ width: 48, height: 48, borderRadius: 12, background: theme.surfaceAlt, display: "inline-flex", alignItems: "center", justifyContent: "center", color: theme.textMuted, marginBottom: 12 }}><Icon name={icon} size={22} /></div>
+      <div
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: theme.surfaceAlt,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: theme.textMuted,
+          marginBottom: 12,
+        }}
+      >
+        <Icon name={icon} size={22} />
+      </div>
       <div style={{ color: theme.text, fontWeight: 600, fontSize: 14 }}>{title}</div>
       {note ? <div style={{ fontSize: 13, marginTop: 4 }}>{note}</div> : null}
     </div>
@@ -286,38 +721,101 @@ export function useLoader(loader) {
   const [error, setError] = useState("");
   const reload = useCallback(() => {
     setLoading(true);
-    return loader().then((d) => { setData(d); setError(""); return d; }).catch((e) => setError(e.message || "Gagal memuat")).finally(() => setLoading(false));
+    return loader()
+      .then((d) => {
+        setData(d);
+        setError("");
+        return d;
+      })
+      .catch((e) => setError(e.message || "Gagal memuat"))
+      .finally(() => setLoading(false));
   }, [loader]);
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
   return { data, loading, error, reload, setData };
 }
 
 // Hook seleksi banyak item (pilih untuk hapus massal)
 export function useSelection() {
   const [ids, setIds] = useState(() => new Set());
-  const toggle = (id) => setIds((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggle = (id) =>
+    setIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   const setAll = (list) => setIds(new Set(list));
   const clear = () => setIds(new Set());
   return { ids, has: (id) => ids.has(id), size: ids.size, toggle, setAll, clear, list: () => [...ids] };
 }
 
 export function Checkbox({ checked, onChange, onClick }) {
-  return <input type="checkbox" checked={checked} onChange={onChange} onClick={onClick} style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.primary, flexShrink: 0 }} />;
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={onClick}
+      style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.primary, flexShrink: 0 }}
+    />
+  );
 }
 
 // Bar aksi massal — muncul saat ada item terpilih
 export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDelete, noun = "item", busy }) {
   if (!count) return null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 13px", background: theme.primarySoft, border: `1px solid ${theme.primary}33`, borderRadius: 10, marginBottom: 12, flexWrap: "wrap" }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>{count} {noun} dipilih</span>
-      {onToggleAll ? <button onClick={onToggleAll} style={{ border: "none", background: "transparent", color: theme.primary, fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>{allSelected ? "Batalkan semua" : `Pilih semua (${total})`}</button> : null}
-      <button onClick={onClear} style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 12.5, cursor: "pointer" }}>Bersihkan</button>
-      <Button variant="danger" size="sm" icon="trash" onClick={onDelete} disabled={busy} style={{ marginLeft: "auto" }}>{busy ? "Menghapus..." : `Hapus ${count}`}</Button>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "9px 13px",
+        background: theme.primarySoft,
+        border: `1px solid ${theme.primary}33`,
+        borderRadius: 10,
+        marginBottom: 12,
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>
+        {count} {noun} dipilih
+      </span>
+      {onToggleAll ? (
+        <button
+          onClick={onToggleAll}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: theme.primary,
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: "pointer",
+            textDecoration: "underline",
+          }}
+        >
+          {allSelected ? "Batalkan semua" : `Pilih semua (${total})`}
+        </button>
+      ) : null}
+      <button
+        onClick={onClear}
+        style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 12.5, cursor: "pointer" }}
+      >
+        Bersihkan
+      </button>
+      <Button variant="danger" size="sm" icon="trash" onClick={onDelete} disabled={busy} style={{ marginLeft: "auto" }}>
+        {busy ? "Menghapus..." : `Hapus ${count}`}
+      </Button>
     </div>
   );
 }
 
 export function fmtDate(d) {
-  try { return new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }); } catch { return String(d); }
+  try {
+    return new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return String(d);
+  }
 }

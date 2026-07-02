@@ -53,7 +53,12 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     // Template ber-tombol Flow (broadcast Flow): sisipkan flow_token untuk korelasi balasan.
     if (input.flowToken) {
-      components.push({ type: "button", sub_type: "flow", index: "0", parameters: [{ type: "action", action: { flow_token: input.flowToken } }] });
+      components.push({
+        type: "button",
+        sub_type: "flow",
+        index: "0",
+        parameters: [{ type: "action", action: { flow_token: input.flowToken } }],
+      });
     }
 
     return this.post({
@@ -71,7 +76,8 @@ export class MetaCloudAdapter implements MessagingProvider {
   // Ambil status kualitas & tier nomor dari Graph API (untuk monitoring anti-banned).
   async getPhoneQuality(): Promise<Record<string, unknown>> {
     if (!this.isConfigured()) return { error: "Nomor Meta belum dikonfigurasi" };
-    const fields = "quality_rating,name_status,code_verification_status,display_phone_number,verified_name,throughput,platform_type,messaging_limit_tier";
+    const fields =
+      "quality_rating,name_status,code_verification_status,display_phone_number,verified_name,throughput,platform_type,messaging_limit_tier";
     const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.phoneNumberId}?fields=${fields}`;
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
@@ -103,7 +109,12 @@ export class MetaCloudAdapter implements MessagingProvider {
       if (!res.ok) return { error: json?.error?.message ?? "Gagal mengambil template", raw: json };
       const data = Array.isArray(json?.data) ? json.data : [];
       return {
-        templates: data.map((t: any) => ({ name: t.name, language: t.language, status: t.status, category: t.category })),
+        templates: data.map((t: any) => ({
+          name: t.name,
+          language: t.language,
+          status: t.status,
+          category: t.category,
+        })),
       };
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Gagal menghubungi Graph API" };
@@ -112,20 +123,30 @@ export class MetaCloudAdapter implements MessagingProvider {
 
   // Ajukan template ke Meta untuk direview (POST message_templates). Header media belum didukung.
   async createTemplate(input: {
-    name: string; language: string; category: string;
-    headerType?: string; headerText?: string | null;
-    bodyText: string; footerText?: string | null;
+    name: string;
+    language: string;
+    category: string;
+    headerType?: string;
+    headerText?: string | null;
+    bodyText: string;
+    footerText?: string | null;
     buttons?: { type: string; text: string; url?: string | null; phone?: string | null }[];
     sampleParams?: string[];
   }): Promise<{ ok: boolean; id?: string; status?: string; error?: string; raw?: unknown }> {
     if (!this.cfg.accessToken) return { ok: false, error: "Access Token Meta belum diisi." };
     if (!this.cfg.wabaId) return { ok: false, error: "WABA ID belum diisi di kartu Meta." };
     if (input.headerType && ["image", "document", "video"].includes(input.headerType)) {
-      return { ok: false, error: "Header media (gambar/dokumen/video) belum didukung untuk pengajuan otomatis. Pakai header Teks / None, atau ajukan manual di WhatsApp Manager." };
+      return {
+        ok: false,
+        error:
+          "Header media (gambar/dokumen/video) belum didukung untuk pengajuan otomatis. Pakai header Teks / None, atau ajukan manual di WhatsApp Manager.",
+      };
     }
 
     const maxVar = (s: string) => {
-      let m = 0; const re = /\{\{(\d+)\}\}/g; let x;
+      let m = 0;
+      const re = /\{\{(\d+)\}\}/g;
+      let x;
       while ((x = re.exec(s || ""))) m = Math.max(m, Number(x[1]) || 0);
       return m;
     };
@@ -161,7 +182,12 @@ export class MetaCloudAdapter implements MessagingProvider {
         body: JSON.stringify({ name: input.name, language: input.language, category: input.category, components }),
       });
       const json = (await res.json().catch(() => ({}))) as any;
-      if (!res.ok) return { ok: false, error: json?.error?.error_user_msg || json?.error?.message || "Gagal mengajukan template", raw: json };
+      if (!res.ok)
+        return {
+          ok: false,
+          error: json?.error?.error_user_msg || json?.error?.message || "Gagal mengajukan template",
+          raw: json,
+        };
       return { ok: true, id: json?.id, status: json?.status };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Gagal menghubungi Graph API" };
@@ -246,7 +272,11 @@ export class MetaCloudAdapter implements MessagingProvider {
           const nfm = msg?.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : null;
           let flowResponse: Record<string, unknown> | undefined;
           if (nfm?.response_json) {
-            try { flowResponse = JSON.parse(nfm.response_json); } catch { flowResponse = undefined; }
+            try {
+              flowResponse = JSON.parse(nfm.response_json);
+            } catch {
+              flowResponse = undefined;
+            }
           }
           if (flowResponse) {
             out.push({
@@ -262,8 +292,7 @@ export class MetaCloudAdapter implements MessagingProvider {
             continue;
           }
 
-          const media =
-            msg?.image ?? msg?.audio ?? msg?.video ?? msg?.document ?? msg?.sticker;
+          const media = msg?.image ?? msg?.audio ?? msg?.video ?? msg?.document ?? msg?.sticker;
           const mediaType = msg?.image
             ? "image"
             : msg?.audio

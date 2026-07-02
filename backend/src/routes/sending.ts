@@ -4,7 +4,8 @@ import { prisma } from "../db.js";
 import { getProvider, loadProviders } from "../providers/registry.js";
 
 async function usedTodayCount(): Promise<number> {
-  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
   const [sent, msgs] = await Promise.all([
     prisma.blastRecipient.count({ where: { status: "sent", updatedAt: { gte: start } } }),
     prisma.message.count({ where: { direction: "out", createdAt: { gte: start } } }),
@@ -31,7 +32,11 @@ export async function sendingRoutes(app: FastifyInstance): Promise<void> {
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
-    const p = await prisma.sendingPolicy.upsert({ where: { id: "default" }, update: parsed.data, create: { id: "default", ...parsed.data } });
+    const p = await prisma.sendingPolicy.upsert({
+      where: { id: "default" },
+      update: parsed.data,
+      create: { id: "default", ...parsed.data },
+    });
     return { ...p, usedToday: await usedTodayCount() };
   });
 
@@ -67,6 +72,11 @@ export async function sendingRoutes(app: FastifyInstance): Promise<void> {
       prisma.contact.count({ where: { subscribed: false } }),
       prisma.contact.groupBy({ by: ["consentSource"], _count: true }),
     ]);
-    return { total, subscribed, optedOut, bySource: bySource.map((b) => ({ source: b.consentSource ?? "(tidak diketahui)", count: b._count })) };
+    return {
+      total,
+      subscribed,
+      optedOut,
+      bySource: bySource.map((b) => ({ source: b.consentSource ?? "(tidak diketahui)", count: b._count })),
+    };
   });
 }

@@ -17,7 +17,12 @@ export function nextStepWithBranch(current: QLite, step: number, savedValue: str
   const branches = (current.options as { branches?: { value: string; goto: string | number }[] } | null)?.branches;
   if (!Array.isArray(branches) || !savedValue || savedValue === "[dilewati]") return def;
   const sv = savedValue.trim().toLowerCase();
-  const m = branches.find((b) => String(b.value ?? "").trim().toLowerCase() === sv);
+  const m = branches.find(
+    (b) =>
+      String(b.value ?? "")
+        .trim()
+        .toLowerCase() === sv,
+  );
   if (!m) return def;
   if (m.goto === "end" || m.goto === -1) return total; // akhiri survei lebih awal
   const g = Number(m.goto);
@@ -37,7 +42,10 @@ export function choices(q: QLite): string[] {
 }
 
 // Validasi & normalisasi jawaban per tipe pertanyaan.
-export function validateAnswer(q: QLite, ev: NormalizedInbound): { ok: true; value: string } | { ok: false; error: string } {
+export function validateAnswer(
+  q: QLite,
+  ev: NormalizedInbound,
+): { ok: true; value: string } | { ok: false; error: string } {
   const text = (ev.text ?? "").trim();
   switch (q.type) {
     case "image":
@@ -69,8 +77,10 @@ export function validateAnswer(q: QLite, ev: NormalizedInbound): { ok: true; val
     }
     case "boolean": {
       const t = text.toLowerCase();
-      if (["ya", "iya", "y", "yes", "ok", "oke", "setuju", "betul", "benar"].includes(t)) return { ok: true, value: "Ya" };
-      if (["tidak", "no", "t", "n", "ngga", "nggak", "gak", "ga", "bukan"].includes(t)) return { ok: true, value: "Tidak" };
+      if (["ya", "iya", "y", "yes", "ok", "oke", "setuju", "betul", "benar"].includes(t))
+        return { ok: true, value: "Ya" };
+      if (["tidak", "no", "t", "n", "ngga", "nggak", "gak", "ga", "bukan"].includes(t))
+        return { ok: true, value: "Tidak" };
       return { ok: false, error: "Mohon balas: Ya atau Tidak." };
     }
     case "text":
@@ -84,13 +94,24 @@ export function validateAnswer(q: QLite, ev: NormalizedInbound): { ok: true; val
 export function formatQuestion(q: QLite): string {
   let hint = "";
   switch (q.type) {
-    case "rating": { const { min, max } = ratingRange(q); hint = `\n\nBalas angka ${min}-${max}.`; break; }
-    case "number": hint = "\n\nBalas dengan angka."; break;
-    case "boolean": hint = "\n\nBalas: Ya / Tidak."; break;
-    case "image": hint = "\n\nKirim foto/gambar."; break;
+    case "rating": {
+      const { min, max } = ratingRange(q);
+      hint = `\n\nBalas angka ${min}-${max}.`;
+      break;
+    }
+    case "number":
+      hint = "\n\nBalas dengan angka.";
+      break;
+    case "boolean":
+      hint = "\n\nBalas: Ya / Tidak.";
+      break;
+    case "image":
+      hint = "\n\nKirim foto/gambar.";
+      break;
     case "choice": {
       const opts = choices(q);
-      if (opts.length) hint = "\n\n" + opts.map((o, i) => `${i + 1}. ${o}`).join("\n") + "\n\nBalas dengan nomor pilihan.";
+      if (opts.length)
+        hint = "\n\n" + opts.map((o, i) => `${i + 1}. ${o}`).join("\n") + "\n\nBalas dengan nomor pilihan.";
       break;
     }
   }

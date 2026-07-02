@@ -42,7 +42,15 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     const survey = await prisma.survey.create({
       data: {
         ...data,
-        questions: { create: questions.map((q, i) => ({ text: q.text, type: q.type, required: q.required, order: i, options: q.options ?? undefined })) },
+        questions: {
+          create: questions.map((q, i) => ({
+            text: q.text,
+            type: q.type,
+            required: q.required,
+            order: i,
+            options: q.options ?? undefined,
+          })),
+        },
       },
       include: { questions: true },
     });
@@ -84,9 +92,16 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
   // Dibuat dari pertanyaan tersimpan agar nama field cocok saat memetakan balasan flow.
   app.get("/api/surveys/:id/flow-json", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const survey = await prisma.survey.findUnique({ where: { id }, include: { questions: { orderBy: { order: "asc" } } } });
+    const survey = await prisma.survey.findUnique({
+      where: { id },
+      include: { questions: { orderBy: { order: "asc" } } },
+    });
     if (!survey) return reply.code(404).send({ error: "survei tidak ditemukan" });
-    return buildSurveyFlow({ title: survey.title, description: survey.description, questions: survey.questions as any });
+    return buildSurveyFlow({
+      title: survey.title,
+      description: survey.description,
+      questions: survey.questions as any,
+    });
   });
 
   app.delete("/api/surveys/:id", async (req) => {

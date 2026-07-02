@@ -73,8 +73,7 @@ export const api = {
   listVendors: () => request("/api/vendors"),
   setVendorCredentials: (vendor, credentials) =>
     request(`/api/vendors/${vendor}/credentials`, { method: "PUT", body: credentials }),
-  setVendorActive: (vendor, active) =>
-    request(`/api/vendors/${vendor}/active`, { method: "PUT", body: { active } }),
+  setVendorActive: (vendor, active) => request(`/api/vendors/${vendor}/active`, { method: "PUT", body: { active } }),
 
   // WhatsApp Langsung (Baileys / scan QR)
   baileysStatus: () => request("/api/baileys/status"),

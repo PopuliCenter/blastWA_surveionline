@@ -49,7 +49,16 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
       const ds = ratingValues(q).map((n) => ({ id: String(n), title: String(n) }));
       children.push({ type: "RadioButtonsGroup", name, label: "Pilih nilai", "data-source": ds, required });
     } else if (q.type === "boolean") {
-      children.push({ type: "RadioButtonsGroup", name, label: "Pilih", "data-source": [{ id: "Ya", title: "Ya" }, { id: "Tidak", title: "Tidak" }], required });
+      children.push({
+        type: "RadioButtonsGroup",
+        name,
+        label: "Pilih",
+        "data-source": [
+          { id: "Ya", title: "Ya" },
+          { id: "Tidak", title: "Tidak" },
+        ],
+        required,
+      });
     } else if (q.type === "choice") {
       const opts = choiceList(q);
       const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
@@ -82,7 +91,10 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
 }
 
 // Petakan response_json flow balik ke jawaban per pertanyaan.
-export function parseFlowAnswers(response: Record<string, unknown>, questions: FlowQuestion[]): { questionId: string; value: string }[] {
+export function parseFlowAnswers(
+  response: Record<string, unknown>,
+  questions: FlowQuestion[],
+): { questionId: string; value: string }[] {
   const out: { questionId: string; value: string }[] = [];
   for (const q of questions) {
     if (!flowSupported(q)) continue;

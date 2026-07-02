@@ -5,7 +5,15 @@ import { hashPassword } from "../lib/auth.js";
 
 // Manajemen user — hanya superadmin. Untuk halaman Admin di frontend.
 
-const sanitize = (u: { id: string; name: string; username: string; email: string | null; role: string; active: boolean; createdAt: Date }) => ({
+const sanitize = (u: {
+  id: string;
+  name: string;
+  username: string;
+  email: string | null;
+  role: string;
+  active: boolean;
+  createdAt: Date;
+}) => ({
   id: u.id,
   name: u.name,
   username: u.username,

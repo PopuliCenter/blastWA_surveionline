@@ -14,9 +14,7 @@ function toWebhookRequest(req: FastifyRequest): WebhookRequest {
 }
 
 async function log(vendor: string, event: string, status: string, payload: unknown, note?: string) {
-  await prisma.webhookLog
-    .create({ data: { vendor, event, status, payload: payload as object, note } })
-    .catch(() => {});
+  await prisma.webhookLog.create({ data: { vendor, event, status, payload: payload as object, note } }).catch(() => {});
 }
 
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {

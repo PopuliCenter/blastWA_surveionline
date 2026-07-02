@@ -35,7 +35,14 @@ const templateSchema = z.object({
 
 // Normalisasi nama template ke format yang diterima Meta: huruf kecil, angka, underscore.
 function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 512) || "template";
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 512) || "template"
+  );
 }
 
 export async function templateRoutes(app: FastifyInstance): Promise<void> {
@@ -107,10 +114,15 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     if (!t) return reply.code(404).send({ error: "template tidak ditemukan" });
 
     await loadProviders();
-    const meta = getProvider("meta") as unknown as { createTemplate?: (i: unknown) => Promise<{ ok: boolean; id?: string; status?: string; error?: string }> };
-    if (typeof meta.createTemplate !== "function") return reply.code(400).send({ error: "Vendor Meta tidak mendukung pengajuan template" });
+    const meta = getProvider("meta") as unknown as {
+      createTemplate?: (i: unknown) => Promise<{ ok: boolean; id?: string; status?: string; error?: string }>;
+    };
+    if (typeof meta.createTemplate !== "function")
+      return reply.code(400).send({ error: "Vendor Meta tidak mendukung pengajuan template" });
 
-    const buttons = Array.isArray(t.buttons) ? (t.buttons as { type: string; text: string; url?: string | null; phone?: string | null }[]) : [];
+    const buttons = Array.isArray(t.buttons)
+      ? (t.buttons as { type: string; text: string; url?: string | null; phone?: string | null }[])
+      : [];
     const result = await meta.createTemplate({
       name: t.name,
       language: t.language,
@@ -124,7 +136,10 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!result.ok) return reply.code(400).send({ error: result.error ?? "Gagal mengajukan template" });
 
-    await prisma.messageTemplate.update({ where: { id }, data: { status: result.status ? mapMetaStatus(result.status) : "submitted" } });
+    await prisma.messageTemplate.update({
+      where: { id },
+      data: { status: result.status ? mapMetaStatus(result.status) : "submitted" },
+    });
     return { ok: true, status: result.status ?? "PENDING", metaId: result.id };
   });
 
@@ -132,7 +147,12 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/templates/sync", async (req, reply) => {
     if (req.user.role === "viewer") return reply.code(403).send({ error: "forbidden" });
     await loadProviders();
-    const meta = getProvider("meta") as unknown as { listTemplates?: () => Promise<{ templates?: { name: string; language: string; status: string }[]; error?: string }> };
+    const meta = getProvider("meta") as unknown as {
+      listTemplates?: () => Promise<{
+        templates?: { name: string; language: string; status: string }[];
+        error?: string;
+      }>;
+    };
     if (typeof meta.listTemplates !== "function") return reply.code(400).send({ error: "Vendor Meta tidak mendukung" });
 
     const res = await meta.listTemplates();
@@ -140,12 +160,19 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     const remote = new Map((res.templates ?? []).map((t) => [`${t.name}|${t.language}`, t.status]));
 
     const locals = await prisma.messageTemplate.findMany();
-    let updated = 0, notFound = 0;
+    let updated = 0,
+      notFound = 0;
     for (const t of locals) {
       const st = remote.get(`${t.name}|${t.language}`);
-      if (st == null) { notFound++; continue; }
+      if (st == null) {
+        notFound++;
+        continue;
+      }
       const mapped = mapMetaStatus(st);
-      if (mapped !== t.status) { await prisma.messageTemplate.update({ where: { id: t.id }, data: { status: mapped } }); updated++; }
+      if (mapped !== t.status) {
+        await prisma.messageTemplate.update({ where: { id: t.id }, data: { status: mapped } });
+        updated++;
+      }
     }
     return { ok: true, updated, notFound, remoteCount: res.templates?.length ?? 0 };
   });

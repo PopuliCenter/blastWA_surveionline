@@ -18,7 +18,8 @@ async function getPolicy() {
 
 // Total pesan keluar hari ini (blast terkirim + balasan chat/survei) untuk cek batas harian.
 async function usedToday(): Promise<number> {
-  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
   const [sent, msgs] = await Promise.all([
     prisma.blastRecipient.count({ where: { status: "sent", updatedAt: { gte: start } } }),
     prisma.message.count({ where: { direction: "out", createdAt: { gte: start } } }),
@@ -47,7 +48,10 @@ async function main() {
         include: { contact: { select: { subscribed: true } } },
       });
       if (recipient && recipient.contact && !recipient.contact.subscribed) {
-        await prisma.blastRecipient.update({ where: { id: recipientId }, data: { status: "failed", error: "dilewati: kontak opt-out" } });
+        await prisma.blastRecipient.update({
+          where: { id: recipientId },
+          data: { status: "failed", error: "dilewati: kontak opt-out" },
+        });
         await maybeComplete(blastId);
         return "skip-optout";
       }
@@ -55,14 +59,16 @@ async function main() {
       // 2) Batas harian (warm-up) → tunda job ke besok bila kuota habis
       const policy = await getPolicy();
       if (policy.enabled && (await usedToday()) >= policy.dailyLimit) {
-        const tomorrow = new Date(); tomorrow.setHours(0, 0, 0, 0);
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
         await job.moveToDelayed(tomorrow.getTime() + 24 * 60 * 60 * 1000 + 60000, token);
         throw new DelayedError();
       }
 
       // 3) Jitter antar pesan agar pola kirim natural
       if (policy.enabled && policy.jitterMaxMs > 0) {
-        const lo = Math.max(0, policy.jitterMinMs), hi = Math.max(lo, policy.jitterMaxMs);
+        const lo = Math.max(0, policy.jitterMinMs),
+          hi = Math.max(lo, policy.jitterMaxMs);
         await sleep(lo + Math.floor(Math.random() * (hi - lo)));
       }
 

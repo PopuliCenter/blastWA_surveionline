@@ -14,7 +14,10 @@ async function addContactsToSegment(
   let skipped = 0;
   for (const item of items) {
     const phone = normalizePhone(item.phone);
-    if (!phone || phone.length < 8 || seen.has(phone)) { skipped++; continue; }
+    if (!phone || phone.length < 8 || seen.has(phone)) {
+      skipped++;
+      continue;
+    }
     seen.add(phone);
     const hasAttrs = item.attributes && Object.keys(item.attributes).length > 0;
     const existing = await prisma.contact.findUnique({ where: { phone } });
@@ -22,16 +25,33 @@ async function addContactsToSegment(
     if (existing) {
       const data: Record<string, unknown> = {};
       if (item.name && item.name !== existing.name) data.name = item.name;
-      if (hasAttrs) data.attributes = { ...((existing.attributes as Record<string, unknown> | null) ?? {}), ...item.attributes } as object;
+      if (hasAttrs)
+        data.attributes = {
+          ...((existing.attributes as Record<string, unknown> | null) ?? {}),
+          ...item.attributes,
+        } as object;
       if (Object.keys(data).length) await prisma.contact.update({ where: { phone }, data });
       contactId = existing.id;
     } else {
-      const c = await prisma.contact.create({ data: { phone, name: item.name, attributes: hasAttrs ? (item.attributes as object) : undefined, consentSource: "import", consentAt: new Date() } });
+      const c = await prisma.contact.create({
+        data: {
+          phone,
+          name: item.name,
+          attributes: hasAttrs ? (item.attributes as object) : undefined,
+          consentSource: "import",
+          consentAt: new Date(),
+        },
+      });
       contactId = c.id;
     }
     // Link bila belum ada (hindari duplikat di segmen)
-    const link = await prisma.segmentContact.findUnique({ where: { segmentId_contactId: { segmentId, contactId } } }).catch(() => null);
-    if (link) { skipped++; continue; }
+    const link = await prisma.segmentContact
+      .findUnique({ where: { segmentId_contactId: { segmentId, contactId } } })
+      .catch(() => null);
+    if (link) {
+      skipped++;
+      continue;
+    }
     await prisma.segmentContact.create({ data: { segmentId, contactId } });
     added++;
     phones.push(phone);

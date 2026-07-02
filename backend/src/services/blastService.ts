@@ -29,7 +29,9 @@ export async function createBlast(input: CreateBlastInput) {
   const templateName = input.templateName ?? (vendor === "baileys" ? "(teks langsung)" : "");
 
   // Survei mode flow → kirim template ber-tombol Flow + flow_token untuk korelasi balasan
-  const survey = input.surveyId ? await prisma.survey.findUnique({ where: { id: input.surveyId }, select: { id: true, mode: true } }) : null;
+  const survey = input.surveyId
+    ? await prisma.survey.findUnique({ where: { id: input.surveyId }, select: { id: true, mode: true } })
+    : null;
   const flowToken = survey?.mode === "flow" ? `srv_${survey.id}` : undefined;
 
   const segment = await prisma.segment.findUnique({

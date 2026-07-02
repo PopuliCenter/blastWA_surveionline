@@ -47,7 +47,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const ok = await verifyPassword(user.passwordHash, body.data.currentPassword);
       if (!ok) return reply.code(400).send({ error: "Password lama salah." });
 
-      await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(body.data.newPassword) } });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hashPassword(body.data.newPassword) },
+      });
       return { ok: true };
     },
   );

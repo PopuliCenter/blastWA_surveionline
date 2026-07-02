@@ -33,7 +33,13 @@ async function anthropic(cfg: AiProviderConfig): Promise<string> {
   });
   const json = (await res.json().catch(() => ({}))) as any;
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${errText(json)}`);
-  return (json?.content ?? []).filter((b: any) => b?.type === "text").map((b: any) => b.text).join("\n").trim() || fallback();
+  return (
+    (json?.content ?? [])
+      .filter((b: any) => b?.type === "text")
+      .map((b: any) => b.text)
+      .join("\n")
+      .trim() || fallback()
+  );
 }
 
 async function openaiCompatible(cfg: AiProviderConfig, base: string): Promise<string> {
@@ -59,12 +65,20 @@ async function gemini(cfg: AiProviderConfig): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: cfg.systemPrompt }] },
-      contents: cfg.messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+      contents: cfg.messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
     }),
   });
   const json = (await res.json().catch(() => ({}))) as any;
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${errText(json)}`);
-  return (json?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text).join("\n").trim() || fallback();
+  return (
+    (json?.candidates?.[0]?.content?.parts ?? [])
+      .map((p: any) => p.text)
+      .join("\n")
+      .trim() || fallback()
+  );
 }
 
 function errText(json: any): string {

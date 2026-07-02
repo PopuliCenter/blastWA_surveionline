@@ -1,11 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type {
-  MessagingProvider,
-  NormalizedInbound,
-  SendResult,
-  SendTemplateInput,
-  WebhookRequest,
-} from "./types.js";
+import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 // ⚠️ SUMBER KEBENARAN: Postman collection Qontak Anda
 //    https://www.postman.com/winter-satellite-337817/
@@ -66,14 +60,29 @@ export class QontakAdapter implements MessagingProvider {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
       const json = (await res.json().catch(() => ({}))) as any;
       if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: res.status, error: "Token tidak valid / kedaluwarsa. Ambil ulang access_token Qontak (OAuth)." };
+        return {
+          ok: false,
+          status: res.status,
+          error: "Token tidak valid / kedaluwarsa. Ambil ulang access_token Qontak (OAuth).",
+        };
       }
       if (res.ok) {
         const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
-        return { ok: true, status: res.status, templates: list.length, channelIntegrationId: this.cfg.channelIntegrationId };
+        return {
+          ok: true,
+          status: res.status,
+          templates: list.length,
+          channelIntegrationId: this.cfg.channelIntegrationId,
+        };
       }
       // 404 dll: token mungkin sampai ke Qontak tapi path beda versi API.
-      return { ok: false, status: res.status, error: json?.error?.messages?.[0] ?? json?.message ?? `Qontak membalas HTTP ${res.status}. Cek base URL/versi API.`, raw: json };
+      return {
+        ok: false,
+        status: res.status,
+        error:
+          json?.error?.messages?.[0] ?? json?.message ?? `Qontak membalas HTTP ${res.status}. Cek base URL/versi API.`,
+        raw: json,
+      };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Gagal menghubungi Qontak (cek base URL/jaringan)." };
     }
@@ -93,10 +102,7 @@ export class QontakAdapter implements MessagingProvider {
   verifyWebhook(req: WebhookRequest): boolean {
     if (!this.cfg.webhookSecret) return true; // belum diset → jangan blokir dev (log saja)
     // Qontak dapat mengirim secret via header signature/authorization — sesuaikan nama header.
-    const header =
-      req.headers["x-qontak-signature"] ??
-      req.headers["x-signature"] ??
-      req.headers["authorization"];
+    const header = req.headers["x-qontak-signature"] ?? req.headers["x-signature"] ?? req.headers["authorization"];
     const provided = (Array.isArray(header) ? header[0] : header) ?? "";
     // Mode 1: HMAC-SHA256 body dengan secret
     const expected = createHmac("sha256", this.cfg.webhookSecret).update(req.rawBody, "utf8").digest("hex");
@@ -130,12 +136,7 @@ export class QontakAdapter implements MessagingProvider {
 
       // Pesan masuk
       const from = it.from ?? it.sender_id ?? it.phone ?? it.account_uniq_id ?? it.contact?.phone;
-      const text =
-        it.text?.body ??
-        it.text ??
-        it.message ??
-        it.data_message?.text ??
-        it.body;
+      const text = it.text?.body ?? it.text ?? it.message ?? it.data_message?.text ?? it.body;
       if (from || text) {
         out.push({
           vendor: this.name,

@@ -50,7 +50,10 @@ export async function baileysRoutes(app: FastifyInstance): Promise<void> {
     r.post("/api/baileys/check-numbers", async (req, reply) => {
       const parsed = z.object({ phones: z.array(z.string()).min(1).max(1000) }).safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "daftar nomor tidak valid (maks 1000)" });
-      if (!baileysGateway.isConnected()) return reply.code(409).send({ error: "WhatsApp Langsung belum terhubung. Scan QR dulu di kartu WhatsApp Langsung." });
+      if (!baileysGateway.isConnected())
+        return reply
+          .code(409)
+          .send({ error: "WhatsApp Langsung belum terhubung. Scan QR dulu di kartu WhatsApp Langsung." });
       try {
         return await baileysGateway.checkNumbers(parsed.data.phones);
       } catch (e) {

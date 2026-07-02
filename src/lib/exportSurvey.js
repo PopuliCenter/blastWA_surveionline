@@ -11,7 +11,11 @@ export async function exportResponses(survey, responses, format, opts = {}) {
   const questions = (survey.questions || []).map((q) => q.text);
   // Kumpulkan kolom pembobot sesuai urutan kemunculan
   const attrKeys = [];
-  responses.forEach((r) => Object.keys(r.attributes || {}).forEach((k) => { if (!INTERNAL_ATTRS.has(k) && !attrKeys.includes(k)) attrKeys.push(k); }));
+  responses.forEach((r) =>
+    Object.keys(r.attributes || {}).forEach((k) => {
+      if (!INTERNAL_ATTRS.has(k) && !attrKeys.includes(k)) attrKeys.push(k);
+    }),
+  );
 
   // Cleaning ringan: rapikan spasi (trim + ganda→tunggal). Opsional: huruf kapital.
   const clean = (v) => {
@@ -24,7 +28,9 @@ export async function exportResponses(survey, responses, format, opts = {}) {
   const header = ["Nomor", "Nama", ...attrKeys, ...questions];
   const rows = responses.map((r) => {
     const map = {};
-    (r.answers || []).forEach((a) => { map[a.question] = a.value; });
+    (r.answers || []).forEach((a) => {
+      map[a.question] = a.value;
+    });
     const attrs = r.attributes || {};
     return [
       clean(r.phone),
@@ -38,7 +44,11 @@ export async function exportResponses(survey, responses, format, opts = {}) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Respons");
   // Nama file = judul survei + tanggal_jam ekspor (mudah dilacak, tak saling menimpa).
-  const slug = (survey.title || "survei").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50);
+  const slug = (survey.title || "survei")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
