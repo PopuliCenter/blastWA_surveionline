@@ -30,6 +30,16 @@ describe("validateAnswer", () => {
     expect(validateAnswer(c, ev("9")).ok).toBe(false); // di luar rentang pilihan
   });
 
+  it("multichoice: terima beberapa nomor (1,3), spasi, dedupe; tolak yang tak dikenal", () => {
+    const m = q("multichoice", { choices: ["Ekonomi", "Pendidikan", "Kesehatan"] });
+    expect(validateAnswer(m, ev("1,3"))).toEqual({ ok: true, value: "Ekonomi, Kesehatan" });
+    expect(validateAnswer(m, ev("2 3"))).toEqual({ ok: true, value: "Pendidikan, Kesehatan" });
+    expect(validateAnswer(m, ev("1,1,2"))).toEqual({ ok: true, value: "Ekonomi, Pendidikan" }); // dedupe
+    expect(validateAnswer(m, ev("ekonomi, kesehatan"))).toEqual({ ok: true, value: "Ekonomi, Kesehatan" });
+    expect(validateAnswer(m, ev("9")).ok).toBe(false); // di luar rentang
+    expect(validateAnswer(m, ev("")).ok).toBe(false);
+  });
+
   it("boolean: kenali ragam ya/tidak", () => {
     const b = q("boolean");
     expect(validateAnswer(b, ev("iya"))).toEqual({ ok: true, value: "Ya" });
@@ -84,6 +94,16 @@ describe("formatQuestion & closingText", () => {
     const out = formatQuestion(q("choice", { choices: ["A", "B"] }));
     expect(out).toContain("1. A");
     expect(out).toContain("2. B");
+  });
+  it("multichoice memberi petunjuk boleh >1 dipisah koma", () => {
+    const out = formatQuestion(q("multichoice", { choices: ["A", "B"] }));
+    expect(out).toContain("1. A");
+    expect(out).toContain("1,3");
+  });
+  it("rating menampilkan label jangkar bila ada", () => {
+    const out = formatQuestion(q("rating", { min: 1, max: 5, minLabel: "Sangat tidak puas", maxLabel: "Sangat puas" }));
+    expect(out).toContain("1 = Sangat tidak puas");
+    expect(out).toContain("5 = Sangat puas");
   });
   it("pertanyaan opsional memberi petunjuk LEWATI", () => {
     expect(formatQuestion(q("text", null, false))).toContain("LEWATI");

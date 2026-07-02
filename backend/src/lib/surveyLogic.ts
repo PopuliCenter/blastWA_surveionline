@@ -41,6 +41,13 @@ export function choices(q: QLite): string[] {
   return Array.isArray(c) ? c.map((x: any) => String(x)) : [];
 }
 
+// Label jangkar rating (mis. 1 = "Sangat tidak puas", 5 = "Sangat puas"). null bila tak ada.
+export function ratingLabels(q: QLite): { min: string; max: string } | null {
+  const mn = String(q.options?.minLabel ?? "").trim();
+  const mx = String(q.options?.maxLabel ?? "").trim();
+  return mn || mx ? { min: mn, max: mx } : null;
+}
+
 // Validasi & normalisasi jawaban per tipe pertanyaan.
 export function validateAnswer(
   q: QLite,
@@ -75,6 +82,32 @@ export function validateAnswer(
       if (partial.length === 1) return { ok: true, value: partial[0]! };
       return { ok: false, error: "Maaf, pilihan belum dikenali. Balas dengan *nomor* pilihan, ya." };
     }
+    case "multichoice": {
+      const opts = choices(q);
+      // Boleh lebih dari satu: pisah dengan koma/spasi/titik koma. Terima nomor atau teks pilihan.
+      const tokens = text
+        .split(/[,;\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (!tokens.length)
+        return { ok: false, error: "Mohon pilih minimal satu. Balas nomor pilihan, boleh >1 dipisah koma (mis. 1,3)." };
+      if (!opts.length) return { ok: true, value: tokens.join(", ") };
+      const picked: string[] = [];
+      for (const tok of tokens) {
+        const n = Number(tok);
+        if (Number.isInteger(n) && n >= 1 && n <= opts.length) {
+          if (!picked.includes(opts[n - 1]!)) picked.push(opts[n - 1]!);
+          continue;
+        }
+        const exact = opts.find((o) => o.toLowerCase() === tok.toLowerCase());
+        if (exact) {
+          if (!picked.includes(exact)) picked.push(exact);
+          continue;
+        }
+        return { ok: false, error: `Pilihan "${tok}" tak dikenali. Balas nomornya, pisah koma (mis. 1,3).` };
+      }
+      return { ok: true, value: picked.join(", ") };
+    }
     case "boolean": {
       const t = text.toLowerCase();
       if (["ya", "iya", "y", "yes", "ok", "oke", "setuju", "betul", "benar"].includes(t))
@@ -96,7 +129,9 @@ export function formatQuestion(q: QLite): string {
   switch (q.type) {
     case "rating": {
       const { min, max } = ratingRange(q);
+      const lab = ratingLabels(q);
       hint = `\n\nBalas angka ${min}-${max}.`;
+      if (lab) hint += ` (${min} = ${lab.min || "…"}, ${max} = ${lab.max || "…"})`;
       break;
     }
     case "number":
@@ -112,6 +147,15 @@ export function formatQuestion(q: QLite): string {
       const opts = choices(q);
       if (opts.length)
         hint = "\n\n" + opts.map((o, i) => `${i + 1}. ${o}`).join("\n") + "\n\nBalas dengan nomor pilihan.";
+      break;
+    }
+    case "multichoice": {
+      const opts = choices(q);
+      if (opts.length)
+        hint =
+          "\n\n" +
+          opts.map((o, i) => `${i + 1}. ${o}`).join("\n") +
+          "\n\nBoleh pilih lebih dari satu — balas nomornya dipisah koma (mis. 1,3).";
       break;
     }
   }

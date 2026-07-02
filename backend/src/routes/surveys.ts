@@ -6,9 +6,9 @@ import { buildSurveyFlow } from "../lib/flowJson.js";
 const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
   text: z.string().min(1),
-  type: z.enum(["text", "rating", "number", "choice", "boolean", "image"]).default("text"),
+  type: z.enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image"]).default("text"),
   required: z.boolean().default(true),
-  options: z.any().optional(), // rating {min,max} | choice {choices:[...]}
+  options: z.any().optional(), // rating {min,max,minLabel?,maxLabel?} | choice/multichoice {choices:[...]}
 });
 
 const surveySchema = z.object({

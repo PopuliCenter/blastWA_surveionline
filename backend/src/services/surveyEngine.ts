@@ -7,7 +7,8 @@ import { parseFlowAnswers } from "../lib/flowJson.js";
 import { validateAnswer, formatQuestion, closingText, nextStepWithBranch, type QLite } from "../lib/surveyLogic.js";
 
 // Mesin survei berbasis chat dengan tipe pertanyaan kaya:
-// text | rating (min-max) | number | choice (pilihan ganda) | boolean (ya/tidak) | image
+// text | rating (min-max, label jangkar opsional) | number | choice (1 pilihan) |
+// multichoice (boleh >1, balas "1,3") | boolean (ya/tidak) | image
 // Mendukung pertanyaan opsional (skip) & validasi jawaban (re-prompt bila salah).
 // Logika murni (validasi, format, percabangan, penutup) ada di lib/surveyLogic.ts (teruji unit).
 

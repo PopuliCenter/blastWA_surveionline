@@ -26,7 +26,7 @@ function choiceList(q: FlowQuestion): string[] {
 
 // Pertanyaan yang punya kontrol input di flow (image tidak didukung di flow → dilewati).
 export function flowSupported(q: FlowQuestion): boolean {
-  return ["text", "number", "rating", "choice", "boolean"].includes(q.type);
+  return ["text", "number", "rating", "choice", "boolean", "multichoice"].includes(q.type);
 }
 
 export function buildSurveyFlow(survey: FlowSurvey): object {
@@ -46,8 +46,28 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
     } else if (q.type === "number") {
       children.push({ type: "TextInput", name, label: "Jawaban (angka)", "input-type": "number", required });
     } else if (q.type === "rating") {
-      const ds = ratingValues(q).map((n) => ({ id: String(n), title: String(n) }));
+      // Legend label jangkar (mis. "1 = Sangat tidak puas · 5 = Sangat puas").
+      const mn = String(q.options?.minLabel ?? "").trim();
+      const mx = String(q.options?.maxLabel ?? "").trim();
+      const vals = ratingValues(q);
+      if (mn || mx) {
+        const lo = vals[0],
+          hi = vals[vals.length - 1];
+        children.push({ type: "TextCaption", text: `${lo} = ${mn || "…"} · ${hi} = ${mx || "…"}`.slice(0, 4000) });
+      }
+      const ds = vals.map((n) => ({ id: String(n), title: String(n) }));
       children.push({ type: "RadioButtonsGroup", name, label: "Pilih nilai", "data-source": ds, required });
+    } else if (q.type === "multichoice") {
+      const opts = choiceList(q);
+      const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
+      children.push({
+        type: "CheckboxGroup",
+        name,
+        label: "Pilih (boleh lebih dari satu)",
+        "data-source": ds,
+        required,
+        ...(required ? { "min-selected-items": 1 } : {}),
+      });
     } else if (q.type === "boolean") {
       children.push({
         type: "RadioButtonsGroup",
@@ -100,6 +120,19 @@ export function parseFlowAnswers(
     if (!flowSupported(q)) continue;
     const raw = response[fieldName(q.id)];
     if (raw === undefined || raw === null || raw === "") continue;
+    // CheckboxGroup mengembalikan array id → petakan tiap id ke teks pilihan, gabung ", ".
+    if (q.type === "multichoice") {
+      const opts = choiceList(q);
+      const arr = Array.isArray(raw) ? raw : String(raw).split(",");
+      const mapped = arr
+        .map((x) => {
+          const idx = parseInt(String(x).trim(), 10);
+          return Number.isInteger(idx) && idx >= 0 && idx < opts.length ? opts[idx]! : String(x).trim();
+        })
+        .filter(Boolean);
+      if (mapped.length) out.push({ questionId: q.id, value: mapped.join(", ") });
+      continue;
+    }
     let value = String(raw);
     if (q.type === "choice") {
       const opts = choiceList(q);

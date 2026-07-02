@@ -124,6 +124,7 @@ const TYPE_LABEL = {
   rating: "Rating",
   number: "Angka",
   choice: "Pilihan",
+  multichoice: "Pilihan (>1)",
   boolean: "Ya/Tidak",
   image: "Gambar",
 };
@@ -131,14 +132,18 @@ const QTYPE_OPTIONS = [
   { value: "text", label: "Teks bebas" },
   { value: "rating", label: "Rating (skala angka)" },
   { value: "number", label: "Angka" },
-  { value: "choice", label: "Pilihan ganda" },
+  { value: "choice", label: "Pilihan ganda (1 jawaban)" },
+  { value: "multichoice", label: "Pilihan ganda (boleh >1)" },
   { value: "boolean", label: "Ya / Tidak" },
   { value: "image", label: "Gambar / foto" },
 ];
+// Tipe yang memakai daftar pilihan (choices).
+const HAS_CHOICES = (t) => t === "choice" || t === "multichoice";
 
 function qSummary(q) {
   if (q.type === "rating") return `skala ${q.options?.min ?? 1}-${q.options?.max ?? 5}`;
-  if (q.type === "choice") return `${(q.options?.choices || []).length} pilihan`;
+  if (HAS_CHOICES(q.type))
+    return `${(q.options?.choices || []).length} pilihan${q.type === "multichoice" ? " (multi)" : ""}`;
   return "";
 }
 
@@ -149,9 +154,18 @@ function previewFormatQuestion(q, idx, total) {
   const max = q.options?.max ?? 10;
   const choices = q.options?.choices || [];
   let text = `*Pertanyaan ${idx + 1} dari ${total}*\n${q.text}`;
-  if (q.type === "rating") text += `\n\n_Balas dengan angka ${min}–${max}_`;
-  else if (q.type === "choice")
+  if (q.type === "rating") {
+    text += `\n\n_Balas dengan angka ${min}–${max}_`;
+    const mn = (q.options?.minLabel || "").trim();
+    const mx = (q.options?.maxLabel || "").trim();
+    if (mn || mx) text += ` _(${min} = ${mn || "…"}, ${max} = ${mx || "…"})_`;
+  } else if (q.type === "choice")
     text += "\n\n" + choices.map((c, i) => `${i + 1}. ${c}`).join("\n") + "\n\n_Balas nomor atau teks pilihan_";
+  else if (q.type === "multichoice")
+    text +=
+      "\n\n" +
+      choices.map((c, i) => `${i + 1}. ${c}`).join("\n") +
+      "\n\n_Boleh >1 — balas nomornya dipisah koma (mis. 1,3)_";
   else if (q.type === "boolean") text += "\n\n_Balas: Ya / Tidak_";
   else if (q.type === "number") text += "\n\n_Balas dengan angka_";
   else if (q.type === "image") text += "\n\n_Kirim foto sebagai simulasi (ketik nama file)_";
@@ -185,6 +199,30 @@ function previewValidate(q, answer) {
       const match = choices.find((c) => c.toLowerCase() === a.toLowerCase());
       if (match) return { ok: true, saved: match };
       return { ok: false, err: `Pilih: ${choices.map((c, i) => `${i + 1}. ${c}`).join(" | ")}` };
+    }
+    case "multichoice": {
+      const choices = q.options?.choices || [];
+      const tokens = a
+        .split(/[,;\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (!tokens.length) return { ok: false, err: "Balas nomor pilihan, boleh >1 dipisah koma (mis. 1,3)." };
+      if (!choices.length) return { ok: true, saved: tokens.join(", ") };
+      const picked = [];
+      for (const tok of tokens) {
+        const n = parseInt(tok) - 1;
+        if (!isNaN(n) && n >= 0 && n < choices.length) {
+          if (!picked.includes(choices[n])) picked.push(choices[n]);
+          continue;
+        }
+        const match = choices.find((c) => c.toLowerCase() === tok.toLowerCase());
+        if (match) {
+          if (!picked.includes(match)) picked.push(match);
+          continue;
+        }
+        return { ok: false, err: `Pilihan "${tok}" tak dikenali. Balas nomornya, pisah koma (mis. 1,3).` };
+      }
+      return { ok: true, saved: picked.join(", ") };
     }
     case "boolean": {
       if (/^(ya|yes|y|1|iya)$/i.test(a)) return { ok: true, saved: "Ya" };
@@ -571,7 +609,16 @@ function SurveyModal({ survey, onClose, onSave }) {
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [c, setC] = useState({ text: "", type: "text", required: true, min: 1, max: 5, choices: "" });
+  const [c, setC] = useState({
+    text: "",
+    type: "text",
+    required: true,
+    min: 1,
+    max: 5,
+    minLabel: "",
+    maxLabel: "",
+    choices: "",
+  });
   const setCk = (k, v) => setC({ ...c, [k]: v });
 
   const addKeywords = (raw) => {
@@ -590,8 +637,12 @@ function SurveyModal({ survey, onClose, onSave }) {
   const addQuestion = () => {
     if (!c.text.trim()) return;
     let options;
-    if (c.type === "rating") options = { min: Number(c.min) || 1, max: Number(c.max) || 5 };
-    if (c.type === "choice")
+    if (c.type === "rating") {
+      options = { min: Number(c.min) || 1, max: Number(c.max) || 5 };
+      if (c.minLabel.trim() || c.maxLabel.trim())
+        options = { ...options, minLabel: c.minLabel.trim(), maxLabel: c.maxLabel.trim() };
+    }
+    if (HAS_CHOICES(c.type))
       options = {
         choices: c.choices
           .split(/[\n,]/)
@@ -602,7 +653,7 @@ function SurveyModal({ survey, onClose, onSave }) {
       ...questions,
       { id: `t${Date.now()}`, text: c.text.trim(), type: c.type, required: c.required, options },
     ]);
-    setC({ text: "", type: "text", required: true, min: 1, max: 5, choices: "" });
+    setC({ text: "", type: "text", required: true, min: 1, max: 5, minLabel: "", maxLabel: "", choices: "" });
   };
 
   const submit = async () => {
@@ -838,19 +889,44 @@ function SurveyModal({ survey, onClose, onSave }) {
             </div>
           </div>
           {c.type === "rating" ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Input label="Nilai minimum" type="number" value={c.min} onChange={(e) => setCk("min", e.target.value)} />
-              <Input
-                label="Nilai maksimum"
-                type="number"
-                value={c.max}
-                onChange={(e) => setCk("max", e.target.value)}
-              />
-            </div>
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input
+                  label="Nilai minimum"
+                  type="number"
+                  value={c.min}
+                  onChange={(e) => setCk("min", e.target.value)}
+                />
+                <Input
+                  label="Nilai maksimum"
+                  type="number"
+                  value={c.max}
+                  onChange={(e) => setCk("max", e.target.value)}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input
+                  label="Label minimum (opsional)"
+                  value={c.minLabel}
+                  onChange={(e) => setCk("minLabel", e.target.value)}
+                  placeholder="cth: Sangat tidak puas"
+                />
+                <Input
+                  label="Label maksimum (opsional)"
+                  value={c.maxLabel}
+                  onChange={(e) => setCk("maxLabel", e.target.value)}
+                  placeholder="cth: Sangat puas"
+                />
+              </div>
+            </>
           ) : null}
-          {c.type === "choice" ? (
+          {HAS_CHOICES(c.type) ? (
             <Textarea
-              label="Pilihan (satu per baris atau pisah koma)"
+              label={
+                c.type === "multichoice"
+                  ? "Pilihan (boleh dipilih >1; satu per baris atau pisah koma)"
+                  : "Pilihan (satu per baris atau pisah koma)"
+              }
               value={c.choices}
               onChange={(e) => setCk("choices", e.target.value)}
               placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"}
@@ -981,6 +1057,8 @@ function QuestionItem({
       required: q.required ?? true,
       min: q.options?.min ?? 1,
       max: q.options?.max ?? 5,
+      minLabel: q.options?.minLabel ?? "",
+      maxLabel: q.options?.maxLabel ?? "",
       choices: (q.options?.choices || []).join("\n"),
       branches: branchMap,
     });
@@ -988,8 +1066,12 @@ function QuestionItem({
   };
   const saveEdit = () => {
     let options;
-    if (d.type === "rating") options = { min: Number(d.min) || 1, max: Number(d.max) || 5 };
-    if (d.type === "choice")
+    if (d.type === "rating") {
+      options = { min: Number(d.min) || 1, max: Number(d.max) || 5 };
+      if (d.minLabel.trim() || d.maxLabel.trim())
+        options = { ...options, minLabel: d.minLabel.trim(), maxLabel: d.maxLabel.trim() };
+    }
+    if (HAS_CHOICES(d.type))
       options = {
         choices: d.choices
           .split(/[\n,]/)
@@ -1055,14 +1137,39 @@ function QuestionItem({
           </div>
         </div>
         {d.type === "rating" ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Input label="Nilai minimum" type="number" value={d.min} onChange={(e) => setDk("min", e.target.value)} />
-            <Input label="Nilai maksimum" type="number" value={d.max} onChange={(e) => setDk("max", e.target.value)} />
-          </div>
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Input label="Nilai minimum" type="number" value={d.min} onChange={(e) => setDk("min", e.target.value)} />
+              <Input
+                label="Nilai maksimum"
+                type="number"
+                value={d.max}
+                onChange={(e) => setDk("max", e.target.value)}
+              />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <Input
+                label="Label minimum (opsional)"
+                value={d.minLabel}
+                onChange={(e) => setDk("minLabel", e.target.value)}
+                placeholder="cth: Sangat tidak puas"
+              />
+              <Input
+                label="Label maksimum (opsional)"
+                value={d.maxLabel}
+                onChange={(e) => setDk("maxLabel", e.target.value)}
+                placeholder="cth: Sangat puas"
+              />
+            </div>
+          </>
         ) : null}
-        {d.type === "choice" ? (
+        {HAS_CHOICES(d.type) ? (
           <Textarea
-            label="Pilihan (satu per baris atau pisah koma)"
+            label={
+              d.type === "multichoice"
+                ? "Pilihan (boleh dipilih >1; satu per baris atau pisah koma)"
+                : "Pilihan (satu per baris atau pisah koma)"
+            }
             value={d.choices}
             onChange={(e) => setDk("choices", e.target.value)}
             placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"}
