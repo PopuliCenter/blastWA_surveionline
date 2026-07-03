@@ -25,7 +25,7 @@ const PROVIDERS = [
 ];
 
 const MODEL_HINT = {
-  anthropic: "cth: claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-8",
+  anthropic: "cth: claude-haiku-4-5-20251001, claude-sonnet-5, claude-opus-4-8",
   openai: "cth: gpt-4o-mini, gpt-4o",
   gemini: "cth: gemini-2.0-flash, gemini-2.5-pro",
   custom: "model sesuai penyedia (mis. llama-3.1-70b, dll)",
