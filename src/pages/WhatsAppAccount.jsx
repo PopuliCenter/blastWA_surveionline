@@ -110,6 +110,7 @@ export default function WhatsAppAccount() {
   const Status = ({ v }) =>
     v ? (
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {v.decryptError ? <Badge tone="red">perlu input ulang</Badge> : null}
         <Badge tone={v.configured ? "green" : "yellow"}>{v.configured ? "terkonfigurasi" : "belum lengkap"}</Badge>
         {v.active ? <Badge tone="green">aktif</Badge> : <Badge tone="default">nonaktif</Badge>}
         {v.isDefault ? <Badge tone="purple">default</Badge> : null}
@@ -145,6 +146,33 @@ export default function WhatsAppAccount() {
       />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
+
+      {/* Peringatan: kredensial tersimpan tapi gagal didekripsi (CREDENTIALS_ENC_KEY berubah). */}
+      {vendors.some((v) => v.decryptError) ? (
+        <div
+          style={{
+            padding: "13px 16px",
+            borderRadius: 12,
+            marginBottom: 16,
+            background: theme.redSoft,
+            border: `1px solid ${theme.red}33`,
+            color: theme.red,
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}
+        >
+          <strong>
+            ⚠ Kredensial{" "}
+            {vendors
+              .filter((v) => v.decryptError)
+              .map((v) => v.name.toUpperCase())
+              .join(" & ")}{" "}
+            tak bisa dibaca.
+          </strong>{" "}
+          Kunci enkripsi server (<code>CREDENTIALS_ENC_KEY</code>) kemungkinan berubah, sehingga kredensial lama tak
+          bisa didekripsi. <strong>Input ulang</strong> kredensial di bawah lalu Simpan untuk mengaktifkan kembali.
+        </div>
+      ) : null}
 
       {/* Banner status koneksi */}
       <div

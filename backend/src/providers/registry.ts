@@ -7,6 +7,9 @@ import { BaileysAdapter } from "./baileys.js";
 import type { MessagingProvider } from "./types.js";
 
 let providers: Record<string, MessagingProvider> = {};
+// Vendor yang kredensialnya TERSIMPAN tapi GAGAL didekripsi (mis. CREDENTIALS_ENC_KEY berubah).
+// Dipakai UI untuk memperingatkan agar kredensial di-input ulang.
+let decryptErrors = new Set<string>();
 
 function buildFromEnv(): Record<string, MessagingProvider> {
   return {
@@ -35,6 +38,7 @@ function buildFromEnv(): Record<string, MessagingProvider> {
  */
 export async function loadProviders(): Promise<void> {
   providers = buildFromEnv();
+  decryptErrors = new Set();
 
   const configs = await prisma.vendorConfig.findMany({ where: { active: true } }).catch(() => []);
   for (const c of configs) {
@@ -60,8 +64,14 @@ export async function loadProviders(): Promise<void> {
       }
     } catch (err) {
       console.error(`Gagal memuat kredensial vendor ${c.vendor}:`, err);
+      decryptErrors.add(c.vendor); // tandai agar UI bisa minta input ulang
     }
   }
+}
+
+// Daftar vendor yang kredensialnya gagal didekripsi (kunci enkripsi kemungkinan berubah).
+export function vendorsWithDecryptError(): string[] {
+  return [...decryptErrors];
 }
 
 export function getProvider(name: string): MessagingProvider {

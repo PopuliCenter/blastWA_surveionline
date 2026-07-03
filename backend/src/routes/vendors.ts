@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { encryptJson, decryptJson } from "../lib/crypto.js";
-import { listProviders, loadProviders } from "../providers/registry.js";
+import { listProviders, loadProviders, vendorsWithDecryptError } from "../providers/registry.js";
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
@@ -11,10 +11,13 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/vendors", async () => {
     const configs = await prisma.vendorConfig.findMany();
     const byVendor = new Map(configs.map((c) => [c.vendor, c]));
+    const decryptFailed = new Set(vendorsWithDecryptError());
     return listProviders().map((p) => ({
       ...p,
       active: byVendor.get(p.name)?.active ?? true,
       hasStoredCredentials: Boolean(byVendor.get(p.name)?.credentials),
+      // true = kredensial tersimpan tapi tak bisa didekripsi (CREDENTIALS_ENC_KEY berubah) → minta input ulang.
+      decryptError: decryptFailed.has(p.name),
     }));
   });
 
