@@ -131,9 +131,6 @@ function LoginPage({ onLogin }) {
         <Button onClick={handleLogin} disabled={loading || !username || !password} style={{ width: "100%" }}>
           {loading ? "Memverifikasi..." : "Masuk"}
         </Button>
-        <div style={{ marginTop: 14, fontSize: 12, color: theme.textMuted, textAlign: "center" }}>
-          Default: <strong style={{ color: theme.text }}>populi / populi13!</strong>
-        </div>
         <div
           style={{
             marginTop: 18,
