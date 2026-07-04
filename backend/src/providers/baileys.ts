@@ -24,6 +24,12 @@ import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInpu
 type GwStatus = "disconnected" | "connecting" | "qr" | "connected" | "logged_out";
 type InboundHandler = (events: NormalizedInbound[]) => Promise<void>;
 
+// Log verbose jalur pesan masuk HANYA bila DEBUG_BAILEYS=true (default senyap:
+// kurangi noise di log prod + hindari mencetak nomor/metadata pesan). Error tetap dicetak.
+const dbg = (...args: unknown[]): void => {
+  if (process.env.DEBUG_BAILEYS === "true") console.log(...args);
+};
+
 // Buka pembungkus umum (disappearing/ephemeral, view-once, edited, dokumen+caption).
 function unwrapMessage(msg: WAMessageContent | null | undefined): WAMessageContent | null | undefined {
   let m: any = msg;
@@ -154,7 +160,7 @@ class BaileysGateway {
       });
 
       sock.ev.on("messages.upsert", async (up) => {
-        console.log(`[baileys] messages.upsert type=${up.type} jumlah=${up.messages.length}`);
+        dbg(`[baileys] messages.upsert type=${up.type} jumlah=${up.messages.length}`);
         if (up.type !== "notify") return;
         const events: NormalizedInbound[] = [];
         for (const m of up.messages) {
@@ -167,17 +173,17 @@ class BaileysGateway {
           };
           const jid = key.remoteJid ?? "";
           if (key.fromMe) {
-            console.log(`[baileys] lewati fromMe (${jid})`);
+            dbg(`[baileys] lewati fromMe (${jid})`);
             continue;
           }
           // Abaikan grup / status / channel — terima chat pribadi (@s.whatsapp.net) & LID (@lid)
           if (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) {
-            console.log(`[baileys] lewati grup/status (${jid})`);
+            dbg(`[baileys] lewati grup/status (${jid})`);
             continue;
           }
           const text = extractText(m.message);
           if (!text) {
-            console.log(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`);
+            dbg(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`);
             continue;
           }
           // WhatsApp kini sering pakai LID (@lid) demi privasi → nomor asli ada di senderPn,
@@ -200,11 +206,9 @@ class BaileysGateway {
             }
           } else phoneJid = jid;
           const from = ((phoneJid || jid).split("@")[0] ?? "").replace(/\D/g, "");
-          console.log(
-            `[baileys] masuk jid=${jid} senderPn=${key.senderPn ?? "-"} → nomor=${from || "(tak terdeteksi)"}`,
-          );
+          dbg(`[baileys] masuk jid=${jid} senderPn=${key.senderPn ?? "-"} → nomor=${from || "(tak terdeteksi)"}`);
           if (!from) {
-            console.log("[baileys] lewati: nomor tak terdeteksi");
+            dbg("[baileys] lewati: nomor tak terdeteksi");
             continue;
           }
           const tsNum = Number(m.messageTimestamp) || Math.floor(Date.now() / 1000);
@@ -219,7 +223,7 @@ class BaileysGateway {
           });
         }
         if (events.length)
-          console.log(`[baileys] ${events.length} pesan masuk diproses → ${events.map((e) => e.from).join(", ")}`);
+          dbg(`[baileys] ${events.length} pesan masuk diproses → ${events.map((e) => e.from).join(", ")}`);
         if (events.length && this.onInbound) {
           await this.onInbound(events).catch((e) => console.error("Baileys inbound gagal:", e));
         }

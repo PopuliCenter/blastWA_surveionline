@@ -79,6 +79,7 @@ export default function Chat() {
   // ter-update otomatis tanpa klik Refresh). Pakai setData agar tidak memunculkan spinner.
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.hidden) return; // jeda saat tab tak terlihat → hemat kuota/baterai
       api
         .conversations()
         .then((d) => convos.setData(d))
@@ -527,6 +528,7 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
   // Auto-update senyap: segarkan pesan thread ini tiap 4 detik (balasan masuk muncul otomatis).
   useEffect(() => {
     const id = setInterval(() => {
+      if (document.hidden) return; // jeda saat tab tak terlihat
       api
         .contactMessages(convo.id)
         .then((d) => setData(d))
@@ -543,13 +545,15 @@ function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMob
       return;
     }
     let alive = true;
-    const tick = () =>
+    const tick = () => {
+      if (document.hidden) return; // jeda saat tab tak terlihat
       api
         .baileysTyping(convo.phone)
         .then((r) => {
           if (alive) setTyping(!!r.typing);
         })
         .catch(() => {});
+    };
     tick();
     const id = setInterval(tick, 2500);
     return () => {

@@ -414,7 +414,9 @@ function BaileysCard({ v, onToggle, reloadVendors }) {
   // Polling saat belum terhubung (agar QR & status ter-update). Berhenti bila sudah connected.
   useEffect(() => {
     if (state?.status === "connected") return;
-    const id = setInterval(refresh, 2500);
+    const id = setInterval(() => {
+      if (!document.hidden) refresh(); // jeda saat tab tak terlihat
+    }, 2500);
     return () => clearInterval(id);
   }, [state?.status, refresh]);
 

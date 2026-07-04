@@ -486,13 +486,15 @@ export default function PopuliApp() {
   useEffect(() => {
     if (!currentUser) return;
     let alive = true;
-    const tick = () =>
+    const tick = () => {
+      if (document.hidden) return; // jeda saat tab tak terlihat
       api
         .conversations()
         .then((cs) => {
           if (alive) setUnreadTotal((cs || []).reduce((n, c) => n + (c.resolved ? 0 : c.unread || 0), 0));
         })
         .catch(() => {});
+    };
     tick();
     const id = setInterval(tick, 10000);
     return () => {

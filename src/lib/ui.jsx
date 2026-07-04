@@ -339,9 +339,13 @@ export function Button({ children, icon, variant = "primary", size = "md", ...pr
     success: { background: theme.green, color: "#fff", border: "none" },
   };
   const pad = size === "sm" ? "7px 11px" : "10px 15px";
+  // Tombol ikon-saja (tanpa teks) butuh nama aksesibel untuk pembaca layar.
+  const iconOnly = icon && (children === undefined || children === null || children === false);
+  const a11y = iconOnly && !props["aria-label"] ? { "aria-label": props.title || icon } : {};
   return (
     <button
       {...props}
+      {...a11y}
       style={{
         padding: pad,
         borderRadius: 9,
@@ -481,7 +485,17 @@ export function Toggle({ checked, onChange, label }) {
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
       <span
+        role="switch"
+        aria-checked={checked}
+        aria-label={label || "Aktifkan/nonaktifkan"}
+        tabIndex={0}
         onClick={() => onChange(!checked)}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            onChange(!checked);
+          }
+        }}
         style={{
           width: 40,
           height: 23,
