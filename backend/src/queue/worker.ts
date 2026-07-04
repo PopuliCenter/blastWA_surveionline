@@ -42,12 +42,18 @@ async function main() {
     async (job, token) => {
       const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams, text, flowToken } = job.data;
 
-      // 1) Lewati kontak yang sudah opt-out (penting untuk blast terjadwal)
       const recipient = await prisma.blastRecipient.findUnique({
         where: { id: recipientId },
         include: { contact: { select: { subscribed: true } } },
       });
-      if (recipient && recipient.contact && !recipient.contact.subscribed) {
+
+      // 0) Idempotensi: bila recipient sudah TIDAK "queued" (mis. sudah terkirim lalu job
+      // di-retry karena error transien), JANGAN kirim ulang → cegah pesan ganda ke pelanggan.
+      if (!recipient) return "skip-missing";
+      if (recipient.status !== "queued") return `skip-${recipient.status}`;
+
+      // 1) Lewati kontak yang sudah opt-out (penting untuk blast terjadwal)
+      if (recipient.contact && !recipient.contact.subscribed) {
         await prisma.blastRecipient.update({
           where: { id: recipientId },
           data: { status: "failed", error: "dilewati: kontak opt-out" },

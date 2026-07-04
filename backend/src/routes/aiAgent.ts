@@ -14,6 +14,7 @@ const DEFAULTS = {
 
 export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   // Ambil konfigurasi (TANPA membocorkan API key)
   app.get("/api/ai-agent", async () => {

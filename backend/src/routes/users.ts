@@ -40,7 +40,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       .object({
         name: z.string().min(1),
         username: z.string().min(1),
-        password: z.string().min(4),
+        password: z.string().min(8),
         email: z.string().optional(),
         role: z.enum(["superadmin", "admin", "viewer"]).default("admin"),
         active: z.boolean().default(true),
@@ -62,7 +62,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
       .object({
         name: z.string().min(1).optional(),
         username: z.string().min(1).optional(),
-        password: z.string().min(4).optional(),
+        password: z.string().min(8).optional(),
         email: z.string().optional(),
         role: z.enum(["superadmin", "admin", "viewer"]).optional(),
         active: z.boolean().optional(),

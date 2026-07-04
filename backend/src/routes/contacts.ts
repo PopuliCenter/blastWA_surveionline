@@ -7,6 +7,7 @@ import { env } from "../env.js";
 
 export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   // Daftar kontak (+ pencarian)
   app.get("/api/contacts", async (req) => {

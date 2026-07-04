@@ -6,6 +6,11 @@ import { env } from "../dist/env.js";
 import { hashPassword } from "../dist/lib/auth.js";
 
 async function main() {
+  // Tolak password kosong/lemah agar tak pernah membuat admin dengan kredensial default/tebakan.
+  if (!env.SEED_ADMIN_PASSWORD || env.SEED_ADMIN_PASSWORD.length < 8) {
+    console.error("✗ Set SEED_ADMIN_PASSWORD (min. 8 karakter) di .env sebelum menjalankan seed.");
+    process.exit(1);
+  }
   const passwordHash = await hashPassword(env.SEED_ADMIN_PASSWORD);
   const user = await prisma.user.upsert({
     where: { username: env.SEED_ADMIN_USERNAME },

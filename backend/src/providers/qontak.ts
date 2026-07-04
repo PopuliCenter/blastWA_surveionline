@@ -100,7 +100,8 @@ export class QontakAdapter implements MessagingProvider {
   }
 
   verifyWebhook(req: WebhookRequest): boolean {
-    if (!this.cfg.webhookSecret) return true; // belum diset → jangan blokir dev (log saja)
+    // Fail-CLOSED bila secret belum diset (aman default di produksi). Dev/tes: ALLOW_UNSIGNED_WEBHOOKS=true.
+    if (!this.cfg.webhookSecret) return process.env.ALLOW_UNSIGNED_WEBHOOKS === "true";
     // Qontak dapat mengirim secret via header signature/authorization — sesuaikan nama header.
     const header = req.headers["x-qontak-signature"] ?? req.headers["x-signature"] ?? req.headers["authorization"];
     const provided = (Array.isArray(header) ? header[0] : header) ?? "";

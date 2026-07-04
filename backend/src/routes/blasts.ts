@@ -5,6 +5,7 @@ import { createBlast } from "../services/blastService.js";
 
 export async function blastRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   app.get("/api/blasts", async () => {
     const blasts = await prisma.blast.findMany({

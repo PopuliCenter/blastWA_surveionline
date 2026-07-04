@@ -17,7 +17,8 @@ const schema = z.object({
   CREDENTIALS_ENC_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, "CREDENTIALS_ENC_KEY harus 64 karakter hex (32 byte)"),
 
   SEED_ADMIN_USERNAME: z.string().default("populi"),
-  SEED_ADMIN_PASSWORD: z.string().default("populi13!"),
+  // Tanpa default: seed WAJIB diberi password kuat via env (lihat guard di prisma/seed*.{ts,mjs}).
+  SEED_ADMIN_PASSWORD: z.string().default(""),
   SEED_ADMIN_EMAIL: z.string().default("admin@populi.id"),
 
   // Meta

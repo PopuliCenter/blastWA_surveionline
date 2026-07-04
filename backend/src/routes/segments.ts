@@ -68,6 +68,7 @@ const toItems = (arr: (string | { phone: string; name?: string; attributes?: Rec
 
 export async function segmentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   app.get("/api/segments", async () => {
     const segments = await prisma.segment.findMany({

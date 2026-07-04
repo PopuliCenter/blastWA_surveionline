@@ -13,6 +13,7 @@ const ruleSchema = z.object({
 
 export async function autoReplyRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   app.get("/api/auto-replies", async () => {
     return prisma.autoReplyRule.findMany({ orderBy: [{ priority: "desc" }, { createdAt: "desc" }] });

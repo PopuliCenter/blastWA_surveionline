@@ -243,7 +243,9 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
 
     // POST: verifikasi X-Hub-Signature-256 = sha256=<hmac>
-    if (!this.cfg.appSecret) return true; // bila app secret belum diset, jangan blokir dev (log saja)
+    // Fail-CLOSED bila App Secret belum diset (aman default di produksi, mis. saat kredensial
+    // sesaat gagal didekripsi). Untuk dev/tes tanpa signature, set ALLOW_UNSIGNED_WEBHOOKS=true.
+    if (!this.cfg.appSecret) return process.env.ALLOW_UNSIGNED_WEBHOOKS === "true";
     const header = req.headers["x-hub-signature-256"];
     const sig = Array.isArray(header) ? header[0] : header;
     if (!sig || !sig.startsWith("sha256=")) return false;

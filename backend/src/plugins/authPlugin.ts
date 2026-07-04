@@ -5,6 +5,7 @@ import { env } from "../env.js";
 declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireWriter: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -23,6 +24,14 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
       await req.jwtVerify();
     } catch {
       reply.code(401).send({ error: "unauthorized" });
+    }
+  });
+
+  // Guard menulis: peran "viewer" hanya boleh baca. Blokir semua metode pengubah data.
+  // Dipakai sebagai onRequest hook SETELAH `authenticate` (req.user sudah terisi).
+  app.decorate("requireWriter", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (req.method !== "GET" && req.method !== "HEAD" && req.user?.role === "viewer") {
+      reply.code(403).send({ error: "forbidden" });
     }
   });
 }

@@ -47,6 +47,7 @@ function normalizeName(name: string): string {
 
 export async function templateRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   app.get("/api/templates", async () => {
     return prisma.messageTemplate.findMany({ orderBy: { updatedAt: "desc" } });

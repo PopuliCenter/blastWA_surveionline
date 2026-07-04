@@ -26,6 +26,7 @@ const surveySchema = z.object({
 
 export async function surveyRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
   app.get("/api/surveys", async () => {
     const surveys = await prisma.survey.findMany({
