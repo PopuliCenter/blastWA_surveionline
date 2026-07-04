@@ -12,6 +12,24 @@ const DEFAULTS = {
   systemPrompt: "Anda asisten layanan pelanggan via WhatsApp. Jawab singkat, ramah, dan jelas dalam Bahasa Indonesia.",
 };
 
+// Cegah SSRF: base URL provider "custom" wajib https & bukan host internal/loopback/privat.
+function isSafeBaseUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  if (["localhost", "0.0.0.0", "::1"].includes(host)) return false;
+  if (!host.includes(".") || host.endsWith(".local") || host.endsWith(".internal")) return false;
+  if (/^(10\.|127\.|192\.168\.|169\.254\.)/.test(host)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+  if (/^(fc00:|fd00:|fe80:)/.test(host)) return false;
+  return true;
+}
+
 export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
@@ -42,6 +60,11 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    // Validasi base URL custom (anti-SSRF) bila diisi.
+    const bu = parsed.data.baseUrl?.trim();
+    if (bu && !isSafeBaseUrl(bu))
+      return reply.code(400).send({ error: "Base URL harus https dan bukan alamat internal/privat." });
 
     const data: Record<string, unknown> = {};
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;

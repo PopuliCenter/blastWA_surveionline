@@ -17,7 +17,8 @@ services:
     container_name: wa_frontend
     restart: unless-stopped
     networks: [internal, web]
-    depends_on: [backend]
+    depends_on:
+      backend: { condition: service_healthy }
 
   backend:
     build: ../backend
@@ -36,7 +37,19 @@ services:
     networks: [internal]
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_started }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
 
   worker:
     build: ../backend
@@ -55,7 +68,7 @@ services:
     networks: [internal]
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_started }
+      redis: { condition: service_healthy }
 
   postgres:
     image: postgres:16-alpine
@@ -74,9 +87,15 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"] # persistence AOF → job antrian selamat saat restart
     volumes: [redisdata:/data]
     networks: [internal]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 networks:
   internal:

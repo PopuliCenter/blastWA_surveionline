@@ -17,7 +17,13 @@ declare module "@fastify/jwt" {
 }
 
 export async function registerAuth(app: FastifyInstance): Promise<void> {
-  await app.register(fastifyJwt, { secret: env.JWT_SECRET });
+  // Pin algoritma HS256 saat sign & verify → tolak token beralgoritma lain
+  // (mencegah algorithm-confusion / "alg: none").
+  await app.register(fastifyJwt, {
+    secret: env.JWT_SECRET,
+    sign: { algorithm: "HS256" },
+    verify: { algorithms: ["HS256"] },
+  });
 
   app.decorate("authenticate", async (req: FastifyRequest, reply: FastifyReply) => {
     try {
