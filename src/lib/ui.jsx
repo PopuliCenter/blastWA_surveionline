@@ -399,13 +399,33 @@ export function Input({ label, error, hint, ...props }) {
   );
 }
 // Input rahasia dengan tombol lihat/sembunyikan
-export function PasswordInput({ label, error, hint, ...props }) {
+export function PasswordInput({ label, error, hint, noAutofill, ...props }) {
   const [show, setShow] = useState(false);
+  // noAutofill: cegah browser/password-manager mengisi & meng-generate field rahasia
+  // (mis. Access Token vendor) secara otomatis. Trik readOnly-saat-load + autoComplete off.
+  const [ro, setRo] = useState(Boolean(noAutofill));
+  const guard = noAutofill
+    ? {
+        autoComplete: "off",
+        autoCorrect: "off",
+        autoCapitalize: "off",
+        spellCheck: false,
+        readOnly: ro,
+        onFocus: (e) => {
+          setRo(false);
+          props.onFocus?.(e);
+        },
+        "data-lpignore": "true",
+        "data-1p-ignore": true,
+        "data-form-type": "other",
+      }
+    : {};
   return (
     <Field label={label} error={error} hint={hint}>
       <div style={{ position: "relative" }}>
         <input
           {...props}
+          {...guard}
           type={show ? "text" : "password"}
           style={{ ...inputStyle(error), paddingRight: 42, ...(props.style || {}) }}
         />

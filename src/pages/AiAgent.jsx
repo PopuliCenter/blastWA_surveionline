@@ -6,6 +6,7 @@ import {
   Button,
   Badge,
   Input,
+  PasswordInput,
   Textarea,
   Select,
   Notice,
@@ -131,9 +132,9 @@ export default function AiAgent() {
             onChange={(e) => set("systemPrompt", e.target.value)}
             style={{ minHeight: 120 }}
           />
-          <Input
+          <PasswordInput
+            noAutofill
             label="API Key"
-            type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={data.hasApiKey ? "•••••• (tersimpan, isi untuk ganti)" : "API key provider"}

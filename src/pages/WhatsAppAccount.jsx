@@ -238,6 +238,7 @@ export default function WhatsAppAccount() {
             </span>
           </div>
           <PasswordInput
+            noAutofill
             label="Access Token (System User)"
             value={meta.accessToken}
             onChange={(e) => setMeta({ ...meta, accessToken: e.target.value })}
@@ -258,12 +259,14 @@ export default function WhatsAppAccount() {
             hint="Untuk mengambil daftar template dari Meta saat broadcast. WhatsApp Manager › Account tools / API Setup."
           />
           <PasswordInput
+            noAutofill
             label="App Secret"
             value={meta.appSecret}
             onChange={(e) => setMeta({ ...meta, appSecret: e.target.value })}
             hint="Meta for Developers › App › Settings › Basic › App Secret. Untuk verifikasi webhook."
           />
           <PasswordInput
+            noAutofill
             label="Webhook Verify Token"
             value={meta.verifyToken}
             onChange={(e) => setMeta({ ...meta, verifyToken: e.target.value })}
@@ -311,6 +314,7 @@ export default function WhatsAppAccount() {
             Alternatif via partner resmi (BSP). Cocok bila Anda sudah berlangganan Qontak.
           </div>
           <PasswordInput
+            noAutofill
             label="Access Token"
             value={qontak.accessToken}
             onChange={(e) => setQontak({ ...qontak, accessToken: e.target.value })}
@@ -324,6 +328,7 @@ export default function WhatsAppAccount() {
             hint="ID channel WhatsApp di akun Qontak Anda."
           />
           <PasswordInput
+            noAutofill
             label="Webhook Secret"
             value={qontak.webhookSecret}
             onChange={(e) => setQontak({ ...qontak, webhookSecret: e.target.value })}
