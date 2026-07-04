@@ -1,7 +1,7 @@
 // Service worker minimal untuk Populi WA (installable PWA + offline shell).
 // Strategi: navigasi = network-first (selalu app terbaru; fallback shell saat offline);
 // aset statis = cache-first; API/webhook = SELALU jaringan (jangan pernah di-cache).
-const CACHE = "populi-wa-v1";
+const CACHE = "populi-wa-v2";
 const SHELL = ["/", "/index.html"];
 
 self.addEventListener("install", (e) => {

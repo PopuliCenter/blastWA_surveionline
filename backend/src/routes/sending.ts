@@ -15,6 +15,7 @@ async function usedTodayCount(): Promise<number> {
 
 export async function sendingRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireWriter); // viewer tak boleh ubah kebijakan kirim
 
   // Kebijakan pengiriman (warm-up / batas harian + jitter)
   app.get("/api/sending-policy", async () => {

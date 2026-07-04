@@ -22,6 +22,7 @@ import { baileysRoutes } from "./routes/baileys.js";
 import { baileysGateway } from "./providers/baileys.js";
 import { handleInboundEvents } from "./services/surveyEngine.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "./lib/errorLog.js";
+import { prisma } from "./db.js";
 
 async function main() {
   // Catat error tingkat proses (unhandledRejection / uncaughtException) ke file log.
@@ -83,6 +84,22 @@ async function main() {
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`Populi WA backend siap di :${env.PORT}`);
+
+  // Graceful shutdown: pada deploy/restart, tuntaskan request in-flight lalu tutup koneksi
+  // (hindari pemutusan mid-write & korupsi state; socket Baileys ditutup rapi saat proses keluar).
+  const shutdown = async (sig: string) => {
+    app.log.info(`${sig} diterima — mematikan dengan rapi…`);
+    try {
+      await app.close(); // stop terima koneksi baru, selesaikan yang sedang berjalan
+      await prisma.$disconnect();
+    } catch (e) {
+      app.log.error({ err: e }, "Gagal shutdown rapi");
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((err) => {

@@ -4,7 +4,10 @@ import { prisma } from "../db.js";
 export async function reportRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
 
-  app.get("/api/webhook-logs", async (req) => {
+  app.get("/api/webhook-logs", async (req, reply) => {
+    // Payload webhook memuat PII (nomor + isi pesan) → hanya admin/superadmin.
+    if (req.user.role !== "admin" && req.user.role !== "superadmin")
+      return reply.code(403).send({ error: "forbidden" });
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 500);
     const logs = await prisma.webhookLog.findMany({ orderBy: { createdAt: "desc" }, take: limit });
     return logs.map((l) => ({

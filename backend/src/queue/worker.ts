@@ -125,6 +125,22 @@ async function main() {
   });
 
   console.log("✅ Blast worker berjalan, menunggu job...");
+
+  // Graceful shutdown: tunggu job yang sedang diproses selesai sebelum keluar
+  // (cegah blast setengah terkirim / status recipient nyangkut saat deploy/restart).
+  const shutdown = async (sig: string) => {
+    console.log(`${sig} diterima — menutup worker (menunggu job aktif)…`);
+    try {
+      await worker.close(); // BullMQ menunggu job aktif rampung
+      await prisma.$disconnect();
+    } catch (e) {
+      logErrorSync("worker", e, { kind: "shutdown" });
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((err) => {
