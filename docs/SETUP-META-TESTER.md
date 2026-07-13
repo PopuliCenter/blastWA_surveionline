@@ -52,7 +52,7 @@ Di halaman ini ada 3 hal penting:
 
 ## 4. Isi kredensial di aplikasi Populi WA
 
-Buka aplikasi (mis. `https://wa.risetcenter.com`) → login admin → menu **Akun WhatsApp** (Vendor / Meta).
+Buka aplikasi (mis. `https://wa.populicenter.com`) → login admin → menu **Akun WhatsApp** (Vendor / Meta).
 
 Isi:
 
@@ -71,7 +71,7 @@ Klik **Simpan**, lalu **Cek Koneksi** / **Cek Status** → harus **hijau** (mena
 
 Menu: **WhatsApp → Configuration → Webhook → Edit**.
 
-1. **Callback URL:** `https://wa.risetcenter.com/webhook/meta`
+1. **Callback URL:** `https://wa.populicenter.com/webhook/meta`
 2. **Verify token:** sama dengan §3.
 3. Klik **Verify and save** → Meta memanggil backend Anda; kalau verify token cocok, tersimpan.
 4. Di daftar field, klik **Manage** → **Subscribe** field **`messages`** (wajib). Boleh tambah `message_template_status_update` (status approval template).

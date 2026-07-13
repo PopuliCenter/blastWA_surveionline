@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 # Origin API = sama dengan domain publik (Nginx kontainer ini yang proxy /api).
-ARG VITE_API_URL=https://wa.risetcenter.com
+ARG VITE_API_URL=https://wa.populicenter.com
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

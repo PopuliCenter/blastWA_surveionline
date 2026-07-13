@@ -6,11 +6,11 @@ Dua lapis pemantauan ringan tanpa layanan berbayar.
 
 Backend punya endpoint sehat yang sudah diproxy publik:
 ```
-https://wa.risetcenter.com/health   →   {"ok":true,"ts":"..."}
+https://wa.populicenter.com/health   →   {"ok":true,"ts":"..."}
 ```
 
 Daftarkan di monitor gratis (mis. **UptimeRobot**, **BetterStack**, **Hetrix**):
-- Tipe: **HTTP(s)**, URL `https://wa.risetcenter.com/health`, interval 1–5 menit.
+- Tipe: **HTTP(s)**, URL `https://wa.populicenter.com/health`, interval 1–5 menit.
 - Keyword (opsional): pastikan respons memuat `"ok":true`.
 - Alert ke email/Telegram bila down.
 

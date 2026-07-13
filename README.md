@@ -121,13 +121,13 @@ Login default: **`populi` / `populi13!`** (ubah setelah masuk).
 
 **Frontend** (`.env` di root) — saat build produksi:
 ```env
-VITE_API_URL=https://wa.risetcenter.com   # origin API; saat dev biarkan http://localhost:3000
+VITE_API_URL=https://wa.populicenter.com   # origin API; saat dev biarkan http://localhost:3000
 ```
 
 **Backend** (`backend/.env`) — kunci penting:
 ```env
 PORT=3000
-FRONTEND_ORIGIN=https://wa.risetcenter.com        # untuk CORS
+FRONTEND_ORIGIN=https://wa.populicenter.com        # untuk CORS
 DATABASE_URL=postgresql://populi:populi@localhost:5433/populi?schema=public
 REDIS_URL=redis://localhost:6379
 
@@ -143,16 +143,16 @@ Kredensial Meta/Qontak (token, phone number id, app secret, dst.) **tidak perlu*
 
 ## 🌐 Deploy ke VPS (subdomain + Cloudflare)
 
-Skenario: satu VPS sudah menjalankan beberapa app (mis. `risetcenter.com`, `survei.risetcenter.com`). App ini dipasang di subdomain **`wa.risetcenter.com`**, DNS sudah diarahkan di **Cloudflare (Proxied)** ke IP origin VPS.
+Skenario: satu VPS sudah menjalankan beberapa app (mis. `populicenter.com`, `survei.populicenter.com`). App ini dipasang di subdomain **`wa.populicenter.com`**, DNS sudah diarahkan di **Cloudflare (Proxied)** ke IP origin VPS.
 
-> 🚀 **VPS yang sudah punya edge nginx + Docker network `web`** (kasus risetcenter.com): pakai panduan & file siap‑pakai di **[`deploy/`](deploy/README.md)** — stack terpisah tanpa buka port host, otomatis diproxy edge nginx. Bagian di bawah ini adalah panduan umum (nginx level host).
+> 🚀 **VPS yang sudah punya edge nginx + Docker network `web`** (kasus populicenter.com): pakai panduan & file siap‑pakai di **[`deploy/`](deploy/README.md)** — stack terpisah tanpa buka port host, otomatis diproxy edge nginx. Bagian di bawah ini adalah panduan umum (nginx level host).
 
 ### 1) DNS & SSL (Cloudflare)
 - Record **A** `wa` → IP VPS, **Proxied** (☁️ oranye). ✅ (sudah dibuat)
 - SSL/TLS mode: **Full** (atau Full strict bila origin punya sertifikat). HTTPS publik ditangani Cloudflare.
 
 ### 2) Jalankan backend + worker + DB (Docker)
-Di server, isi `backend/.env` (JWT_SECRET, CREDENTIALS_ENC_KEY, `FRONTEND_ORIGIN=https://wa.risetcenter.com`, `META_WEBHOOK_VERIFY_TOKEN`, dll.), lalu:
+Di server, isi `backend/.env` (JWT_SECRET, CREDENTIALS_ENC_KEY, `FRONTEND_ORIGIN=https://wa.populicenter.com`, `META_WEBHOOK_VERIFY_TOKEN`, dll.), lalu:
 ```bash
 docker compose up -d --build         # postgres, redis, backend (:3000), worker
 ```
@@ -161,9 +161,9 @@ docker compose up -d --build         # postgres, redis, backend (:3000), worker
 ### 3) Build frontend (statis)
 ```bash
 # di root repo (di server, atau build lokal lalu kirim folder dist/)
-echo "VITE_API_URL=https://wa.risetcenter.com" > .env
+echo "VITE_API_URL=https://wa.populicenter.com" > .env
 npm install && npm run build
-sudo mkdir -p /var/www/wa.risetcenter.com && sudo cp -r dist/* /var/www/wa.risetcenter.com/
+sudo mkdir -p /var/www/wa.populicenter.com && sudo cp -r dist/* /var/www/wa.populicenter.com/
 ```
 
 ### 4) Nginx — server block subdomain
@@ -171,9 +171,9 @@ Frontend statis disajikan langsung; `/api`, `/webhook`, `/health` di‑proxy ke 
 ```nginx
 server {
     listen 80;
-    server_name wa.risetcenter.com;
+    server_name wa.populicenter.com;
 
-    root /var/www/wa.risetcenter.com;
+    root /var/www/wa.populicenter.com;
     index index.html;
 
     # SPA: arahkan rute non‑file ke index.html
@@ -186,13 +186,13 @@ server {
 }
 ```
 ```bash
-sudo ln -s /etc/nginx/sites-available/wa.risetcenter.com /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/wa.populicenter.com /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 > Karena Cloudflare Proxied, sertifikat publik ditangani Cloudflare. Bila ingin HTTPS di origin juga, pasang Let's Encrypt / Cloudflare Origin Cert dan tambahkan blok `listen 443 ssl`.
 
 ### 5) Daftarkan Webhook di Meta
-- Callback URL: **`https://wa.risetcenter.com/webhook/meta`**
+- Callback URL: **`https://wa.populicenter.com/webhook/meta`**
 - Verify Token: samakan dengan `META_WEBHOOK_VERIFY_TOKEN`
 - Subscribe field **`messages`**.
 

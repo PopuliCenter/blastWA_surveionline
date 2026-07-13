@@ -5,21 +5,21 @@
 # ⚠️ PELAJARAN INSIDEN 1 Juli 2026 (lihat docs/ops/vps-multi-app-nginx.md §6):
 # vhost survei.conf TIDAK pernah terdaftar di docker-compose.yml dasar — dulu
 # ditambal manual ke container yang jalan (tidak persisten) → HILANG saat nginx
-# di-recreate untuk memasang wa.conf, sehingga survei.risetcenter.com jatuh ke
+# di-recreate untuk memasang wa.conf, sehingga survei.populicenter.com jatuh ke
 # catch-all app lama. Maka override ini WAJIB mendaftarkan SEMUA vhost yang
 # harus persisten (survei + wa), bukan hanya wa. JANGAN berasumsi mount lama
 # "otomatis ada" — verifikasi dengan `docker compose config`.
 #
 # Pasang di VPS:
-#   cp /var/www/survei-wa/deploy/wa.risetcenter.com.conf      /var/www/survey-populicenter/
-#   # pastikan survei.risetcenter.com.conf juga ada di /var/www/survey-populicenter/
+#   cp /var/www/survei-wa/deploy/wa.populicenter.com.conf      /var/www/survey-populicenter/
+#   # pastikan survei.populicenter.com.conf juga ada di /var/www/survey-populicenter/
 #   cp /var/www/survei-wa/deploy/edge-nginx.override.yml      /var/www/survey-populicenter/docker-compose.override.yml
 #   cd /var/www/survey-populicenter
 #   docker compose config        # PREVIEW hasil merge — pastikan SEMUA vhost muncul
 #   docker compose up -d nginx   # recreate nginx (baca mount baru)
 #   docker exec survey-populicenter-nginx-1 nginx -t   # harus "syntax is ok / successful"
 #   # cek SEMUA domain (bukan cuma yang baru):
-#   for d in risetcenter.com survei.risetcenter.com wa.risetcenter.com; do \
+#   for d in populicenter.com survei.populicenter.com wa.populicenter.com; do \
 #     curl -sk --resolve "$d:443:127.0.0.1" "https://$d/" -o /dev/null -w "$d %{http_code}\n"; done
 #
 # Catatan: nama service di stack itu = "nginx" (kontainer survey-populicenter-nginx-1).
@@ -28,8 +28,8 @@ services:
     # Daftarkan SEMUA vhost yang harus persisten (compose menggabung volumes
     # berdasarkan path tujuan — tetap VERIFIKASI dgn `docker compose config`).
     volumes:
-      - ./survei.risetcenter.com.conf:/etc/nginx/conf.d/survei.risetcenter.com.conf:ro
-      - ./wa.risetcenter.com.conf:/etc/nginx/conf.d/wa.risetcenter.com.conf:ro
+      - ./survei.populicenter.com.conf:/etc/nginx/conf.d/survei.populicenter.com.conf:ro
+      - ./wa.populicenter.com.conf:/etc/nginx/conf.d/wa.populicenter.com.conf:ro
     # Pastikan edge nginx TETAP tersambung ke network "web" walau di-recreate
     # (web sebelumnya disambung manual → hilang saat compose recreate).
     networks:

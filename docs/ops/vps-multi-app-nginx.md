@@ -1,12 +1,12 @@
 > **Sumber asal:** disalin dari `PopuliCenter/wwwpc-PC` (`docs/ops/vps-multi-app-nginx.md`),
 > disalin ke repo ini (`blastWA_surveionline`) karena app ini (`wa_frontend`/
-> `wa_backend`, subdomain `wa.risetcenter.com`) numpang di edge nginx bersama
-> yang dibahas di dokumen ini — vhost `wa.risetcenter.com.conf` yang di-deploy
+> `wa_backend`, subdomain `wa.populicenter.com`) numpang di edge nginx bersama
+> yang dibahas di dokumen ini — vhost `wa.populicenter.com.conf` yang di-deploy
 > untuk app ini ada di stack `survey-populicenter` (bukan di repo ini). Kalau
 > dokumen ini diperbarui, perbarui juga salinannya di `wwwpc-PC` dan
 > `survey-populicenter`.
 
-# VPS Bersama: Edge Nginx Multi-Aplikasi (risetcenter.com)
+# VPS Bersama: Edge Nginx Multi-Aplikasi (populicenter.com)
 
 > **Konteks:** Satu VPS (Hostinger) menjalankan **beberapa aplikasi terpisah**
 > (masing-masing Docker Compose sendiri), berbagi **satu nginx edge** yang
@@ -27,8 +27,8 @@ Internet → Cloudflare (DNS + SSL) → VPS:80/443
                     ┌───────────────────┼───────────────────┐
                     ▼                   ▼                   ▼
          server_name              server_name          server_name
-      risetcenter.com          survei.risetcenter    wa.risetcenter
-      www.risetcenter.com      .com (conf sendiri)   .com (conf sendiri) ← APP INI
+      populicenter.com          survei.populicenter   wa.populicenter
+      www.populicenter.com      .com (conf sendiri)   .com (conf sendiri) ← APP INI
       "_" (catch-all)                │                     │
             │                        ▼                     ▼
             ▼                 survei_frontend:80     wa_frontend:80
@@ -49,9 +49,9 @@ Traefik/dsb). App WA (repo ini) **tidak** publish port sendiri — cukup
 
 | Domain | Diproxy ke | Compose stack | Lokasi compose |
 |---|---|---|---|
-| `risetcenter.com`, `www.risetcenter.com` | `backend` (app lama) via `nginx-common.conf` | survey-populicenter | `/var/www/survey-populicenter/` |
-| `survei.risetcenter.com` | `survei_frontend:80` | aplikasi-survei-web-online (`wwwpc-PC`) | `/var/www/online-survei/` |
-| `wa.risetcenter.com` | `wa_frontend:80` | app WhatsApp (repo ini) | `/var/www/survei-wa/` (deploy asal) |
+| `populicenter.com`, `www.populicenter.com` | `backend` (app lama) via `nginx-common.conf` | survey-populicenter | `/var/www/survey-populicenter/` |
+| `survei.populicenter.com` | `survei_frontend:80` | aplikasi-survei-web-online (`wwwpc-PC`) | `/var/www/online-survei/` |
+| `wa.populicenter.com` | `wa_frontend:80` | app WhatsApp (repo ini) | `/var/www/survei-wa/` (deploy asal) |
 
 File kunci di `/var/www/survey-populicenter/` (host, di-*bind mount* ke
 container edge nginx — **bukan bagian repo ini**, ada di repo `survey-populicenter`):
@@ -60,11 +60,11 @@ container edge nginx — **bukan bagian repo ini**, ada di repo `survey-populice
 |---|---|---|
 | `docker-compose.yml` | — | Stack ASLI app lama (nginx, backend, worker, postgres, redis). **Publish port 80/443 di sini.** |
 | `docker-compose.override.yml` | — | **Tempat menambah vhost baru** tanpa mengubah `docker-compose.yml`. Compose **menggabung** (bukan menimpa) `volumes:` berdasarkan path tujuan di container — jadi aman menambah baris baru di sini. |
-| `nginx.conf` | `/etc/nginx/conf.d/default.conf` | Server block `risetcenter.com`/catch-all `_` (app lama). Dimuat **paling awal** (alfabetis) → jadi *implicit default server*. |
+| `nginx.conf` | `/etc/nginx/conf.d/default.conf` | Server block `populicenter.com`/catch-all `_` (app lama). Dimuat **paling awal** (alfabetis) → jadi *implicit default server*. |
 | `nginx-common.conf` | `/etc/nginx/nginx-common.conf` | Rute API **app lama saja** (`/auth`, `/surveys`, `/responses`, dst. — mirip nama tapi BUKAN app survei kita!). Jangan bingung. |
-| `certs/origin.pem`, `certs/origin.key` | `/etc/nginx/certs/` | **Cloudflare Origin Certificate**, SAN `*.risetcenter.com`, berlaku 15 tahun. Dipakai bersama oleh SEMUA subdomain. |
-| `wa.risetcenter.com.conf` | `/etc/nginx/conf.d/wa.risetcenter.com.conf` | **Vhost app ini** — mandiri, proxy semua path ke `wa_frontend:80`. Sumber file ada di `deploy/wa.risetcenter.com.conf` repo ini. |
-| `survei.risetcenter.com.conf` | `/etc/nginx/conf.d/survei.risetcenter.com.conf` | Vhost survei — mandiri, proxy semua path ke `survei_frontend:80`. |
+| `certs/origin.pem`, `certs/origin.key` | `/etc/nginx/certs/` | **Cloudflare Origin Certificate**, SAN `*.populicenter.com`, berlaku 15 tahun. Dipakai bersama oleh SEMUA subdomain. |
+| `wa.populicenter.com.conf` | `/etc/nginx/conf.d/wa.populicenter.com.conf` | **Vhost app ini** — mandiri, proxy semua path ke `wa_frontend:80`. Sumber file ada di `deploy/wa.populicenter.com.conf` repo ini. |
+| `survei.populicenter.com.conf` | `/etc/nginx/conf.d/survei.populicenter.com.conf` | Vhost survei — mandiri, proxy semua path ke `survei_frontend:80`. |
 
 ## 3. Panduan: menambah aplikasi baru (app ke-4, dst.)
 
@@ -91,16 +91,16 @@ container edge nginx — **bukan bagian repo ini**, ada di repo `survey-populice
 
 ### Langkah di edge nginx (`/var/www/survey-populicenter/` — repo `survey-populicenter`)
 
-1. **Buat file vhost baru**, mandiri, pola sama seperti `wa.risetcenter.com.conf`
-   (lihat `deploy/wa.risetcenter.com.conf` di repo ini sebagai contoh nyata):
+1. **Buat file vhost baru**, mandiri, pola sama seperti `wa.populicenter.com.conf`
+   (lihat `deploy/wa.populicenter.com.conf` di repo ini sebagai contoh nyata):
    ```bash
-   cat > /var/www/survey-populicenter/<subdomain>.risetcenter.com.conf <<'EOF'
+   cat > /var/www/survey-populicenter/<subdomain>.populicenter.com.conf <<'EOF'
    server {
        listen 80;
        listen [::]:80;
        listen 443 ssl;
        listen [::]:443 ssl;
-       server_name <subdomain>.risetcenter.com;
+       server_name <subdomain>.populicenter.com;
 
        ssl_certificate     /etc/nginx/certs/origin.pem;
        ssl_certificate_key /etc/nginx/certs/origin.key;
@@ -130,9 +130,9 @@ container edge nginx — **bukan bagian repo ini**, ada di repo `survey-populice
    services:
      nginx:
        volumes:
-         - ./wa.risetcenter.com.conf:/etc/nginx/conf.d/wa.risetcenter.com.conf:ro
-         - ./survei.risetcenter.com.conf:/etc/nginx/conf.d/survei.risetcenter.com.conf:ro
-         - ./<subdomain>.risetcenter.com.conf:/etc/nginx/conf.d/<subdomain>.risetcenter.com.conf:ro   # BARU
+         - ./wa.populicenter.com.conf:/etc/nginx/conf.d/wa.populicenter.com.conf:ro
+         - ./survei.populicenter.com.conf:/etc/nginx/conf.d/survei.populicenter.com.conf:ro
+         - ./<subdomain>.populicenter.com.conf:/etc/nginx/conf.d/<subdomain>.populicenter.com.conf:ro   # BARU
        networks:
          - default
          - web
@@ -158,14 +158,14 @@ container edge nginx — **bukan bagian repo ini**, ada di repo `survey-populice
 5. **Verifikasi dengan SNI yang benar** (⚠️ lihat gotcha #3 di bawah — `-H
    "Host:"` biasa TIDAK CUKUP untuk domain HTTPS/HTTP2):
    ```bash
-   curl -sk --resolve <subdomain>.risetcenter.com:443:127.0.0.1 \
-     https://<subdomain>.risetcenter.com/ -o /dev/null -w "HTTP: %{http_code}\n"
+   curl -sk --resolve <subdomain>.populicenter.com:443:127.0.0.1 \
+     https://<subdomain>.populicenter.com/ -o /dev/null -w "HTTP: %{http_code}\n"
    ```
    Harus `200`. Lalu cek juga dari browser asli.
 
 6. **Cek domain-domain LAIN masih hidup** (jangan cuma cek yang baru!):
    ```bash
-   for d in risetcenter.com survei.risetcenter.com wa.risetcenter.com; do
+   for d in populicenter.com survei.populicenter.com wa.populicenter.com; do
      printf "%-28s " "$d"
      curl -sk --resolve "$d:443:127.0.0.1" "https://$d/" -o /dev/null -w "%{http_code}\n"
    done
@@ -226,20 +226,20 @@ free -h; df -h /; docker stats --no-stream
    akan memutus SEMUA app dari edge nginx sekaligus, termasuk app WA ini.
 5. **`nginx-common.conf` di stack `survey-populicenter` BUKAN untuk app WA
    ini** — itu murni rute API app lama. App WA punya vhost sendiri
-   (`wa.risetcenter.com.conf`, mandiri).
+   (`wa.populicenter.com.conf`, mandiri).
 6. **Disk VPS saat insiden ini: 74% terpakai (71G/96G).** Pantau berkala
    (`df -h /`) — jangan sampai penuh saat menambah app baru.
 
 ## 6. Riwayat insiden
 
 **1 Juli 2026** — instalasi app WhatsApp (repo ini, aplikasi ketiga di VPS)
-menyebabkan `survei.risetcenter.com` menyajikan aplikasi lama
+menyebabkan `survei.populicenter.com` menyajikan aplikasi lama
 (`survey-populicenter`) alih-alih `survei_frontend`. Akar masalah: vhost
-`survei.risetcenter.com.conf` ternyata **tidak pernah didaftarkan secara
+`survei.populicenter.com.conf` ternyata **tidak pernah didaftarkan secara
 persisten** di `docker-compose.yml`/`docker-compose.override.yml` milik stack
 `survey-populicenter` — kemungkinan sebelumnya sempat ditambal manual ke
 container yang berjalan (tidak persisten) dan hilang saat container
-di-*recreate* untuk memasang override `wa.risetcenter.com.conf`. Diperbaiki
-dengan membuat `survei.risetcenter.com.conf` (mandiri, proxy ke
+di-*recreate* untuk memasang override `wa.populicenter.com.conf`. Diperbaiki
+dengan membuat `survei.populicenter.com.conf` (mandiri, proxy ke
 `survei_frontend:80`) dan mendaftarkannya via `docker-compose.override.yml`
 (lihat §3 sbg SOP ke depan — pola yang sama dipakai untuk app ini juga).

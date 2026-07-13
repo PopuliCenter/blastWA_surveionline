@@ -1,4 +1,4 @@
-# Stack produksi app WA — wa.risetcenter.com
+# Stack produksi app WA — wa.populicenter.com
 # Project name "survei-wa" → kontainer wa_frontend / wa_backend / wa_worker / dst.
 # TANPA buka port host (3000/5432/6379) agar tidak bentrok app lain.
 # Frontend gabung ke network "web" (bersama edge nginx) → diproxy via nama "wa_frontend".
@@ -13,7 +13,7 @@ services:
       context: ..
       dockerfile: deploy/frontend.Dockerfile
       args:
-        VITE_API_URL: https://wa.risetcenter.com
+        VITE_API_URL: https://wa.populicenter.com
     container_name: wa_frontend
     restart: unless-stopped
     networks: [internal, web]
