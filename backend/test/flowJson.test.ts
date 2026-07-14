@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildSurveyFlow, parseFlowAnswers, fieldName, flowSupported, type FlowQuestion } from "../src/lib/flowJson.js";
+import {
+  buildSurveyFlow,
+  parseFlowAnswers,
+  flowOutOfSync,
+  fieldName,
+  flowSupported,
+  type FlowQuestion,
+} from "../src/lib/flowJson.js";
 
 const q = (id: string, type: string, options: any = null, required = true): FlowQuestion => ({
   id,
@@ -52,5 +59,40 @@ describe("parseFlowAnswers", () => {
   it("choice: id tunggal → teks pilihan", () => {
     const qs = [q("c", "choice", { choices: ["X", "Y"] })];
     expect(parseFlowAnswers({ [fieldName("c")]: "1" }, qs)).toEqual([{ questionId: "c", value: "Y" }]);
+  });
+
+  // Kasus nyata: Flow terbit di Meta memakai id pertanyaan dari survei LAIN/lama →
+  // tak satu pun nama field cocok. Jawaban harus tetap terselamatkan lewat urutan field.
+  it("flow tidak sinkron (id lama) + jumlah sama → diselamatkan lewat urutan", () => {
+    const qs = [q("baru1", "boolean"), q("baru2", "rating", { min: 1, max: 10 })];
+    const resp = { q_lama1: "Ya", q_lama2: "5", flow_token: "resp_x" };
+    expect(flowOutOfSync(resp, qs)).toBe(true);
+    expect(parseFlowAnswers(resp, qs)).toEqual([
+      { questionId: "baru1", value: "Ya" },
+      { questionId: "baru2", value: "5" },
+    ]);
+  });
+
+  it("flow tidak sinkron TAPI jumlah beda → kosong (jangan salah pasang jawaban)", () => {
+    const qs = [q("baru1", "boolean"), q("baru2", "rating")];
+    const resp = { q_lama1: "Ya", flow_token: "resp_x" }; // 1 field vs 2 pertanyaan
+    expect(flowOutOfSync(resp, qs)).toBe(true);
+    expect(parseFlowAnswers(resp, qs)).toEqual([]);
+  });
+
+  it("flow tidak sinkron & urutan tertukar → dibatalkan (jangan salah pasang)", () => {
+    // Pertanyaan sekarang: [boolean, rating 1-10]. Flow lama mengirim urutan terbalik
+    // (rating dulu, baru boolean) → nilai "7" tak masuk akal untuk boolean → batal.
+    const qs = [q("baru1", "boolean"), q("baru2", "rating", { min: 1, max: 10 })];
+    const resp = { q_lama1: "7", q_lama2: "Ya", flow_token: "resp_x" };
+    expect(flowOutOfSync(resp, qs)).toBe(true);
+    expect(parseFlowAnswers(resp, qs)).toEqual([]);
+  });
+
+  it("flow sinkron → flowOutOfSync false, tidak memakai jalur cadangan", () => {
+    const qs = [q("a", "boolean")];
+    const resp = { [fieldName("a")]: "Ya", flow_token: "resp_x" };
+    expect(flowOutOfSync(resp, qs)).toBe(false);
+    expect(parseFlowAnswers(resp, qs)).toEqual([{ questionId: "a", value: "Ya" }]);
   });
 });

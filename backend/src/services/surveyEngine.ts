@@ -3,7 +3,8 @@ import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
 import { findAutoResponse } from "./autoResponder.js";
-import { parseFlowAnswers } from "../lib/flowJson.js";
+import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
+import { logError } from "../lib/errorLog.js";
 import { validateAnswer, formatQuestion, closingText, nextStepWithBranch, type QLite } from "../lib/surveyLogic.js";
 
 // Mesin survei berbasis chat dengan tipe pertanyaan kaya:
@@ -260,7 +261,23 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
   }
   if (!surveyResponse) return;
   if (surveyResponse.completedAt) return; // sudah pernah diproses
-  const answers = parseFlowAnswers(resp as Record<string, unknown>, surveyResponse.survey.questions as QLite[]);
+  const flowResp = resp as Record<string, unknown>;
+  const questions = surveyResponse.survey.questions as QLite[];
+
+  // Flow di Meta memakai id pertanyaan lain (survei diubah / Flow dibuat dari survei lain).
+  // Tanpa peringatan ini kegagalan bersifat SENYAP: responden ditandai "selesai" tapi 0 jawaban.
+  if (flowOutOfSync(flowResp, questions)) {
+    logError(
+      "backend",
+      new Error(
+        `Flow tidak sinkron: response_json memakai nama field lain dari pertanyaan survei "${surveyResponse.survey.title}". ` +
+          `Regenerate Flow JSON dari survei ini lalu update & publish ulang Flow di Meta.`,
+      ),
+      { surveyId: surveyResponse.surveyId, responseId: surveyResponse.id },
+    );
+  }
+
+  const answers = parseFlowAnswers(flowResp, questions);
   for (const a of answers)
     await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
   await prisma.surveyResponse.update({
