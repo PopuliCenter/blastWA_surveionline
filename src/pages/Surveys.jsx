@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
+import { confirmDialog } from "../lib/confirm";
 import { PageHeader, Card, Button, Badge, Notice, Loading, Empty, useLoader, theme } from "../lib/ui";
 import { SurveyModal } from "./survey/SurveyModal";
 import { ResponsesModal } from "./survey/ResponsesModal";
@@ -28,6 +29,19 @@ export default function Surveys() {
       else await api.createSurvey(draft);
       setModal(null);
     });
+  const delSurvey = async (s) => {
+    const withResp = s.responses ? ` beserta ${s.responses} respons yang sudah masuk` : "";
+    if (
+      !(await confirmDialog({
+        title: "Hapus survei",
+        message: `Hapus survei "${s.title}"${withResp}? Tindakan ini permanen dan tidak bisa dibatalkan.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
+    )
+      return;
+    run(() => api.deleteSurvey(s.id));
+  };
 
   return (
     <div>
@@ -77,7 +91,7 @@ export default function Surveys() {
                 <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
                   Edit
                 </Button>
-                <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteSurvey(s.id))} />
+                <Button variant="danger" size="sm" icon="trash" title="Hapus survei" onClick={() => delSurvey(s)} />
               </div>
             </Card>
           ))}
