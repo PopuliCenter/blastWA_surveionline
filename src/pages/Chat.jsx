@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import { confirmDialog } from "../lib/confirm";
 import {
   PageHeader,
   Button,
@@ -51,9 +52,14 @@ export default function Chat() {
   }, [convos.setData]);
 
   const bulkDeleteConvos = async () => {
+    if (!sel.size) return;
     if (
-      !sel.size ||
-      !window.confirm(`Hapus ${sel.size} percakapan terpilih? Riwayat pesannya akan dihapus (kontak tetap ada).`)
+      !(await confirmDialog({
+        title: "Hapus percakapan",
+        message: `Hapus ${sel.size} percakapan terpilih? Riwayat pesannya akan dihapus (kontak tetap ada).`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
     )
       return;
     setBulkBusy(true);

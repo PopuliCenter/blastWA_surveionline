@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
+import { confirmDialog } from "../lib/confirm";
 import {
   PageHeader,
   Card,
@@ -61,9 +62,14 @@ export default function Broadcast() {
 
   const bulkDel = async (which) => {
     const s = which === "blasts" ? selBlast : selSeg;
+    if (!s.size) return;
     if (
-      !s.size ||
-      !window.confirm(`Hapus ${s.size} ${which === "blasts" ? "blast" : "segmen"} terpilih? Tindakan ini permanen.`)
+      !(await confirmDialog({
+        title: `Hapus ${which === "blasts" ? "blast" : "segmen"}`,
+        message: `Hapus ${s.size} ${which === "blasts" ? "blast" : "segmen"} terpilih? Tindakan ini permanen.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
     )
       return;
     setBulkBusy(true);

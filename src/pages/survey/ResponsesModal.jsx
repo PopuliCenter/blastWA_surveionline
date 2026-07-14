@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { exportResponses } from "../../lib/exportSurvey";
+import { confirmDialog } from "../../lib/confirm";
 import {
   Button,
   Badge,
@@ -24,7 +25,15 @@ export function ResponsesModal({ survey, onClose }) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [delErr, setDelErr] = useState("");
   const bulkDelete = async () => {
-    if (!sel.size || !window.confirm(`Hapus ${sel.size} responden terpilih? Jawaban mereka ikut terhapus permanen.`))
+    if (!sel.size) return;
+    if (
+      !(await confirmDialog({
+        title: "Hapus responden",
+        message: `Hapus ${sel.size} responden terpilih? Jawaban mereka ikut terhapus permanen.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
+    )
       return;
     setBulkBusy(true);
     setDelErr("");
@@ -41,9 +50,12 @@ export function ResponsesModal({ survey, onClose }) {
   const [busyId, setBusyId] = useState("");
   const deleteOne = async (r) => {
     if (
-      !window.confirm(
-        `Hapus respons dari ${r.name || r.phone}? Jawabannya terhapus permanen. (mis. tertukar setelah revisi soal)`,
-      )
+      !(await confirmDialog({
+        title: "Hapus respons",
+        message: `Hapus respons dari ${r.name || r.phone}? Jawabannya terhapus permanen. (mis. tertukar setelah revisi soal)`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
     )
       return;
     setBusyId(r.id);

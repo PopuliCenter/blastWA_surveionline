@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
 import { PageHeader, Card, Button, Notice, Loading, Empty, Icon, useLoader, useIsMobile, theme } from "../lib/ui";
+import { confirmDialog } from "../lib/confirm";
 import { blankTemplate } from "./template/constants";
 import { TemplateCard } from "./template/TemplateCard";
 import { PresetPicker } from "./template/PresetPicker";
@@ -27,7 +28,14 @@ export default function Templates() {
   };
 
   const submitToMeta = async (t) => {
-    if (!window.confirm(`Ajukan template "${t.name}" (${t.language}) ke Meta untuk direview?`)) return;
+    if (
+      !(await confirmDialog({
+        title: "Ajukan ke Meta",
+        message: `Ajukan template "${t.name}" (${t.language}) ke Meta untuk direview?`,
+        confirmText: "Ajukan",
+      }))
+    )
+      return;
     setBusyId(t.id);
     setErr("");
     setNote("");

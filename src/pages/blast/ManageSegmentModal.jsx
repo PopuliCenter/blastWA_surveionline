@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Modal, Notice, Loading, Input, Button, Badge, Empty, useLoader, theme } from "../../lib/ui";
+import { confirmDialog } from "../../lib/confirm";
 
 // Kelola anggota segmen: opt-out/opt-in, edit nama, keluarkan dari segmen, hapus kontak.
 export function ManageSegmentModal({ segment, onClose }) {
@@ -44,9 +45,11 @@ export function ManageSegmentModal({ segment, onClose }) {
     const all = data?.contacts || [];
     if (!all.length) return;
     if (
-      !window.confirm(
-        `Cek ${all.length} nomor ke WhatsApp via jalur Baileys? Butuh WhatsApp Langsung terhubung. Untuk daftar besar prosesnya berjeda (anti-banned).`,
-      )
+      !(await confirmDialog({
+        title: "Cek nomor WhatsApp",
+        message: `Cek ${all.length} nomor ke WhatsApp via jalur Baileys? Butuh WhatsApp Langsung terhubung. Untuk daftar besar prosesnya berjeda (anti-banned).`,
+        confirmText: "Cek sekarang",
+      }))
     )
       return;
     setChecking(true);
@@ -72,9 +75,11 @@ export function ManageSegmentModal({ segment, onClose }) {
     const targets = (data?.contacts || []).filter((c) => waMap[c.phone] === false && c.subscribed);
     if (!targets.length) return;
     if (
-      !window.confirm(
-        `Tandai opt-out ${targets.length} nomor yang tidak ber-WA? (tetap tersimpan, dikecualikan dari blast)`,
-      )
+      !(await confirmDialog({
+        title: "Tandai opt-out",
+        message: `Tandai opt-out ${targets.length} nomor yang tidak ber-WA? (tetap tersimpan, dikecualikan dari blast)`,
+        confirmText: "Tandai opt-out",
+      }))
     )
       return;
     setErr("");
@@ -96,16 +101,27 @@ export function ManageSegmentModal({ segment, onClose }) {
       act(() => api.updateContact(c.id, { name }));
     }
   };
-  const removeFromSeg = (c) => {
-    if (!window.confirm(`Keluarkan ${c.phone} dari segmen ini? (kontak tetap ada di sistem)`)) return;
+  const removeFromSeg = async (c) => {
+    if (
+      !(await confirmDialog({
+        title: "Keluarkan dari segmen",
+        message: `Keluarkan ${c.phone} dari segmen ini? (kontak tetap ada di sistem)`,
+        confirmText: "Keluarkan",
+        tone: "danger",
+      }))
+    )
+      return;
     setBusy(c.id);
     act(() => api.removeSegmentContact(segment.id, c.id));
   };
-  const deleteContact = (c) => {
+  const deleteContact = async (c) => {
     if (
-      !window.confirm(
-        `HAPUS kontak ${c.phone} permanen dari SEMUA segmen & riwayat? Tindakan ini tidak bisa dibatalkan.`,
-      )
+      !(await confirmDialog({
+        title: "Hapus kontak permanen",
+        message: `HAPUS kontak ${c.phone} permanen dari SEMUA segmen & riwayat? Tindakan ini tidak bisa dibatalkan.`,
+        confirmText: "Hapus permanen",
+        tone: "danger",
+      }))
     )
       return;
     setBusy(c.id);

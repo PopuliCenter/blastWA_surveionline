@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
+import { confirmDialog } from "../lib/confirm";
 import {
   PageHeader,
   Card,
@@ -44,7 +45,16 @@ export default function Contacts() {
   };
 
   const bulkDelete = async () => {
-    if (!sel.size || !window.confirm(`Hapus ${sel.size} kontak terpilih? Tindakan ini permanen.`)) return;
+    if (!sel.size) return;
+    if (
+      !(await confirmDialog({
+        title: "Hapus kontak",
+        message: `Hapus ${sel.size} kontak terpilih? Tindakan ini permanen.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
+    )
+      return;
     setBulkBusy(true);
     setActionError("");
     try {
