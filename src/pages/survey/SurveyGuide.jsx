@@ -21,13 +21,13 @@ export function SurveyGuide() {
       good: [
         "Responden mengisi seperti Google Form di dalam WhatsApp",
         "Dibagi beberapa layar dengan tombol Lanjut (tidak menumpuk)",
+        "Skip logic berlaku — soal yang dilewati disembunyikan otomatis",
         "Punya pemilih tanggal & kotak persetujuan (consent)",
-        "Sekali kirim, jawaban rapi & tervalidasi",
       ],
       bad: [
         "HANYA untuk Meta Cloud API",
         "Tipe Gambar/foto TIDAK didukung (dilewati)",
-        "Skip logic (percabangan) belum berlaku — semua soal tampil",
+        "LAYAR tidak bisa dilompati (hanya isinya yang disembunyikan)",
         "Setiap ubah pertanyaan → WAJIB publish ulang di Meta",
       ],
     },
@@ -121,10 +121,22 @@ export function SurveyGuide() {
       </GuideNote>
 
       <GuideNote tone="info">
-        <strong>Batasan Flow yang perlu diketahui.</strong> <strong>Skip logic (percabangan)</strong> baru berlaku di
-        mode <strong>Chat</strong> — di Flow semua pertanyaan tetap tampil. Tipe <strong>Gambar/foto</strong> tidak
-        didukung Flow (otomatis dilewati). Untuk layar yang isinya <em>dihitung server</em> (mis. pertanyaan lanjutan
-        yang dipersonalisasi), Meta mewajibkan <strong>Flow Endpoint</strong> terenkripsi — belum dipakai di sini.
+        <strong>Skip logic di Flow — cara kerjanya beda dari Chat.</strong> Di <strong>Chat</strong>, pertanyaan yang
+        dilewati benar-benar tidak dikirim. Di <strong>Flow</strong>, pertanyaannya{" "}
+        <strong>disembunyikan otomatis</strong> saat kondisinya terpenuhi — tapi <strong>LAYAR tidak bisa dilompati</strong>{" "}
+        (batasan Flow statis dari Meta). Jadi kalau percabangan melompat jauh atau ke &quot;Selesai&quot;, layar
+        sesudahnya <em>tetap muncul</em> dengan isi kosong.
+        <div style={{ marginTop: 5 }}>
+          <strong>Solusinya:</strong> taruh pertanyaan <strong>pemicu</strong> dan pertanyaan yang{" "}
+          <strong>dilewatinya</strong> di <strong>layar/seksi yang sama</strong> — maka penyembunyiannya terasa mulus,
+          persis seperti di Chat.
+        </div>
+      </GuideNote>
+
+      <GuideNote tone="info">
+        <strong>Batasan lain.</strong> Tipe <strong>Gambar/foto</strong> tidak didukung Flow (otomatis dilewati). Untuk
+        layar yang isinya <em>dihitung server</em> (mis. pertanyaan lanjutan yang dipersonalisasi dari database), Meta
+        mewajibkan <strong>Flow Endpoint</strong> terenkripsi — belum dipakai di sini.
       </GuideNote>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>

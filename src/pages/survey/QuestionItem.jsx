@@ -156,8 +156,18 @@ export function QuestionItem({
           <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: 11, marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>Skip logic (opsional)</div>
             <div style={{ fontSize: 11.5, color: theme.textMuted, margin: "3px 0 9px", lineHeight: 1.5 }}>
-              Berdasarkan jawaban, lompat ke pertanyaan lain atau akhiri survei. Hanya lompat <strong>maju</strong>.
-              (Hanya mode Chatbot; cek ulang bila urutan diubah.)
+              Berdasarkan jawaban, lompat ke pertanyaan lain atau akhiri survei. Hanya lompat <strong>maju</strong>. Cek
+              ulang bila urutan pertanyaan diubah.
+              {flowMode ? (
+                <>
+                  {" "}
+                  <strong style={{ color: theme.yellow }}>
+                    Di Flow, pertanyaan yang dilewati disembunyikan — tapi LAYAR tidak bisa dilompati.
+                  </strong>{" "}
+                  Agar mulus, taruh pertanyaan pemicu dan pertanyaan yang dilewatinya di{" "}
+                  <strong>layar/seksi yang sama</strong>.
+                </>
+              ) : null}
             </div>
             <div style={{ display: "grid", gap: 7 }}>
               {branchValues.map((v) => (

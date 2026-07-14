@@ -111,6 +111,72 @@ describe("multi-layar", () => {
   });
 });
 
+describe("skip logic di Flow (komponen If)", () => {
+  const ifs = (flow: any) => findByType(flow, "If");
+
+  it("boolean: 'Tidak' → lompat ke Selesai; soal sesudahnya dibungkus If", () => {
+    const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text"), q("c", "text")], flowPerScreen: 10 });
+    const wrapped = ifs(flow);
+    expect(wrapped).toHaveLength(2); // b & c bisa dilewati
+    expect(wrapped[0].condition).toBe("${form.q_a} != 'Tidak'");
+    // pemicu sendiri tidak dibungkus
+    expect(findByType(wrapped[0].then, "RadioButtonsGroup")).toHaveLength(0);
+  });
+
+  it("choice: kondisi memakai INDEKS pilihan, bukan teks jawaban", () => {
+    // branches menyimpan teks "Tidak tahu" → di Flow field-nya id "1"
+    const q0 = q("a", "choice", { choices: ["Tahu", "Tidak tahu"], branches: [{ value: "Tidak tahu", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text")], flowPerScreen: 10 });
+    expect(ifs(flow)[0].condition).toBe("${form.q_a} != '1'");
+  });
+
+  it("goto indeks: hanya soal DI ANTARA yang dilewati, soal target tetap tampil", () => {
+    // a(0) jika "Ya" → lompat ke indeks 3 (soal d). Berarti b(1) & c(2) dilewati, d(3) tidak.
+    const q0 = q("a", "boolean", { branches: [{ value: "Ya", goto: 3 }] });
+    const flow: any = buildSurveyFlow({
+      questions: [q0, q("b", "text"), q("c", "text"), q("d", "text")],
+      flowPerScreen: 10,
+    });
+    const wrapped = ifs(flow);
+    expect(wrapped).toHaveLength(2); // hanya b & c
+    expect(wrapped.every((w: any) => w.condition === "${form.q_a} != 'Ya'")).toBe(true);
+    // d tidak dibungkus → TextArea-nya ada di luar If
+    const dField = findByType(flow, "TextArea").map((t: any) => t.name);
+    expect(dField).toContain(fieldName("d"));
+  });
+
+  it("pemicu di layar sebelumnya → kondisi memakai ${data.…}, bukan ${form.…}", () => {
+    const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text"), q("c", "text")], flowPerScreen: 1 });
+    // layar 1 = a, layar 2 = b, layar 3 = c
+    expect(ifs(flow.screens[1])[0].condition).toBe("${data.q_a} != 'Tidak'");
+    expect(ifs(flow.screens[2])[0].condition).toBe("${data.q_a} != 'Tidak'");
+    // field pemicu memang dideklarasikan di data layar tsb (kalau tidak, kondisi invalid)
+    expect(flow.screens[1].data.q_a).toBeDefined();
+  });
+
+  it("indeks goto mengacu daftar LENGKAP (tipe image ikut dihitung walau dilewati Flow)", () => {
+    // a(0) jika "Ya" → goto 2. img(1) tak didukung Flow. b(2) adalah TARGET → harus tampil.
+    const q0 = q("a", "boolean", { branches: [{ value: "Ya", goto: 2 }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q("img", "image"), q("b", "text")], flowPerScreen: 10 });
+    expect(ifs(flow)).toHaveLength(0); // tak ada yang dilewati di antara a dan target
+  });
+
+  it("dua pemicu melewati soal yang sama → kondisi digabung dengan &&", () => {
+    const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const q1 = q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q1, q("c", "text")], flowPerScreen: 10 });
+    const cWrap = ifs(flow).find((w: any) => findByType(w.then, "TextArea").length);
+    expect(cWrap.condition).toBe("${form.q_a} != 'Tidak' && ${form.q_b} != 'Tidak'");
+  });
+
+  it("tanpa percabangan → tidak ada If sama sekali", () => {
+    const flow: any = buildSurveyFlow({ questions: [q("a", "text"), q("b", "text")] });
+    expect(ifs(flow)).toHaveLength(0);
+  });
+});
+
 describe("tipe baru: date & consent", () => {
   it("date → DatePicker, consent → OptIn", () => {
     const flow: any = buildSurveyFlow({ questions: [q("d", "date"), q("c", "consent")] });

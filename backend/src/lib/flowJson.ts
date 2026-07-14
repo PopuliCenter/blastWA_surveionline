@@ -75,6 +75,62 @@ function screenId(i: number): string {
   return i === 0 ? "SURVEY" : `SURVEY_${i + 1}`; // layar pertama wajib "SURVEY" (dipakai sendFlow)
 }
 
+// ===== Skip logic di Flow (komponen If — dievaluasi di sisi klien, tanpa Flow Endpoint) =====
+
+type Branch = { value: string; goto: string | number };
+
+function branchesOf(q: FlowQuestion): Branch[] {
+  const b = q.options?.branches;
+  return Array.isArray(b) ? b : [];
+}
+
+// Nilai FIELD di Flow untuk satu nilai percabangan.
+// PENTING: aturan branches menyimpan TEKS jawaban, tapi field Flow mengirim ID:
+//   choice  → id = indeks pilihan ("0","1",…)  ·  boolean → id = "Ya"/"Tidak"
+// Tanpa terjemahan ini kondisi tidak akan pernah cocok.
+function flowBranchValue(q: FlowQuestion, value: string): string | null {
+  const v = String(value).trim();
+  if (q.type === "boolean") return v === "Ya" || v === "Tidak" ? v : null;
+  if (q.type === "choice") {
+    const idx = choiceList(q).indexOf(v);
+    return idx >= 0 ? String(idx) : null;
+  }
+  return null; // hanya choice & boolean yang bisa dicabangkan
+}
+
+// Apakah percabangan pada pertanyaan indeks `i` (nilai b) MELEWATI pertanyaan indeks `j`?
+// goto "end" → semua sesudah i dilewati. goto = G → yang dilewati adalah i < j < G.
+// Indeks mengacu ke daftar pertanyaan LENGKAP (sama seperti mesin chat), bukan hasil filter.
+function branchSkips(i: number, b: Branch, j: number): boolean {
+  if (j <= i) return false;
+  if (b.goto === "end" || b.goto === -1) return true;
+  const g = Number(b.goto);
+  return Number.isInteger(g) && j < g;
+}
+
+// Kondisi "tampilkan pertanyaan ini" = AND dari semua `!=` (De Morgan atas OR dari `==`).
+// Memakai != menghindari negasi bertingkat, jadi ekspresinya sederhana & aman.
+// refOf: bagaimana merujuk field pertanyaan pemicu (${form.x} bila selayar, ${data.x} bila layar sebelumnya).
+function visibilityCondition(
+  target: { q: FlowQuestion; index: number },
+  all: { q: FlowQuestion; index: number }[],
+  refOf: (qid: string) => string,
+): string | null {
+  const terms: string[] = [];
+  for (const src of all) {
+    if (src.index >= target.index) continue;
+    if (!flowSupported(src.q)) continue;
+    for (const b of branchesOf(src.q)) {
+      if (!branchSkips(src.index, b, target.index)) continue;
+      const val = flowBranchValue(src.q, b.value);
+      if (val === null) continue; // nilai tak bisa dipetakan → abaikan (jangan tebak)
+      terms.push(`${refOf(src.q.id)} != '${val.replace(/'/g, "")}'`);
+    }
+  }
+  if (!terms.length) return null;
+  return [...new Set(terms)].join(" && ");
+}
+
 // Komponen input untuk satu pertanyaan.
 function questionChildren(q: FlowQuestion, number: number): any[] {
   const name = fieldName(q.id);
@@ -139,12 +195,21 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
   const last = screensQs.length - 1;
   const multi = screensQs.length > 1;
 
+  // Indeks ASLI tiap pertanyaan (daftar lengkap, termasuk tipe yang tak didukung Flow) —
+  // aturan `goto` percabangan memakai indeks ini, sama seperti mesin chat.
+  const all = survey.questions.map((q, index) => ({ q, index }));
+  const indexOf = new Map(all.map((x) => [x.q.id, x.index]));
+
   // Nomor urut global tiap pertanyaan (lintas layar).
   let counter = 0;
   const numbers = screensQs.map((qs) => qs.map(() => ++counter));
 
   const screens = screensQs.map((qs, i) => {
     const children: any[] = [];
+    // Field pemicu yang ada di layar ini dirujuk ${form.x}; dari layar sebelumnya ${data.x}.
+    const onThisScreen = new Set(qs.map((q) => q.id));
+    const refOf = (qid: string) =>
+      onThisScreen.has(qid) ? "${form." + fieldName(qid) + "}" : "${data." + fieldName(qid) + "}";
 
     const secTitle = String(qs[0]?.options?.screenTitle ?? "").trim();
     if (secTitle) children.push({ type: "TextHeading", text: secTitle.slice(0, 80) });
@@ -158,7 +223,14 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
         "on-click-action": { name: "open_url", url: String(survey.privacyUrl) },
       });
 
-    qs.forEach((q, j) => children.push(...questionChildren(q, numbers[i]![j]!)));
+    qs.forEach((q, j) => {
+      const kids = questionChildren(q, numbers[i]![j]!);
+      // Skip logic: bila ada percabangan yang melewati pertanyaan ini, bungkus dengan If
+      // sehingga komponennya hanya dirender saat kondisinya benar (dan tak ikut divalidasi).
+      const cond = visibilityCondition({ q, index: indexOf.get(q.id) ?? 0 }, all, refOf);
+      if (cond) children.push({ type: "If", condition: cond, then: kids });
+      else children.push(...kids);
+    });
 
     // Jawaban layar-layar sebelumnya: dideklarasikan di `data` & diteruskan ke payload.
     const prev = screensQs.slice(0, i).flat();
