@@ -71,8 +71,23 @@ export function splitScreens(questions: FlowQuestion[], perScreen?: number | nul
   return screens;
 }
 
+// Sufiks huruf bijektif: 1→A, 2→B, … 26→Z, 27→AA. TANPA angka.
+function alphaSuffix(n: number): string {
+  let s = "";
+  let x = n;
+  while (x > 0) {
+    const r = (x - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+}
+
+// ID layar. Meta mewajibkan id HANYA huruf & underscore — ANGKA DITOLAK
+// ("Property 'id' should only consist of alphabets and underscores"), jadi jangan pakai SURVEY_2.
+// Layar pertama wajib tetap "SURVEY" (dirujuk provider.sendFlow → flow_action_payload).
 function screenId(i: number): string {
-  return i === 0 ? "SURVEY" : `SURVEY_${i + 1}`; // layar pertama wajib "SURVEY" (dipakai sendFlow)
+  return i === 0 ? "SURVEY" : `SURVEY_${alphaSuffix(i + 1)}`; // SURVEY, SURVEY_B, SURVEY_C, …
 }
 
 // ===== Skip logic di Flow (komponen If — dievaluasi di sisi klien, tanpa Flow Endpoint) =====

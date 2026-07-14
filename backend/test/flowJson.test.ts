@@ -79,8 +79,28 @@ describe("multi-layar", () => {
 
     const footer = (s: any) => findByType(s, "Footer")[0]["on-click-action"];
     expect(footer(flow.screens[0]).name).toBe("navigate");
-    expect(footer(flow.screens[0]).next).toEqual({ type: "screen", name: "SURVEY_2" });
+    expect(footer(flow.screens[0]).next).toEqual({ type: "screen", name: "SURVEY_B" });
     expect(footer(flow.screens[2]).name).toBe("complete");
+  });
+
+  // Meta menolak id layar yang mengandung ANGKA:
+  // "Property 'id' should only consist of alphabets and underscores."
+  it("id layar HANYA huruf & underscore (tanpa angka) dan target navigate cocok", () => {
+    const flow: any = buildSurveyFlow({ title: "S", questions: many(60), flowPerScreen: 2 }); // 30 layar
+    const ids = flow.screens.map((s: any) => s.id);
+    expect(ids.every((id: string) => /^[A-Za-z_]+$/.test(id))).toBe(true);
+    expect(ids.slice(0, 4)).toEqual(["SURVEY", "SURVEY_B", "SURVEY_C", "SURVEY_D"]);
+    expect(new Set(ids).size).toBe(ids.length); // tidak ada id kembar
+
+    // setiap navigate menunjuk ke id layar yang benar-benar ada
+    const idSet = new Set(ids);
+    flow.screens.forEach((s: any, i: number) => {
+      const act = findByType(s, "Footer")[0]["on-click-action"];
+      if (act.name === "navigate") {
+        expect(idSet.has(act.next.name)).toBe(true);
+        expect(act.next.name).toBe(ids[i + 1]);
+      }
+    });
   });
 
   it("payload complete memuat SEMUA jawaban lintas layar (data diteruskan)", () => {
@@ -146,7 +166,8 @@ describe("skip logic di Flow (komponen If)", () => {
     expect(dField).toContain(fieldName("d"));
   });
 
-  it("pemicu di layar sebelumnya → kondisi memakai ${data.…}, bukan ${form.…}", () => {
+  // eslint-disable-next-line no-template-curly-in-string
+  it("pemicu di layar sebelumnya → kondisi memakai data.…, bukan form.…", () => {
     const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text"), q("c", "text")], flowPerScreen: 1 });
     // layar 1 = a, layar 2 = b, layar 3 = c
