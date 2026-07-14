@@ -142,8 +142,13 @@ function visibilityCondition(
       terms.push(`${refOf(src.q.id)} != '${val.replace(/'/g, "")}'`);
     }
   }
-  if (!terms.length) return null;
-  return [...new Set(terms)].join(" && ");
+  const uniq = [...new Set(terms)];
+  if (!uniq.length) return null;
+  if (uniq.length === 1) return uniq[0]!;
+  // Grammar Flow: perbandingan TIDAK boleh langsung disambung dengan && —
+  // "Wrong positioning of operator '&&'. It cannot be used in concatenation with '!='".
+  // Jadi tiap perbandingan wajib dikurung saat digabung.
+  return uniq.map((t) => `(${t})`).join(" && ");
 }
 
 // Komponen input untuk satu pertanyaan.

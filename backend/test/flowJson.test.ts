@@ -184,12 +184,32 @@ describe("skip logic di Flow (komponen If)", () => {
     expect(ifs(flow)).toHaveLength(0); // tak ada yang dilewati di antara a dan target
   });
 
-  it("dua pemicu melewati soal yang sama → kondisi digabung dengan &&", () => {
+  // Grammar Flow menolak perbandingan yang langsung disambung && tanpa kurung:
+  // "Wrong positioning of operator '&&'. It cannot be used in concatenation with '!='"
+  it("dua pemicu → tiap perbandingan DIKURUNG saat digabung dengan &&", () => {
     const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const q1 = q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const flow: any = buildSurveyFlow({ questions: [q0, q1, q("c", "text")], flowPerScreen: 10 });
     const cWrap = ifs(flow).find((w: any) => findByType(w.then, "TextArea").length);
-    expect(cWrap.condition).toBe("${form.q_a} != 'Tidak' && ${form.q_b} != 'Tidak'");
+    expect(cWrap.condition).toBe("(${form.q_a} != 'Tidak') && (${form.q_b} != 'Tidak')");
+  });
+
+  it("kondisi tunggal TIDAK dikurung (layar 1 yang diterima Meta)", () => {
+    const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text")], flowPerScreen: 10 });
+    expect(ifs(flow)[0].condition).toBe("${form.q_a} != 'Tidak'");
+  });
+
+  it("setiap kondisi ber-&& selalu punya perbandingan yang dikurung", () => {
+    const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const q1 = q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const q2 = q("c", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
+    const flow: any = buildSurveyFlow({ questions: [q0, q1, q2, q("d", "text")], flowPerScreen: 2 });
+    for (const w of ifs(flow)) {
+      if (!w.condition.includes("&&")) continue;
+      // tiap bagian yang dipisah && harus berbentuk (…)
+      for (const part of w.condition.split("&&")) expect(part.trim()).toMatch(/^\(.*\)$/);
+    }
   });
 
   it("tanpa percabangan → tidak ada If sama sekali", () => {
