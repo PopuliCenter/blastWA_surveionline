@@ -184,31 +184,43 @@ describe("skip logic di Flow (komponen If)", () => {
     expect(ifs(flow)).toHaveLength(0); // tak ada yang dilewati di antara a dan target
   });
 
-  // Grammar Flow menolak perbandingan yang langsung disambung && tanpa kurung:
-  // "Wrong positioning of operator '&&'. It cannot be used in concatenation with '!='"
-  it("dua pemicu → tiap perbandingan DIKURUNG saat digabung dengan &&", () => {
+  // Grammar kondisi Flow menolak dua perbandingan yang digabung operator logika:
+  // "Type mismatch in an equality operation between '(${data.x} != Tidak)' and 'Tidak'".
+  // Solusinya If BERSARANG, bukan "&&".
+  it("dua pemicu → If BERSARANG (bukan &&)", () => {
     const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const q1 = q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const flow: any = buildSurveyFlow({ questions: [q0, q1, q("c", "text")], flowPerScreen: 10 });
-    const cWrap = ifs(flow).find((w: any) => findByType(w.then, "TextArea").length);
-    expect(cWrap.condition).toBe("(${form.q_a} != 'Tidak') && (${form.q_b} != 'Tidak')");
+
+    // c disyarati a & b → If(a) { If(b) { c } }
+    const outer = ifs(flow).find(
+      (w: any) => w.condition === "${form.q_a} != 'Tidak'" && findByType(w.then, "TextArea").length,
+    );
+    expect(outer).toBeDefined();
+    const inner = outer.then[0];
+    expect(inner.type).toBe("If");
+    expect(inner.condition).toBe("${form.q_b} != 'Tidak'");
+    expect(findByType(inner.then, "TextArea")[0].name).toBe(fieldName("c"));
   });
 
-  it("kondisi tunggal TIDAK dikurung (layar 1 yang diterima Meta)", () => {
+  it("syarat tunggal → satu If, kondisinya polos tanpa kurung", () => {
     const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const flow: any = buildSurveyFlow({ questions: [q0, q("b", "text")], flowPerScreen: 10 });
     expect(ifs(flow)[0].condition).toBe("${form.q_a} != 'Tidak'");
   });
 
-  it("setiap kondisi ber-&& selalu punya perbandingan yang dikurung", () => {
+  it("TIDAK ada operator && / || di kondisi mana pun (ditolak grammar Flow)", () => {
     const q0 = q("a", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const q1 = q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const q2 = q("c", "boolean", { branches: [{ value: "Tidak", goto: "end" }] });
     const flow: any = buildSurveyFlow({ questions: [q0, q1, q2, q("d", "text")], flowPerScreen: 2 });
-    for (const w of ifs(flow)) {
-      if (!w.condition.includes("&&")) continue;
-      // tiap bagian yang dipisah && harus berbentuk (…)
-      for (const part of w.condition.split("&&")) expect(part.trim()).toMatch(/^\(.*\)$/);
+    const conds = ifs(flow).map((w: any) => w.condition);
+    expect(conds.length).toBeGreaterThan(0);
+    for (const c of conds) {
+      expect(c).not.toContain("&&");
+      expect(c).not.toContain("||");
+      // tepat satu perbandingan per kondisi
+      expect(c.match(/!=/g)).toHaveLength(1);
     }
   });
 

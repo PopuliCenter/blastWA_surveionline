@@ -123,14 +123,22 @@ function branchSkips(i: number, b: Branch, j: number): boolean {
   return Number.isInteger(g) && j < g;
 }
 
-// Kondisi "tampilkan pertanyaan ini" = AND dari semua `!=` (De Morgan atas OR dari `==`).
-// Memakai != menghindari negasi bertingkat, jadi ekspresinya sederhana & aman.
-// refOf: bagaimana merujuk field pertanyaan pemicu (${form.x} bila selayar, ${data.x} bila layar sebelumnya).
-function visibilityCondition(
+// Syarat "tampilkan pertanyaan ini" — SATU kondisi per syarat (tiap syarat = satu `!=`),
+// yaitu negasi dari tiap percabangan yang melewati pertanyaan ini
+// (De Morgan: !(A==x || B==y) ≡ A!=x && B!=y).
+//
+// PENTING: syarat-syarat ini TIDAK boleh disambung "&&". Grammar kondisi Flow menolak dua
+// perbandingan yang digabung operator logika — Meta melaporkan:
+//   "Type mismatch in an equality operation between '(${data.x} != Tidak)' and 'Tidak'"
+// (operand kiri `!=` kedua terbaca sebagai SELURUH ekspresi sebelumnya; kurung tidak menolong).
+// Karena itu pemanggil merangkainya jadi `If` BERSARANG: If(A){ If(B){ … } } ≡ A && B.
+//
+// refOf: cara merujuk field pemicu (${form.x} bila selayar, ${data.x} bila layar sebelumnya).
+function visibilityConditions(
   target: { q: FlowQuestion; index: number },
   all: { q: FlowQuestion; index: number }[],
   refOf: (qid: string) => string,
-): string | null {
+): string[] {
   const terms: string[] = [];
   for (const src of all) {
     if (src.index >= target.index) continue;
@@ -142,13 +150,15 @@ function visibilityCondition(
       terms.push(`${refOf(src.q.id)} != '${val.replace(/'/g, "")}'`);
     }
   }
-  const uniq = [...new Set(terms)];
-  if (!uniq.length) return null;
-  if (uniq.length === 1) return uniq[0]!;
-  // Grammar Flow: perbandingan TIDAK boleh langsung disambung dengan && —
-  // "Wrong positioning of operator '&&'. It cannot be used in concatenation with '!='".
-  // Jadi tiap perbandingan wajib dikurung saat digabung.
-  return uniq.map((t) => `(${t})`).join(" && ");
+  return [...new Set(terms)];
+}
+
+// Bungkus komponen dengan If BERSARANG — satu tingkat per syarat (terluar = syarat pertama).
+// Setara "A && B" tanpa memakai operator && yang ditolak grammar Flow.
+function wrapConditions(kids: any[], conditions: string[]): any[] {
+  let node = kids;
+  for (let i = conditions.length - 1; i >= 0; i--) node = [{ type: "If", condition: conditions[i]!, then: node }];
+  return node;
 }
 
 // Komponen input untuk satu pertanyaan.
@@ -245,11 +255,10 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
 
     qs.forEach((q, j) => {
       const kids = questionChildren(q, numbers[i]![j]!);
-      // Skip logic: bila ada percabangan yang melewati pertanyaan ini, bungkus dengan If
-      // sehingga komponennya hanya dirender saat kondisinya benar (dan tak ikut divalidasi).
-      const cond = visibilityCondition({ q, index: indexOf.get(q.id) ?? 0 }, all, refOf);
-      if (cond) children.push({ type: "If", condition: cond, then: kids });
-      else children.push(...kids);
+      // Skip logic: tiap percabangan yang melewati pertanyaan ini jadi satu tingkat If.
+      // Komponennya hanya dirender (dan divalidasi) saat semua syaratnya terpenuhi.
+      const conds = visibilityConditions({ q, index: indexOf.get(q.id) ?? 0 }, all, refOf);
+      children.push(...wrapConditions(kids, conds));
     });
 
     // Jawaban layar-layar sebelumnya: dideklarasikan di `data` & diteruskan ke payload.
