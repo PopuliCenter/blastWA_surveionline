@@ -6,11 +6,13 @@ import { blankTemplate } from "./template/constants";
 import { TemplateCard } from "./template/TemplateCard";
 import { PresetPicker } from "./template/PresetPicker";
 import { TemplateEditor } from "./template/TemplateEditor";
+import { TemplateGuide } from "./template/TemplateGuide";
 
 export default function Templates() {
   const tpls = useLoader(useCallback(() => api.listTemplates(), []));
   const [editing, setEditing] = useState(null); // objek template yg diedit/dibuat
   const [presetOpen, setPresetOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
   const [busyId, setBusyId] = useState("");
@@ -82,6 +84,9 @@ export default function Templates() {
         title="Template Pesan"
         subtitle="Buat & kelola template WhatsApp untuk broadcast. Template wajib disetujui Meta sebelum dipakai."
         actions={[
+          <Button key="g" variant="secondary" icon="doc" onClick={() => setGuideOpen((v) => !v)}>
+            {guideOpen ? "Tutup Panduan" : "Panduan"}
+          </Button>,
           <Button key="s" variant="secondary" icon="refresh" onClick={syncStatus} disabled={syncing}>
             {syncing ? "Sinkron…" : "Sinkron status Meta"}
           </Button>,
@@ -96,6 +101,8 @@ export default function Templates() {
 
       <Notice>{err || tpls.error}</Notice>
       <Notice kind="success">{note}</Notice>
+
+      {guideOpen ? <TemplateGuide /> : null}
 
       <Card style={{ marginBottom: 16 }} pad={16}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>

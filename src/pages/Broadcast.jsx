@@ -24,6 +24,7 @@ import { BlastReportModal } from "./blast/BlastReportModal";
 import { BlastModal } from "./blast/BlastModal";
 import { CostSimulator } from "./blast/CostSimulator";
 import { SegmentModal } from "./blast/SegmentModal";
+import { BroadcastGuide } from "./blast/BroadcastGuide";
 
 export default function Broadcast() {
   const blasts = useLoader(useCallback(() => api.listBlasts(), []));
@@ -33,6 +34,7 @@ export default function Broadcast() {
   const [tab, setTab] = useState("blasts");
   const [showBlast, setShowBlast] = useState(false);
   const [showSeg, setShowSeg] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
   const [reportBlast, setReportBlast] = useState(null);
@@ -96,6 +98,9 @@ export default function Broadcast() {
         title="Broadcast"
         subtitle="Kirim pesan/survei ke segmen kontak."
         actions={[
+          <Button key="g" variant="secondary" icon="doc" onClick={() => setGuideOpen((v) => !v)}>
+            {guideOpen ? "Tutup Panduan" : "Panduan"}
+          </Button>,
           <Button
             key="r"
             variant="ghost"
@@ -117,6 +122,7 @@ export default function Broadcast() {
       />
       <Notice>{err || blasts.error || segments.error}</Notice>
       <Notice kind="success">{note}</Notice>
+      {guideOpen ? <BroadcastGuide /> : null}
       <Tabs
         active={tab}
         onChange={setTab}
