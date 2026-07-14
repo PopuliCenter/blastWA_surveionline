@@ -1,9 +1,24 @@
 // Pembuat WhatsApp Flow JSON dari definisi survei.
 // Hasilnya bisa ditempel di Meta Flow Builder untuk membuat & menerbitkan Flow.
 // Pemetaan jawaban balik (response_json) memakai aturan yang sama → lihat parseFlowAnswers.
+//
+// MULTI-LAYAR (statis, tanpa Flow Endpoint):
+// Pertanyaan dibagi ke beberapa layar — dipotong di penanda manual (options.newScreen)
+// lalu dipecah lagi tiap `flowPerScreen` pertanyaan. Antar layar memakai aksi "navigate";
+// layar terakhir memakai "complete". Data layar sebelumnya diteruskan lewat payload dan
+// dideklarasikan di `data` layar berikutnya, sehingga payload complete memuat SEMUA jawaban.
+// Layar pertama tetap ber-id "SURVEY" (dipakai provider.sendFlow → flow_action_payload).
 
 export type FlowQuestion = { id: string; text: string; type: string; required?: boolean; options?: any };
-export type FlowSurvey = { title?: string; description?: string | null; questions: FlowQuestion[] };
+export type FlowSurvey = {
+  title?: string;
+  description?: string | null;
+  questions: FlowQuestion[];
+  flowPerScreen?: number | null;
+  privacyUrl?: string | null;
+};
+
+export const DEFAULT_PER_SCREEN = 4;
 
 // Nama field di flow untuk satu pertanyaan (charset aman: huruf/angka/underscore).
 export function fieldName(qid: string): string {
@@ -26,93 +41,175 @@ function choiceList(q: FlowQuestion): string[] {
 
 // Pertanyaan yang punya kontrol input di flow (image tidak didukung di flow → dilewati).
 export function flowSupported(q: FlowQuestion): boolean {
-  return ["text", "number", "rating", "choice", "boolean", "multichoice"].includes(q.type);
+  return ["text", "number", "rating", "choice", "boolean", "multichoice", "date", "consent"].includes(q.type);
+}
+
+// Tipe data field saat diteruskan antar layar (dideklarasikan di `data` tiap layar).
+function fieldDataType(q: FlowQuestion): Record<string, unknown> {
+  if (q.type === "multichoice") return { type: "array", items: { type: "string" }, __example__: [] };
+  if (q.type === "consent") return { type: "boolean", __example__: false };
+  return { type: "string", __example__: "" };
+}
+
+// Bagi pertanyaan ke layar: potong di penanda manual (options.newScreen), lalu pecah
+// tiap `perScreen`. Selalu mengembalikan minimal 1 layar (bila ada pertanyaan).
+export function splitScreens(questions: FlowQuestion[], perScreen?: number | null): FlowQuestion[][] {
+  const n = Math.max(1, Math.min(20, Number(perScreen) || DEFAULT_PER_SCREEN));
+  const supported = questions.filter(flowSupported);
+
+  // 1) Potong di penanda seksi manual.
+  const sections: FlowQuestion[][] = [];
+  for (const q of supported) {
+    if (!sections.length || q.options?.newScreen === true) sections.push([]);
+    sections[sections.length - 1]!.push(q);
+  }
+  // 2) Pecah tiap seksi yang lebih panjang dari n.
+  const screens: FlowQuestion[][] = [];
+  for (const sec of sections) {
+    for (let i = 0; i < sec.length; i += n) screens.push(sec.slice(i, i + n));
+  }
+  return screens;
+}
+
+function screenId(i: number): string {
+  return i === 0 ? "SURVEY" : `SURVEY_${i + 1}`; // layar pertama wajib "SURVEY" (dipakai sendFlow)
+}
+
+// Komponen input untuk satu pertanyaan.
+function questionChildren(q: FlowQuestion, number: number): any[] {
+  const name = fieldName(q.id);
+  const required = q.required ?? true;
+  const out: any[] = [{ type: "TextBody", text: `${number}. ${q.text}`.slice(0, 4000) }];
+
+  if (q.type === "text") {
+    out.push({ type: "TextArea", name, label: "Jawaban", required });
+  } else if (q.type === "number") {
+    out.push({ type: "TextInput", name, label: "Jawaban (angka)", "input-type": "number", required });
+  } else if (q.type === "date") {
+    out.push({ type: "DatePicker", name, label: "Pilih tanggal", required });
+  } else if (q.type === "consent") {
+    out.push({ type: "OptIn", name, label: "Saya setuju".slice(0, 120), required });
+  } else if (q.type === "rating") {
+    const mn = String(q.options?.minLabel ?? "").trim();
+    const mx = String(q.options?.maxLabel ?? "").trim();
+    const vals = ratingValues(q);
+    if (mn || mx) {
+      const lo = vals[0],
+        hi = vals[vals.length - 1];
+      out.push({ type: "TextCaption", text: `${lo} = ${mn || "…"} · ${hi} = ${mx || "…"}`.slice(0, 4000) });
+    }
+    out.push({
+      type: "RadioButtonsGroup",
+      name,
+      label: "Pilih nilai",
+      "data-source": vals.map((n) => ({ id: String(n), title: String(n) })),
+      required,
+    });
+  } else if (q.type === "multichoice") {
+    const ds = choiceList(q).map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
+    out.push({
+      type: "CheckboxGroup",
+      name,
+      label: "Pilih (boleh lebih dari satu)",
+      "data-source": ds,
+      required,
+      ...(required ? { "min-selected-items": 1 } : {}),
+    });
+  } else if (q.type === "boolean") {
+    out.push({
+      type: "RadioButtonsGroup",
+      name,
+      label: "Pilih",
+      "data-source": [
+        { id: "Ya", title: "Ya" },
+        { id: "Tidak", title: "Tidak" },
+      ],
+      required,
+    });
+  } else if (q.type === "choice") {
+    const opts = choiceList(q);
+    const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
+    out.push({ type: opts.length > 3 ? "Dropdown" : "RadioButtonsGroup", name, label: "Pilih", "data-source": ds, required });
+  }
+  return out;
 }
 
 export function buildSurveyFlow(survey: FlowSurvey): object {
-  const children: any[] = [];
-  if (survey.description) children.push({ type: "TextBody", text: String(survey.description).slice(0, 4000) });
+  const screensQs = splitScreens(survey.questions, survey.flowPerScreen);
+  const last = screensQs.length - 1;
+  const multi = screensQs.length > 1;
 
-  const payload: Record<string, string> = {};
-  const supported = survey.questions.filter(flowSupported);
+  // Nomor urut global tiap pertanyaan (lintas layar).
+  let counter = 0;
+  const numbers = screensQs.map((qs) => qs.map(() => ++counter));
 
-  supported.forEach((q, i) => {
-    const name = fieldName(q.id);
-    const required = q.required ?? true;
-    children.push({ type: "TextBody", text: `${i + 1}. ${q.text}`.slice(0, 4000) });
+  const screens = screensQs.map((qs, i) => {
+    const children: any[] = [];
 
-    if (q.type === "text") {
-      children.push({ type: "TextArea", name, label: "Jawaban", required });
-    } else if (q.type === "number") {
-      children.push({ type: "TextInput", name, label: "Jawaban (angka)", "input-type": "number", required });
-    } else if (q.type === "rating") {
-      // Legend label jangkar (mis. "1 = Sangat tidak puas · 5 = Sangat puas").
-      const mn = String(q.options?.minLabel ?? "").trim();
-      const mx = String(q.options?.maxLabel ?? "").trim();
-      const vals = ratingValues(q);
-      if (mn || mx) {
-        const lo = vals[0],
-          hi = vals[vals.length - 1];
-        children.push({ type: "TextCaption", text: `${lo} = ${mn || "…"} · ${hi} = ${mx || "…"}`.slice(0, 4000) });
-      }
-      const ds = vals.map((n) => ({ id: String(n), title: String(n) }));
-      children.push({ type: "RadioButtonsGroup", name, label: "Pilih nilai", "data-source": ds, required });
-    } else if (q.type === "multichoice") {
-      const opts = choiceList(q);
-      const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
+    const secTitle = String(qs[0]?.options?.screenTitle ?? "").trim();
+    if (secTitle) children.push({ type: "TextHeading", text: secTitle.slice(0, 80) });
+    if (multi) children.push({ type: "TextCaption", text: `Bagian ${i + 1} dari ${screensQs.length}` });
+    if (i === 0 && survey.description)
+      children.push({ type: "TextBody", text: String(survey.description).slice(0, 4000) });
+    if (i === 0 && survey.privacyUrl)
       children.push({
-        type: "CheckboxGroup",
-        name,
-        label: "Pilih (boleh lebih dari satu)",
-        "data-source": ds,
-        required,
-        ...(required ? { "min-selected-items": 1 } : {}),
+        type: "EmbeddedLink",
+        text: "Kebijakan Privasi",
+        "on-click-action": { name: "open_url", url: String(survey.privacyUrl) },
       });
-    } else if (q.type === "boolean") {
-      children.push({
-        type: "RadioButtonsGroup",
-        name,
-        label: "Pilih",
-        "data-source": [
-          { id: "Ya", title: "Ya" },
-          { id: "Tidak", title: "Tidak" },
-        ],
-        required,
-      });
-    } else if (q.type === "choice") {
-      const opts = choiceList(q);
-      const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
-      // ≤ 3 pilihan → radio; lebih → dropdown
-      const type = opts.length > 3 ? "Dropdown" : "RadioButtonsGroup";
-      children.push({ type, name, label: "Pilih", "data-source": ds, required });
-    }
-    payload[name] = "${form." + name + "}";
+
+    qs.forEach((q, j) => children.push(...questionChildren(q, numbers[i]![j]!)));
+
+    // Jawaban layar-layar sebelumnya: dideklarasikan di `data` & diteruskan ke payload.
+    const prev = screensQs.slice(0, i).flat();
+    const data: Record<string, unknown> = {};
+    for (const q of prev) data[fieldName(q.id)] = fieldDataType(q);
+
+    const payload: Record<string, string> = {};
+    for (const q of prev) payload[fieldName(q.id)] = "${data." + fieldName(q.id) + "}";
+    for (const q of qs) payload[fieldName(q.id)] = "${form." + fieldName(q.id) + "}";
+
+    children.push({
+      type: "Footer",
+      label: i === last ? "Kirim Jawaban" : "Lanjut",
+      "on-click-action":
+        i === last
+          ? { name: "complete", payload }
+          : { name: "navigate", next: { type: "screen", name: screenId(i + 1) }, payload },
+    });
+
+    return {
+      id: screenId(i),
+      title: (secTitle || survey.title || "Survei").slice(0, 30),
+      ...(i === last ? { terminal: true, success: true } : {}),
+      data,
+      layout: { type: "SingleColumnLayout", children: [{ type: "Form", name: "form", children }] },
+    };
   });
 
-  children.push({
-    type: "Footer",
-    label: "Kirim Jawaban",
-    "on-click-action": { name: "complete", payload },
-  });
-
-  return {
-    version: "7.0",
-    screens: [
-      {
-        id: "SURVEY",
-        title: (survey.title || "Survei").slice(0, 30),
-        terminal: true,
-        success: true,
-        data: {},
-        layout: { type: "SingleColumnLayout", children: [{ type: "Form", name: "form", children }] },
-      },
-    ],
-  };
+  return { version: "7.0", screens };
 }
+
+// ===== Pemetaan response_json balik ke jawaban =====
 
 // Ubah satu nilai mentah dari response_json menjadi jawaban (id pilihan → teks pilihan).
 function toAnswer(q: FlowQuestion, raw: unknown): { questionId: string; value: string } | null {
   if (raw === undefined || raw === null || raw === "") return null;
+
+  // OptIn mengembalikan boolean.
+  if (q.type === "consent") {
+    const yes = raw === true || String(raw).toLowerCase() === "true";
+    return { questionId: q.id, value: yes ? "Ya" : "Tidak" };
+  }
+  // DatePicker mengembalikan timestamp milidetik (string) → tanggal YYYY-MM-DD.
+  if (q.type === "date") {
+    const ms = Number(String(raw).trim());
+    if (Number.isFinite(ms) && ms > 0) {
+      const d = new Date(ms);
+      if (!Number.isNaN(d.getTime())) return { questionId: q.id, value: d.toISOString().slice(0, 10) };
+    }
+    return { questionId: q.id, value: String(raw) };
+  }
   // CheckboxGroup mengembalikan array id → petakan tiap id ke teks pilihan, gabung ", ".
   if (q.type === "multichoice") {
     const opts = choiceList(q);
@@ -189,6 +286,12 @@ function plausible(q: FlowQuestion, raw: unknown): boolean {
   switch (q.type) {
     case "boolean":
       return s === "Ya" || s === "Tidak";
+    case "consent":
+      return raw === true || raw === false || s === "true" || s === "false";
+    case "date": {
+      const ms = Number(s);
+      return Number.isFinite(ms) && ms > 0;
+    }
     case "rating": {
       const vals = ratingValues(q);
       const n = Number(s);

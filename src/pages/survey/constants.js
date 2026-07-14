@@ -5,6 +5,8 @@ export const TYPE_LABEL = {
   choice: "Pilihan",
   multichoice: "Pilihan (>1)",
   boolean: "Ya/Tidak",
+  date: "Tanggal",
+  consent: "Persetujuan",
   image: "Gambar",
 };
 export const QTYPE_OPTIONS = [
@@ -14,6 +16,8 @@ export const QTYPE_OPTIONS = [
   { value: "choice", label: "Pilihan ganda (1 jawaban)" },
   { value: "multichoice", label: "Pilihan ganda (boleh >1)" },
   { value: "boolean", label: "Ya / Tidak" },
+  { value: "date", label: "Tanggal (pemilih tanggal di Flow)" },
+  { value: "consent", label: "Persetujuan / informed consent" },
   { value: "image", label: "Gambar / foto" },
 ];
 // Tipe yang memakai daftar pilihan (choices).

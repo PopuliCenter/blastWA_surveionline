@@ -22,6 +22,8 @@ export function formatQuestion(q, idx, total) {
       choices.map((c, i) => `${i + 1}. ${c}`).join("\n") +
       "\n\n_Boleh >1 — balas nomornya dipisah koma (mis. 1,3)_";
   else if (q.type === "boolean") text += "\n\n_Balas: Ya / Tidak_";
+  else if (q.type === "consent") text += "\n\n_Balas: Ya (setuju) / Tidak_";
+  else if (q.type === "date") text += "\n\n_Balas tanggal, format DD-MM-YYYY (mis. 17-08-2026)_";
   else if (q.type === "number") text += "\n\n_Balas dengan angka_";
   else if (q.type === "image") text += "\n\n_Kirim foto sebagai simulasi (ketik nama file)_";
   if (!q.required) text += "\n\n_Opsional — ketik *lewati* untuk melewati_";
@@ -80,10 +82,27 @@ export function validateAnswer(q, answer) {
       }
       return { ok: true, saved: picked.join(", ") };
     }
+    case "consent":
     case "boolean": {
-      if (/^(ya|yes|y|1|iya)$/i.test(a)) return { ok: true, saved: "Ya" };
+      if (/^(ya|yes|y|1|iya|setuju)$/i.test(a)) return { ok: true, saved: "Ya" };
       if (/^(tidak|no|n|0|tdk|tdak)$/i.test(a)) return { ok: true, saved: "Tidak" };
       return { ok: false, err: 'Balas dengan "Ya" atau "Tidak".' };
+    }
+    case "date": {
+      // Terima DD-MM-YYYY / DD/MM/YYYY / YYYY-MM-DD → simpan seragam YYYY-MM-DD.
+      const iso = a.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      const dmy = a.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      const p = iso
+        ? [+iso[1], +iso[2], +iso[3]]
+        : dmy
+          ? [+dmy[3], +dmy[2], +dmy[1]]
+          : null;
+      if (p) {
+        const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+        if (dt.getUTCFullYear() === p[0] && dt.getUTCMonth() === p[1] - 1 && dt.getUTCDate() === p[2])
+          return { ok: true, saved: dt.toISOString().slice(0, 10) };
+      }
+      return { ok: false, err: "Format tanggal salah. Contoh: 17-08-2026." };
     }
     case "image":
       if (!a) return { ok: false, err: "Ketik nama file gambar sebagai simulasi." };
@@ -116,7 +135,7 @@ export function nextStep(q, step, savedValue, total) {
 
 export function quickReplies(q) {
   if (!q) return [];
-  if (q.type === "boolean") return ["Ya", "Tidak"];
+  if (q.type === "boolean" || q.type === "consent") return ["Ya", "Tidak"];
   if (q.type === "choice") return (q.options?.choices || []).map((_, i) => String(i + 1));
   return [];
 }
@@ -129,7 +148,8 @@ export function inputPlaceholder(q) {
     return `Angka ${min}–${max}…`;
   }
   if (q.type === "number") return "Ketik angka…";
-  if (q.type === "boolean") return "Ya / Tidak…";
+  if (q.type === "boolean" || q.type === "consent") return "Ya / Tidak…";
+  if (q.type === "date") return "DD-MM-YYYY, mis. 17-08-2026…";
   if (q.type === "choice") return "Nomor atau teks pilihan…";
   if (q.type === "multichoice") return "Nomor pilihan, mis. 1,3…";
   if (q.type === "image") return "Nama file gambar (simulasi)…";

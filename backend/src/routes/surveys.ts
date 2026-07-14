@@ -6,9 +6,13 @@ import { buildSurveyFlow } from "../lib/flowJson.js";
 const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
   text: z.string().min(1),
-  type: z.enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image"]).default("text"),
+  type: z
+    .enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image", "date", "consent"])
+    .default("text"),
   required: z.boolean().default(true),
-  options: z.any().optional(), // rating {min,max,minLabel?,maxLabel?} | choice/multichoice {choices:[...]}
+  // rating {min,max,minLabel?,maxLabel?} | choice/multichoice {choices:[...]} | branches:[...]
+  // mode flow: newScreen (mulai layar baru di sini) & screenTitle (judul seksi)
+  options: z.any().optional(),
 });
 
 const surveySchema = z.object({
@@ -20,6 +24,8 @@ const surveySchema = z.object({
   mode: z.enum(["chat", "flow"]).default("chat"),
   flowId: z.string().optional().nullable(),
   flowCta: z.string().optional().nullable(),
+  flowPerScreen: z.coerce.number().int().min(1).max(20).default(4),
+  privacyUrl: z.string().url().or(z.literal("")).optional().nullable(),
   closingMessage: z.string().max(2000).optional().nullable(),
   questions: z.array(questionSchema).default([]),
 });
@@ -102,6 +108,8 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       title: survey.title,
       description: survey.description,
       questions: survey.questions as any,
+      flowPerScreen: survey.flowPerScreen,
+      privacyUrl: survey.privacyUrl,
     });
   });
 

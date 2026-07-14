@@ -12,6 +12,7 @@ export function QuestionItem({
   onMove,
   qtypeOptions = QTYPE_OPTIONS,
   allQuestions = [],
+  flowMode = false,
 }) {
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState(null);
@@ -32,6 +33,8 @@ export function QuestionItem({
       maxLabel: q.options?.maxLabel ?? "",
       choices: (q.options?.choices || []).join("\n"),
       branches: branchMap,
+      newScreen: q.options?.newScreen === true,
+      screenTitle: q.options?.screenTitle ?? "",
     });
     setEditing(true);
   };
@@ -59,6 +62,9 @@ export function QuestionItem({
       }
       if (branches.length) options = { ...(options || {}), branches };
     }
+    // Penanda seksi (mode Flow) — dipertahankan lintas edit, jangan sampai ikut terhapus.
+    if (d.newScreen) options = { ...(options || {}), newScreen: true };
+    if (d.screenTitle?.trim()) options = { ...(options || {}), screenTitle: d.screenTitle.trim() };
     onChange({ ...q, text: d.text.trim(), type: d.type, required: d.required, options });
     setEditing(false);
   };
@@ -187,6 +193,30 @@ export function QuestionItem({
             </div>
           </div>
         ) : null}
+        {flowMode ? (
+          <div style={{ background: theme.surfaceAlt, borderRadius: 9, padding: 11, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: theme.text }}>Penanda seksi (mode Flow)</div>
+            <div style={{ fontSize: 11.5, color: theme.textMuted, margin: "3px 0 9px", lineHeight: 1.5 }}>
+              Mulai <strong>layar baru</strong> dari pertanyaan ini. Bila tidak ditandai, Flow tetap dipecah otomatis
+              sesuai &quot;Pertanyaan per layar&quot;.
+            </div>
+            <Toggle
+              checked={d.newScreen}
+              onChange={(v) => setDk("newScreen", v)}
+              label="Mulai layar baru di sini"
+            />
+            {d.newScreen ? (
+              <div style={{ marginTop: 10 }}>
+                <Input
+                  label="Judul seksi (opsional)"
+                  value={d.screenTitle}
+                  onChange={(e) => setDk("screenTitle", e.target.value)}
+                  placeholder="cth: Data Demografi"
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
             Batal
@@ -199,6 +229,8 @@ export function QuestionItem({
     );
   }
 
+  const startsScreen = flowMode && q.options?.newScreen === true;
+
   return (
     <div
       style={{
@@ -209,9 +241,18 @@ export function QuestionItem({
         justifyContent: "space-between",
         gap: 10,
         alignItems: "center",
+        // Garis atas = batas layar baru di Flow
+        borderTop: startsScreen ? `2px solid ${theme.primary}` : undefined,
       }}
     >
       <div style={{ fontSize: 13, color: theme.text, minWidth: 0 }}>
+        {startsScreen ? (
+          <div style={{ marginBottom: 4 }}>
+            <Badge tone="purple">
+              ⤵ layar baru{q.options?.screenTitle ? ` — ${q.options.screenTitle}` : ""}
+            </Badge>
+          </div>
+        ) : null}
         {index + 1}. {q.text}
         <span style={{ marginLeft: 8 }}>
           <Badge tone="blue">{TYPE_LABEL[q.type] || q.type}</Badge>

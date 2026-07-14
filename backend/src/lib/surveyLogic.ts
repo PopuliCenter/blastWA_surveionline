@@ -108,13 +108,35 @@ export function validateAnswer(
       }
       return { ok: true, value: picked.join(", ") };
     }
+    case "consent":
     case "boolean": {
       const t = text.toLowerCase();
       if (["ya", "iya", "y", "yes", "ok", "oke", "setuju", "betul", "benar"].includes(t))
         return { ok: true, value: "Ya" };
       if (["tidak", "no", "t", "n", "ngga", "nggak", "gak", "ga", "bukan"].includes(t))
         return { ok: true, value: "Tidak" };
-      return { ok: false, error: "Mohon balas: Ya atau Tidak." };
+      return {
+        ok: false,
+        error: q.type === "consent" ? "Mohon balas: Ya (setuju) atau Tidak." : "Mohon balas: Ya atau Tidak.",
+      };
+    }
+    case "date": {
+      // Terima dd-mm-yyyy / dd/mm/yyyy / yyyy-mm-dd → simpan seragam YYYY-MM-DD.
+      const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      const parts = iso
+        ? [Number(iso[1]), Number(iso[2]), Number(iso[3])]
+        : dmy
+          ? [Number(dmy[3]), Number(dmy[2]), Number(dmy[1])]
+          : null;
+      if (parts) {
+        const [y, m, d] = parts as [number, number, number];
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        // Cek tanggal benar-benar ada (mis. 31-02-2026 ditolak).
+        if (dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d)
+          return { ok: true, value: dt.toISOString().slice(0, 10) };
+      }
+      return { ok: false, error: "Mohon balas tanggal, format DD-MM-YYYY (mis. 17-08-2026)." };
     }
     case "text":
     default:
@@ -139,6 +161,12 @@ export function formatQuestion(q: QLite): string {
       break;
     case "boolean":
       hint = "\n\nBalas: Ya / Tidak.";
+      break;
+    case "consent":
+      hint = "\n\nBalas: Ya (setuju) / Tidak.";
+      break;
+    case "date":
+      hint = "\n\nBalas tanggal, format DD-MM-YYYY (mis. 17-08-2026).";
       break;
     case "image":
       hint = "\n\nKirim foto/gambar.";

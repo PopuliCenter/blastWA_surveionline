@@ -17,16 +17,17 @@ export function SurveyGuide() {
     },
     {
       badge: <Badge tone="blue">flow</Badge>,
-      title: "WhatsApp Flow — formulir 1 layar",
+      title: "WhatsApp Flow — formulir multi-layar",
       good: [
         "Responden mengisi seperti Google Form di dalam WhatsApp",
+        "Dibagi beberapa layar dengan tombol Lanjut (tidak menumpuk)",
+        "Punya pemilih tanggal & kotak persetujuan (consent)",
         "Sekali kirim, jawaban rapi & tervalidasi",
-        "Angka penyelesaian biasanya lebih tinggi",
       ],
       bad: [
         "HANYA untuk Meta Cloud API",
         "Tipe Gambar/foto TIDAK didukung (dilewati)",
-        "Wajib dibuat & diterbitkan dulu di Meta",
+        "Skip logic (percabangan) belum berlaku — semua soal tampil",
         "Setiap ubah pertanyaan → WAJIB publish ulang di Meta",
       ],
     },
@@ -47,6 +48,10 @@ export function SurveyGuide() {
 
   const flowSteps = [
     ["Buat survei mode Flow", "Buat Survei → isi pertanyaan → pilih Mode = WhatsApp Flow → klik Simpan."],
+    [
+      "Atur pembagian layar",
+      'Isi "Pertanyaan per layar" (default 4) — Flow otomatis dipecah jadi beberapa layar bertombol Lanjut. Untuk kontrol penuh, buka pertanyaan → aktifkan "Mulai layar baru di sini" + beri "Judul seksi" (mis. Data Demografi). Penanda manual ini menimpa pembagian otomatis.',
+    ],
     [
       "Simpan DULU, baru salin JSON",
       'Buka lagi survei (Edit) → klik "Lihat / Salin Flow JSON". Wajib simpan dulu supaya JSON memakai ID pertanyaan final — ini yang membuat jawaban bisa dipetakan balik dengan benar.',
@@ -113,6 +118,13 @@ export function SurveyGuide() {
         <strong>Sesi 24 jam.</strong> Formulir Flow &amp; balasan bebas hanya bisa dikirim dalam 24 jam sejak pesan
         terakhir responden. Di luar itu, mulai percakapan lewat <strong>Template</strong> (menu Broadcast) yang sudah
         disetujui Meta.
+      </GuideNote>
+
+      <GuideNote tone="info">
+        <strong>Batasan Flow yang perlu diketahui.</strong> <strong>Skip logic (percabangan)</strong> baru berlaku di
+        mode <strong>Chat</strong> — di Flow semua pertanyaan tetap tampil. Tipe <strong>Gambar/foto</strong> tidak
+        didukung Flow (otomatis dilewati). Untuk layar yang isinya <em>dihitung server</em> (mis. pertanyaan lanjutan
+        yang dipersonalisasi), Meta mewajibkan <strong>Flow Endpoint</strong> terenkripsi — belum dipakai di sini.
       </GuideNote>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>

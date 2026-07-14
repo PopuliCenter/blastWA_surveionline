@@ -3,6 +3,7 @@ import {
   buildSurveyFlow,
   parseFlowAnswers,
   flowOutOfSync,
+  splitScreens,
   fieldName,
   flowSupported,
   type FlowQuestion,
@@ -47,6 +48,89 @@ describe("buildSurveyFlow", () => {
   it("image tidak didukung di flow", () => {
     expect(flowSupported(q("i", "image"))).toBe(false);
     expect(flowSupported(q("m", "multichoice"))).toBe(true);
+  });
+});
+
+describe("multi-layar", () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => q(`q${i}`, "text"));
+
+  it("splitScreens: potong otomatis tiap N pertanyaan", () => {
+    expect(splitScreens(many(10), 4).map((s) => s.length)).toEqual([4, 4, 2]);
+  });
+
+  it("splitScreens: penanda manual newScreen memotong layar", () => {
+    const qs = [q("a", "text"), q("b", "text"), q("c", "text")];
+    qs[2]!.options = { newScreen: true };
+    expect(splitScreens(qs, 10).map((s) => s.map((x) => x.id))).toEqual([["a", "b"], ["c"]]);
+  });
+
+  it("splitScreens: penanda manual + potong otomatis di dalam seksi panjang", () => {
+    const qs = many(5);
+    qs[2]!.options = { newScreen: true }; // seksi 1 = q0,q1 · seksi 2 = q2,q3,q4
+    expect(splitScreens(qs, 2).map((s) => s.length)).toEqual([2, 2, 1]);
+  });
+
+  it("layar pertama tetap ber-id SURVEY; antar layar navigate, terakhir complete", () => {
+    const flow: any = buildSurveyFlow({ title: "S", questions: many(5), flowPerScreen: 2 });
+    expect(flow.screens).toHaveLength(3);
+    expect(flow.screens[0].id).toBe("SURVEY"); // dipakai provider.sendFlow
+    expect(flow.screens[0].terminal).toBeUndefined();
+    expect(flow.screens[2].terminal).toBe(true);
+
+    const footer = (s: any) => findByType(s, "Footer")[0]["on-click-action"];
+    expect(footer(flow.screens[0]).name).toBe("navigate");
+    expect(footer(flow.screens[0]).next).toEqual({ type: "screen", name: "SURVEY_2" });
+    expect(footer(flow.screens[2]).name).toBe("complete");
+  });
+
+  it("payload complete memuat SEMUA jawaban lintas layar (data diteruskan)", () => {
+    const flow: any = buildSurveyFlow({ title: "S", questions: many(4), flowPerScreen: 2 });
+    const finalPayload = findByType(flow.screens[1], "Footer")[0]["on-click-action"].payload;
+    expect(Object.keys(finalPayload).sort()).toEqual(["q_q0", "q_q1", "q_q2", "q_q3"]);
+    // Layar sebelumnya diambil dari ${data.…}, layar ini dari ${form.…}
+    expect(finalPayload.q_q0).toBe("${data.q_q0}");
+    expect(finalPayload.q_q2).toBe("${form.q_q2}");
+    // dan layar 2 mendeklarasikan data dari layar 1
+    expect(Object.keys(flow.screens[1].data).sort()).toEqual(["q_q0", "q_q1"]);
+  });
+
+  it("judul seksi → TextHeading, dan ada penanda 'Bagian x dari y'", () => {
+    const qs = many(3);
+    qs[2]!.options = { newScreen: true, screenTitle: "Bagian Demografi" };
+    const flow: any = buildSurveyFlow({ title: "S", questions: qs, flowPerScreen: 10 });
+    expect(findByType(flow.screens[1], "TextHeading")[0].text).toBe("Bagian Demografi");
+    expect(findByType(flow, "TextCaption").some((c: any) => c.text === "Bagian 2 dari 2")).toBe(true);
+  });
+
+  it("satu layar (pertanyaan sedikit) → tanpa penanda bagian, langsung complete", () => {
+    const flow: any = buildSurveyFlow({ title: "S", questions: many(2), flowPerScreen: 4 });
+    expect(flow.screens).toHaveLength(1);
+    expect(flow.screens[0].id).toBe("SURVEY");
+    expect(findByType(flow, "TextCaption").some((c: any) => /Bagian/.test(c.text))).toBe(false);
+    expect(findByType(flow, "Footer")[0]["on-click-action"].name).toBe("complete");
+  });
+});
+
+describe("tipe baru: date & consent", () => {
+  it("date → DatePicker, consent → OptIn", () => {
+    const flow: any = buildSurveyFlow({ questions: [q("d", "date"), q("c", "consent")] });
+    expect(findByType(flow, "DatePicker")[0].name).toBe(fieldName("d"));
+    expect(findByType(flow, "OptIn")[0].name).toBe(fieldName("c"));
+  });
+
+  it("parse: DatePicker (timestamp ms) → YYYY-MM-DD; OptIn (boolean) → Ya/Tidak", () => {
+    const qs = [q("d", "date"), q("c", "consent")];
+    const ms = Date.UTC(2026, 7, 17); // 17 Agustus 2026
+    const out = parseFlowAnswers({ [fieldName("d")]: String(ms), [fieldName("c")]: true }, qs);
+    expect(out).toEqual([
+      { questionId: "d", value: "2026-08-17" },
+      { questionId: "c", value: "Ya" },
+    ]);
+  });
+
+  it("consent false → Tidak (bukan dianggap kosong)", () => {
+    const qs = [q("c", "consent")];
+    expect(parseFlowAnswers({ [fieldName("c")]: false }, qs)).toEqual([{ questionId: "c", value: "Tidak" }]);
   });
 });
 

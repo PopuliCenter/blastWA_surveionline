@@ -17,6 +17,8 @@ export function SurveyModal({ survey, onClose, onSave }) {
   const [mode, setMode] = useState(survey?.mode || "chat");
   const [flowId, setFlowId] = useState(survey?.flowId || "");
   const [flowCta, setFlowCta] = useState(survey?.flowCta || "Isi Survei");
+  const [flowPerScreen, setFlowPerScreen] = useState(survey?.flowPerScreen ?? 4);
+  const [privacyUrl, setPrivacyUrl] = useState(survey?.privacyUrl || "");
   const [closingMessage, setClosingMessage] = useState(survey?.closingMessage || "");
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,6 +82,8 @@ export function SurveyModal({ survey, onClose, onSave }) {
         mode,
         flowId: mode === "flow" ? flowId.trim() : null,
         flowCta: mode === "flow" ? flowCta.trim() || "Isi Survei" : null,
+        flowPerScreen: Math.min(20, Math.max(1, Number(flowPerScreen) || 4)),
+        privacyUrl: mode === "flow" ? privacyUrl.trim() || null : null,
         closingMessage: closingMessage.trim() || null,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
@@ -125,7 +129,7 @@ export function SurveyModal({ survey, onClose, onSave }) {
             }}
             options={[
               { value: "chat", label: "Chatbot — tanya-jawab per pesan (semua jalur: Meta/Qontak/Baileys)" },
-              { value: "flow", label: "WhatsApp Flow — formulir 1 layar (khusus Meta Cloud API)" },
+              { value: "flow", label: "WhatsApp Flow — formulir multi-layar (khusus Meta Cloud API)" },
             ]}
           />
           {mode === "flow" ? (
@@ -142,6 +146,22 @@ export function SurveyModal({ survey, onClose, onSave }) {
                 value={flowCta}
                 onChange={(e) => setFlowCta(e.target.value)}
                 placeholder="Isi Survei"
+              />
+              <Input
+                label="Pertanyaan per layar"
+                type="number"
+                min={1}
+                max={20}
+                value={flowPerScreen}
+                onChange={(e) => setFlowPerScreen(e.target.value)}
+                hint="Flow dibagi jadi beberapa layar (ada tombol Lanjut). Bisa ditimpa dengan penanda seksi manual pada pertanyaan."
+              />
+              <Input
+                label="Tautan kebijakan privasi (opsional)"
+                value={privacyUrl}
+                onChange={(e) => setPrivacyUrl(e.target.value)}
+                placeholder="https://populicenter.com/privasi"
+                hint="Bila diisi, muncul sebagai tautan di layar pertama Flow."
               />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <Button
@@ -162,7 +182,8 @@ export function SurveyModal({ survey, onClose, onSave }) {
               <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8, lineHeight: 1.5 }}>
                 Alur: simpan survei → salin Flow JSON → tempel di{" "}
                 <strong>Meta WhatsApp Manager › Flows › buat Flow</strong> → terbitkan → salin <strong>Flow ID</strong>{" "}
-                ke sini. Tipe <strong>Gambar</strong> tidak didukung di Flow (dilewati).
+                ke sini. Tipe <strong>Gambar</strong> tidak didukung di Flow (dilewati). Setiap kali pertanyaan berubah,{" "}
+                <strong>publish ulang Flow di Meta</strong> — kalau tidak, jawaban masuk kosong.
               </div>
             </>
           ) : null}
@@ -268,6 +289,7 @@ export function SurveyModal({ survey, onClose, onSave }) {
               total={questions.length}
               qtypeOptions={qtypeOptions}
               allQuestions={questions}
+              flowMode={mode === "flow"}
               onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
               onDelete={() => setQuestions(questions.filter((_, j) => j !== i))}
               onMove={(dir) => {
