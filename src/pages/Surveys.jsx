@@ -5,12 +5,14 @@ import { PageHeader, Card, Button, Badge, Notice, Loading, Empty, useLoader, the
 import { SurveyModal } from "./survey/SurveyModal";
 import { ResponsesModal } from "./survey/ResponsesModal";
 import { SurveyPreviewModal } from "./survey/SurveyPreviewModal";
+import { SurveyGuide } from "./survey/SurveyGuide";
 
 export default function Surveys() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
   const [modal, setModal] = useState(null);
   const [responsesFor, setResponsesFor] = useState(null);
   const [previewFor, setPreviewFor] = useState(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
   const surveys = data || [];
 
@@ -49,6 +51,9 @@ export default function Surveys() {
         title="Survei"
         subtitle="Buat survei & lihat jawaban responden."
         actions={[
+          <Button key="g" variant="secondary" icon="doc" onClick={() => setGuideOpen((v) => !v)}>
+            {guideOpen ? "Tutup Panduan" : "Panduan"}
+          </Button>,
           <Button key="r" variant="ghost" icon="refresh" onClick={reload}>
             Refresh
           </Button>,
@@ -57,6 +62,7 @@ export default function Surveys() {
           </Button>,
         ]}
       />
+      {guideOpen ? <SurveyGuide /> : null}
       <Notice>{error || err}</Notice>
       {loading ? (
         <Loading />
