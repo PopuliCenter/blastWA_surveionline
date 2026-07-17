@@ -3,6 +3,8 @@
 > Dokumen ini menjelaskan arsitektur target aplikasi survei WhatsApp multi-vendor.
 > Status saat ini: **prototype frontend-only** (lihat bagian "Titik Awal").
 > Target: aplikasi produksi dengan backend, database, dan abstraksi vendor (Qontak + Meta Cloud API langsung + BSP lain).
+>
+> Lihat juga: [TWELVE-FACTOR.md](TWELVE-FACTOR.md) — kepatuhan 12-factor, deviasi yang disengaja, & jalur menuju scale horizontal.
 
 ---
 
