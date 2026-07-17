@@ -1,27 +1,33 @@
 # Arsitektur — Populi WA Survey Platform
 
-> Dokumen ini menjelaskan arsitektur target aplikasi survei WhatsApp multi-vendor.
-> Status saat ini: **prototype frontend-only** (lihat bagian "Titik Awal").
-> Target: aplikasi produksi dengan backend, database, dan abstraksi vendor (Qontak + Meta Cloud API langsung + BSP lain).
+> Aplikasi survei & broadcast WhatsApp multi-vendor. **Status: produksi** — backend, database,
+> antrian, dan abstraksi vendor (Meta Cloud API + Qontak + Baileys) sudah terpasang dan berjalan.
+> Deployment: 1 organisasi di satu VPS via Docker Compose (lihat `deploy/`).
+>
+> Dokumen ini awalnya ditulis sebagai rancangan **target**; bagian 2–8 tetap relevan sebagai
+> gambaran arsitektur karena sebagian besar sudah terwujud seperti dirancang.
 >
 > Lihat juga: [TWELVE-FACTOR.md](TWELVE-FACTOR.md) — kepatuhan 12-factor, deviasi yang disengaja, & jalur menuju scale horizontal.
 
 ---
 
-## 1. Titik Awal (kondisi sekarang)
+## 1. Kondisi Sekarang (terpasang)
 
-Yang sudah ada hanya **frontend React + Vite** (`src/PopuliApp.jsx`, ~1050 baris). Semua data di `localStorage`, semua angka blast/webhook **disimulasikan**. Tidak ada server, database, atau integrasi WhatsApp sungguhan.
+Aplikasi sudah utuh: **frontend React 19 + Vite** (`src/PopuliApp.jsx` sebagai shell SPA,
+halaman lazy-loaded di `src/pages/`) dan **backend Fastify 5 + TypeScript** (`backend/src/server.ts`)
+dengan **worker BullMQ** terpisah (`backend/src/queue/worker.ts`).
 
-| Komponen | Sekarang | Target |
-|---|---|---|
-| Penyimpanan data | `localStorage` browser | PostgreSQL |
-| Kirim pesan WA | Angka palsu | API vendor (Qontak / Meta) via worker queue |
-| Terima webhook | `fetch()` tes dari browser | Endpoint HTTPS publik di backend |
-| Kredensial vendor | Form di browser (tidak aman) | Server-side, terenkripsi |
-| Auth user | Cek password di localStorage | JWT/session + password hash (bcrypt/argon2) |
-| Multi-vendor | Tidak ada | Lapisan adapter (interface tunggal) |
+| Komponen | Implementasi sekarang |
+|---|---|
+| Penyimpanan data | **PostgreSQL** via Prisma |
+| Antrian kirim | **BullMQ** (Redis) — worker terpisah dari backend |
+| Kirim pesan WA | Lapisan adapter `MessagingProvider` → Meta Cloud API / Qontak / Baileys |
+| Terima webhook | Endpoint HTTPS di backend (`/webhook/meta`, `/webhook/qontak`) + verifikasi signature |
+| Kredensial vendor | Server-side, **AES-256-GCM** terenkripsi di DB (`CREDENTIALS_ENC_KEY`) |
+| Auth user | **JWT (HS256)** + hash **argon2**; peran `viewer` (hanya-baca) / `writer` |
+| Konfigurasi | Env tervalidasi Zod (`backend/src/env.ts`, fail-fast) |
 
-`src/wa_survey_app.jsx` adalah versi lama yang tidak terpakai → **hapus** di Fase 0.
+Detail per subsistem ada di bagian-bagian berikut.
 
 ---
 
@@ -148,7 +154,7 @@ Vendor aktif disimpan di tabel `vendor_configs` (bisa diatur dari halaman Settin
 | Biaya | Bayar Meta langsung (per percakapan) | Bayar Meta + markup Qontak |
 | Approve template | Kelola sendiri di Meta Business Manager | Lewat dashboard Qontak |
 
-> **Catatan versi:** kode prototype memakai Graph API `v18.0` (lawas). Target gunakan versi yang masih didukung (mis. `v21.0`/`v22.0`) dan jadikan konfigurabel.
+> **Catatan versi:** versi Graph API kini konfigurabel via `META_GRAPH_VERSION` (default `v21.0`, bisa ditimpa di kartu Meta pada menu Akun WhatsApp).
 
 ---
 
