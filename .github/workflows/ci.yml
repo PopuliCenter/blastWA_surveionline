@@ -46,3 +46,43 @@ jobs:
         run: npm run test
       - name: Build backend
         run: npm run build
+
+  migrations:
+    name: Backend (uji migrasi di Postgres)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine # samakan dengan prod (deploy/docker-compose.prod.yml)
+        env:
+          POSTGRES_USER: populi
+          POSTGRES_PASSWORD: populi
+          POSTGRES_DB: populi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U populi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://populi:populi@localhost:5432/populi?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # Terapkan SELURUH riwayat migrasi ke DB kosong — perintah yang sama dengan rilis
+      # prod (`prisma migrate deploy` di command container backend). Menangkap SQL cacat
+      # SEBELUM menyentuh VPS.
+      - name: Terapkan migrasi (migrate deploy)
+        run: npx prisma migrate deploy
+      # Drift check: hasil migrasi harus identik dengan schema.prisma. Gagal (exit 2)
+      # bila ada perubahan schema yang lupa dibuatkan migrasinya.
+      - name: Cek drift schema vs migrasi
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
