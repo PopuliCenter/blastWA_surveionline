@@ -3,6 +3,17 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { getProvider, loadProviders } from "../providers/registry.js";
 
+// Bentuk template sebagaimana dikembalikan MetaCloudAdapter.listTemplates().
+type MetaTemplate = {
+  id?: string;
+  name: string;
+  language: string;
+  status: string;
+  category?: string;
+  quality?: string | null;
+  rejectedReason?: string | null;
+};
+
 // Petakan status Meta → label lokal.
 function mapMetaStatus(s: unknown): "approved" | "rejected" | "submitted" {
   const v = String(s).toUpperCase();
@@ -137,44 +148,68 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!result.ok) return reply.code(400).send({ error: result.error ?? "Gagal mengajukan template" });
 
+    // Catat juga cermin Meta-nya agar UI langsung tahu template ini SUDAH ada di Meta
+    // (tanpa menunggu sinkron berikutnya).
     await prisma.messageTemplate.update({
       where: { id },
-      data: { status: result.status ? mapMetaStatus(result.status) : "submitted" },
+      data: {
+        status: result.status ? mapMetaStatus(result.status) : "submitted",
+        metaStatus: String(result.status ?? "PENDING").toUpperCase(),
+        metaId: result.id ?? null,
+        metaReason: null,
+        metaSyncedAt: new Date(),
+      },
     });
     return { ok: true, status: result.status ?? "PENDING", metaId: result.id };
   });
 
-  // Sinkron status ASLI semua template dari Meta → perbarui label lokal (cocokkan nama+bahasa).
+  // Sinkron status ASLI semua template dari Meta (cocokkan nama+bahasa).
+  // Menyimpan cermin status Meta (metaStatus/metaQuality/…) SEKALIGUS memperbarui label lokal.
+  // Template yang tak ditemukan di Meta ditandai metaStatus=null + metaSyncedAt terisi →
+  // UI bisa membedakan "belum pernah disinkron" dari "sudah dicek, memang tak ada di Meta".
   app.post("/api/templates/sync", async (req, reply) => {
     if (req.user.role === "viewer") return reply.code(403).send({ error: "forbidden" });
     await loadProviders();
     const meta = getProvider("meta") as unknown as {
-      listTemplates?: () => Promise<{
-        templates?: { name: string; language: string; status: string }[];
-        error?: string;
-      }>;
+      listTemplates?: () => Promise<{ templates?: MetaTemplate[]; error?: string }>;
     };
     if (typeof meta.listTemplates !== "function") return reply.code(400).send({ error: "Vendor Meta tidak mendukung" });
 
     const res = await meta.listTemplates();
     if (res.error) return reply.code(400).send({ error: res.error });
-    const remote = new Map((res.templates ?? []).map((t) => [`${t.name}|${t.language}`, t.status]));
+    const remote = new Map((res.templates ?? []).map((t) => [`${t.name}|${t.language}`, t]));
 
     const locals = await prisma.messageTemplate.findMany();
+    const syncedAt = new Date();
     let updated = 0,
       notFound = 0;
     for (const t of locals) {
-      const st = remote.get(`${t.name}|${t.language}`);
-      if (st == null) {
+      const r = remote.get(`${t.name}|${t.language}`);
+      if (!r) {
         notFound++;
+        // Tandai: sudah dicek, TIDAK ada di Meta. Label lokal "approved" dibiarkan apa adanya —
+        // UI memakai metaStatus sebagai sumber kebenaran, jadi tak lagi menyesatkan.
+        await prisma.messageTemplate.update({
+          where: { id: t.id },
+          data: { metaStatus: null, metaQuality: null, metaReason: null, metaSyncedAt: syncedAt },
+        });
         continue;
       }
-      const mapped = mapMetaStatus(st);
-      if (mapped !== t.status) {
-        await prisma.messageTemplate.update({ where: { id: t.id }, data: { status: mapped } });
-        updated++;
-      }
+      const mapped = mapMetaStatus(r.status);
+      if (mapped !== t.status || t.metaStatus !== String(r.status).toUpperCase()) updated++;
+      await prisma.messageTemplate.update({
+        where: { id: t.id },
+        data: {
+          status: mapped,
+          metaStatus: String(r.status ?? "").toUpperCase() || null,
+          metaQuality: r.quality ?? null,
+          metaCategory: r.category ?? null,
+          metaId: r.id ?? null,
+          metaReason: r.rejectedReason ?? null,
+          metaSyncedAt: syncedAt,
+        },
+      });
     }
-    return { ok: true, updated, notFound, remoteCount: res.templates?.length ?? 0 };
+    return { ok: true, updated, notFound, remoteCount: res.templates?.length ?? 0, syncedAt };
   });
 }

@@ -1,8 +1,12 @@
 import { Card, Button, Badge, Icon, theme, fmtDate } from "../../lib/ui";
-import { HEADER_TYPES, STATUS_TONE, STATUS_LABEL, USECASE_LABEL, fillVars } from "./constants";
+import { HEADER_TYPES, USECASE_LABEL, META_QUALITY, metaState, fillVars } from "./constants";
 
 export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submitting }) {
   const headerIcon = { image: "image", document: "doc", video: "eye", text: "template" }[t.headerType];
+  const ms = metaState(t); // status ASLI di Meta — sumber kebenaran
+  const quality = t.metaQuality ? META_QUALITY[t.metaQuality] : null;
+  // Ajukan hanya masuk akal bila belum ada di Meta (atau ditolak → perbaiki lalu ajukan ulang).
+  const canSubmit = ms.key === "unsynced" || ms.key === "missing" || ms.key === "REJECTED";
   return (
     <Card pad={16}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -24,8 +28,48 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
             {t.useCase ? <Badge>{USECASE_LABEL[t.useCase] || t.useCase}</Badge> : null}
           </div>
         </div>
-        <Badge tone={STATUS_TONE[t.status] || "default"}>{STATUS_LABEL[t.status] || t.status}</Badge>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
+          <Badge tone={ms.tone}>{ms.label}</Badge>
+          {quality ? <Badge tone={quality.tone}>{quality.label}</Badge> : null}
+        </div>
       </div>
+
+      {/* Alasan penolakan & waktu sinkron — supaya jelas apa yang harus diperbaiki. */}
+      {ms.key === "REJECTED" && t.metaReason ? (
+        <div
+          style={{
+            marginTop: 9,
+            fontSize: 11.5,
+            color: theme.red,
+            background: theme.redSoft,
+            borderRadius: 8,
+            padding: "7px 10px",
+            lineHeight: 1.5,
+          }}
+        >
+          Alasan Meta: <strong>{t.metaReason}</strong>
+        </div>
+      ) : null}
+      {ms.key === "missing" ? (
+        <div
+          style={{
+            marginTop: 9,
+            fontSize: 11.5,
+            color: theme.yellow,
+            background: theme.yellowSoft,
+            borderRadius: 8,
+            padding: "7px 10px",
+            lineHeight: 1.5,
+          }}
+        >
+          Belum pernah diajukan (atau namanya berbeda di Meta). <strong>Tidak bisa dipakai broadcast.</strong>
+        </div>
+      ) : null}
+      {ms.key === "unsynced" ? (
+        <div style={{ marginTop: 9, fontSize: 11.5, color: theme.textMuted, lineHeight: 1.5 }}>
+          Status Meta belum diketahui — klik <strong>Sinkron status Meta</strong>.
+        </div>
+      ) : null}
 
       {t.headerType !== "none" ? (
         <div
@@ -63,12 +107,11 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
       ) : null}
 
       <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
-        {t.status !== "approved" && t.status !== "submitted" ? (
+        {canSubmit ? (
           <Button size="sm" icon="send" onClick={onSubmit} disabled={submitting}>
-            {submitting ? "Mengajukan…" : "Ajukan ke Meta"}
+            {submitting ? "Mengajukan…" : ms.key === "REJECTED" ? "Ajukan Ulang" : "Ajukan ke Meta"}
           </Button>
         ) : null}
-        {t.status === "submitted" ? <Badge tone="yellow">menunggu review Meta</Badge> : null}
         <Button size="sm" variant="secondary" icon="edit" onClick={onEdit}>
           Edit
         </Button>
@@ -79,7 +122,10 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
           Hapus
         </Button>
       </div>
-      <div style={{ marginTop: 8, fontSize: 11, color: theme.textMuted }}>Diubah {fmtDate(t.updatedAt)}</div>
+      <div style={{ marginTop: 8, fontSize: 11, color: theme.textMuted }}>
+        Diubah {fmtDate(t.updatedAt)}
+        {t.metaSyncedAt ? ` • sinkron Meta ${fmtDate(t.metaSyncedAt)}` : ""}
+      </div>
     </Card>
   );
 }

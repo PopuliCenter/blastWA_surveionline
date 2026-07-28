@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { api, apiBase } from "../../lib/api";
 import { Modal, Select, Notice, Input, Textarea, Button, theme } from "../../lib/ui";
 import { loadRates, rupiah } from "./constants";
+import { metaState } from "../template/constants";
 
 const MEDIA_TYPES = ["image", "document", "video"];
 const MEDIA_ACCEPT = {
@@ -243,14 +244,22 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
               { value: "", label: "— ketik manual —" },
               ...templates.map((t) => ({
                 value: t.id,
-                label: `${t.name} (${t.status === "approved" ? "disetujui" : t.status})`,
+                label: `${t.name} — ${metaState(t).label}`, // status ASLI Meta, bukan label lokal
               })),
             ]}
           />
-          {selectedTpl && selectedTpl.status !== "approved" ? (
+          {selectedTpl && selectedTpl.metaStatus !== "APPROVED" ? (
             <Notice kind="info">
-              Template ini berstatus <strong>{selectedTpl.status}</strong>. Pastikan sudah disetujui Meta sebelum
-              benar-benar dikirim.
+              Menurut sinkron terakhir, template ini{" "}
+              <strong>
+                {!selectedTpl.metaSyncedAt
+                  ? "belum pernah disinkron ke Meta"
+                  : !selectedTpl.metaStatus
+                    ? "TIDAK ada di Meta"
+                    : `berstatus ${selectedTpl.metaStatus} di Meta`}
+              </strong>
+              . Hanya template <strong>Disetujui Meta</strong> yang bisa terkirim — cek di menu Template →{" "}
+              <strong>Sinkron status Meta</strong>.
             </Notice>
           ) : null}
           <Input

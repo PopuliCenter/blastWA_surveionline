@@ -258,8 +258,19 @@ model MessageTemplate {
   footerText     String?
   buttons        Json? // [{type:"QUICK_REPLY"|"URL"|"PHONE_NUMBER", text, url?, phone?}]
   sampleParams   String[] @default([]) // contoh nilai untuk {{1}}, {{2}} (untuk preview & submit ke Meta)
-  status         String   @default("draft") // draft | submitted | approved | rejected (lokal, ikuti status Meta)
+  status         String   @default("draft") // draft | submitted | approved | rejected (label LOKAL)
   useCase        String? // survei | rilis | acara | lainnya
+
+  // ===== Cermin status ASLI di Meta (diisi oleh /api/templates/sync) =====
+  // Sumber kebenaran untuk "boleh dipakai broadcast atau tidak". Dibedakan dari `status`
+  // di atas yang hanya label lokal & bisa menyesatkan (mis. "approved" padahal belum diajukan).
+  metaStatus     String? // APPROVED | PENDING | IN_REVIEW | REJECTED | PAUSED | DISABLED. null = TIDAK ada di Meta
+  metaQuality    String? // GREEN | YELLOW | RED | UNKNOWN (quality rating Meta)
+  metaCategory   String? // kategori menurut Meta (bisa berbeda — Meta kadang mengklasifikasi ulang)
+  metaId         String? // id template di Meta
+  metaReason     String? // rejected_reason bila ditolak
+  metaSyncedAt   DateTime? // kapan terakhir dicocokkan ke Meta. null = belum pernah disinkron
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

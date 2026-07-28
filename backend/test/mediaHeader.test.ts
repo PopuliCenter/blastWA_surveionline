@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mediaHeaderComponent, headerFormatOf } from "../src/providers/meta.js";
+import { mediaHeaderComponent, headerFormatOf, qualityScoreOf } from "../src/providers/meta.js";
 
 // Parameter header media kirim template Meta: tanpa ini, template ber-header media
 // ditolak Meta (error 132018 "issue with the parameters in your template").
@@ -44,5 +44,27 @@ describe("headerFormatOf (deteksi header dari components Meta)", () => {
   it("format tak dikenal (mis. LOCATION) → null; TEXT → 'text'", () => {
     expect(headerFormatOf([{ type: "HEADER", format: "LOCATION" }])).toBeNull();
     expect(headerFormatOf([{ type: "HEADER", format: "TEXT", text: "Judul" }])).toBe("text");
+  });
+});
+
+// Dokumentasi Meta tidak memastikan bentuk quality_score → parser harus toleran,
+// tapi TIDAK boleh menebak nilai yang tak dikenal (lebih baik null = "belum dinilai").
+describe("qualityScoreOf (quality rating template)", () => {
+  it("objek {score} → nilai score", () => {
+    expect(qualityScoreOf({ score: "GREEN", date: 123 })).toBe("GREEN");
+    expect(qualityScoreOf({ score: "red" })).toBe("RED");
+  });
+
+  it("string polos → dipakai langsung", () => {
+    expect(qualityScoreOf("YELLOW")).toBe("YELLOW");
+    expect(qualityScoreOf("UNKNOWN")).toBe("UNKNOWN");
+  });
+
+  it("kosong / bentuk tak dikenal → null (jangan menebak)", () => {
+    expect(qualityScoreOf(undefined)).toBeNull();
+    expect(qualityScoreOf(null)).toBeNull();
+    expect(qualityScoreOf({})).toBeNull();
+    expect(qualityScoreOf({ score: "MAGENTA" })).toBeNull();
+    expect(qualityScoreOf(42)).toBeNull();
   });
 });

@@ -38,6 +38,35 @@ export const HEADER_TYPES = [
 ];
 export const STATUS_TONE = { draft: "default", submitted: "yellow", approved: "green", rejected: "red" };
 export const STATUS_LABEL = { draft: "Draf", submitted: "Menunggu Meta", approved: "Disetujui", rejected: "Ditolak" };
+
+// ===== Status ASLI di Meta (sumber kebenaran; `status` di atas hanya label lokal) =====
+export const META_STATUS = {
+  APPROVED: { label: "Disetujui Meta", tone: "green" },
+  PENDING: { label: "Menunggu review", tone: "yellow" },
+  IN_REVIEW: { label: "Sedang direview", tone: "yellow" },
+  PENDING_DELETION: { label: "Menunggu dihapus", tone: "yellow" },
+  REJECTED: { label: "Ditolak Meta", tone: "red" },
+  PAUSED: { label: "Dijeda Meta", tone: "red" },
+  DISABLED: { label: "Dinonaktifkan Meta", tone: "red" },
+};
+// Quality rating Meta (dari usage & feedback penerima).
+export const META_QUALITY = {
+  GREEN: { label: "Kualitas tinggi", tone: "green" },
+  YELLOW: { label: "Kualitas sedang", tone: "yellow" },
+  RED: { label: "Kualitas rendah", tone: "red" },
+  UNKNOWN: { label: "Kualitas belum dinilai", tone: "default" },
+};
+
+// Ringkasan status Meta sebuah template untuk ditampilkan di UI.
+// Membedakan 3 keadaan yang sebelumnya tercampur: belum disinkron / tak ada di Meta / status asli.
+export function metaState(t) {
+  if (!t.metaSyncedAt) return { key: "unsynced", label: "Belum disinkron", tone: "default" };
+  if (!t.metaStatus) return { key: "missing", label: "Tidak ada di Meta", tone: "red" };
+  const m = META_STATUS[t.metaStatus];
+  return { key: t.metaStatus, label: m?.label || t.metaStatus, tone: m?.tone || "default" };
+}
+// Boleh dipakai broadcast HANYA bila Meta bilang APPROVED.
+export const isSendable = (t) => t.metaStatus === "APPROVED";
 export const USECASE_LABEL = {
   survei: "Blast Survei",
   rilis: "Rilis ke Media",

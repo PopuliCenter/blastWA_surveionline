@@ -124,11 +124,11 @@ export default function Templates() {
           <div style={{ fontSize: 13, color: theme.textMuted, lineHeight: 1.6 }}>
             <strong style={{ color: theme.text }}>Cara kerja:</strong> susun template di sini → klik{" "}
             <strong>Ajukan ke Meta</strong> (kirim untuk direview) → tunggu → klik <strong>Sinkron status Meta</strong>{" "}
-            agar status berubah <strong>Disetujui</strong> secara otomatis → baru bisa dipilih di Blast.
-            <div style={{ marginTop: 5, color: theme.yellow }}>
-              ⚠ Status pada kartu adalah <strong>label lokal</strong>. Yang menentukan bisa/tidaknya dipakai broadcast
-              adalah status ASLI di Meta — pastikan lewat <strong>Ajukan → Sinkron</strong> (atau lihat di Broadcast →
-              "Ambil dari Meta"). Butuh <strong>WABA ID</strong> terisi di Akun WhatsApp.
+            agar status berubah <strong>Disetujui Meta</strong> secara otomatis → baru bisa dipilih di Blast.
+            <div style={{ marginTop: 5 }}>
+              Badge pada kartu menampilkan <strong>status ASLI di Meta</strong> beserta <strong>quality rating</strong>-nya
+              (hasil sinkron terakhir). <strong>Tidak ada di Meta</strong> = belum pernah diajukan / namanya berbeda →
+              belum bisa dipakai broadcast. Butuh <strong>WABA ID</strong> terisi di Akun WhatsApp.
             </div>
           </div>
         </div>

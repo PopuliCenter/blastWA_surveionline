@@ -108,7 +108,8 @@ export class MetaCloudAdapter implements MessagingProvider {
   async listTemplates(): Promise<Record<string, unknown>> {
     if (!this.cfg.accessToken) return { error: "Access Token Meta belum diisi." };
     if (!this.cfg.wabaId) return { error: "WABA ID belum diisi — isi 'WhatsApp Business Account ID' di kartu Meta." };
-    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates?fields=name,language,status,category,components&limit=250`;
+    const fields = "id,name,language,status,category,components,quality_score,rejected_reason";
+    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates?fields=${fields}&limit=250`;
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
       const json = (await res.json().catch(() => ({}))) as any;
@@ -116,11 +117,14 @@ export class MetaCloudAdapter implements MessagingProvider {
       const data = Array.isArray(json?.data) ? json.data : [];
       return {
         templates: data.map((t: any) => ({
+          id: t.id,
           name: t.name,
           language: t.language,
           status: t.status,
           category: t.category,
           headerFormat: headerFormatOf(t.components),
+          quality: qualityScoreOf(t.quality_score),
+          rejectedReason: t.rejected_reason ?? null,
         })),
       };
     } catch (e) {
@@ -345,6 +349,20 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Quality rating template dari Meta → GREEN | YELLOW | RED | UNKNOWN (null bila tak ada).
+// TOLERAN bentuk: dokumentasi Meta tidak memastikan bentuk `quality_score`; di lapangan bisa
+// objek {score:"GREEN",date:…} atau string polos. Bentuk tak dikenal → null (jangan menebak).
+export function qualityScoreOf(raw: unknown): "GREEN" | "YELLOW" | "RED" | "UNKNOWN" | null {
+  const v =
+    typeof raw === "string"
+      ? raw
+      : raw && typeof raw === "object"
+        ? ((raw as { score?: unknown }).score ?? "")
+        : "";
+  const s = String(v).toUpperCase();
+  return s === "GREEN" || s === "YELLOW" || s === "RED" || s === "UNKNOWN" ? s : null;
 }
 
 // Format header sebuah template dari daftar components Meta → lowercase; null bila tanpa header.
