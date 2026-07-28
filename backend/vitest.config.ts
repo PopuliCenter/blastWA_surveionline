@@ -10,6 +10,7 @@ export default defineConfig({
       JWT_SECRET: "test_jwt_secret_minimal_32_characters",
       CREDENTIALS_ENC_KEY: "0".repeat(64),
       ERROR_LOG_FILE: "./logs/test-error.log",
+      UPLOAD_DIR: "./.test-uploads",
     },
   },
 });

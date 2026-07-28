@@ -12,6 +12,9 @@ const schema = z.object({
   // File log error terstruktur (1 baris JSON/error). Di prod dipisah per proses via compose.
   ERROR_LOG_FILE: z.string().default("./logs/error.log"),
 
+  // Folder penyimpanan file upload (header media template). Di prod di-mount ke volume.
+  UPLOAD_DIR: z.string().default("./uploads"),
+
   JWT_SECRET: z.string().min(32),
   // 32 byte = 64 karakter hex
   CREDENTIALS_ENC_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, "CREDENTIALS_ENC_KEY harus 64 karakter hex (32 byte)"),

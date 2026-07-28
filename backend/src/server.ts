@@ -19,6 +19,10 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { sendingRoutes } from "./routes/sending.js";
 import { templateRoutes } from "./routes/templates.js";
 import { baileysRoutes } from "./routes/baileys.js";
+import { uploadRoutes } from "./routes/uploads.js";
+import fastifyStatic from "@fastify/static";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { baileysGateway } from "./providers/baileys.js";
 import { handleInboundEvents } from "./services/surveyEngine.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "./lib/errorLog.js";
@@ -59,6 +63,18 @@ async function main() {
 
   app.get("/health", async () => ({ ok: true, ts: new Date().toISOString() }));
 
+  // File upload (header media template): disajikan PUBLIK tanpa auth — Meta harus bisa
+  // mengunduh URL-nya saat kirim. Nama file acak (UUID) = tak bisa ditebak; listing mati.
+  const uploadRoot = path.resolve(env.UPLOAD_DIR);
+  await mkdir(uploadRoot, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: uploadRoot,
+    prefix: "/uploads/",
+    decorateReply: false,
+    maxAge: "7d",
+    immutable: true,
+  });
+
   await app.register(authRoutes);
   await app.register(surveyRoutes);
   await app.register(segmentRoutes);
@@ -73,6 +89,7 @@ async function main() {
   await app.register(sendingRoutes);
   await app.register(templateRoutes);
   await app.register(baileysRoutes);
+  await app.register(uploadRoutes);
 
   // Baileys: proses backend = pemilik socket. Pasang handler pesan masuk (survei/auto-reply)
   // & auto-start bila ada sesi tersimpan (tak perlu scan ulang setelah restart).

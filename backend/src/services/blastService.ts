@@ -34,6 +34,21 @@ export async function createBlast(input: CreateBlastInput) {
     : null;
   const flowToken = survey?.mode === "flow" ? `srv_${survey.id}` : undefined;
 
+  // Template lokal ber-header media → bawa URL-nya agar dikirim sebagai parameter header.
+  // (Template yang dipilih langsung "dari Meta" tidak punya metadata lokal → dilewati;
+  // bila template Meta itu ber-header media, buat padanannya di menu Template + isi URL.)
+  const localTpl =
+    templateName && vendor !== "baileys"
+      ? await prisma.messageTemplate.findFirst({ where: { name: templateName, language: templateLang } })
+      : null;
+  const headerMedia =
+    localTpl && ["image", "document", "video"].includes(localTpl.headerType) && localTpl.headerMediaUrl
+      ? {
+          headerMediaType: localTpl.headerType as "image" | "document" | "video",
+          headerMediaUrl: localTpl.headerMediaUrl,
+        }
+      : null;
+
   const segment = await prisma.segment.findUnique({
     where: { id: input.segmentId },
     include: { contacts: { include: { contact: true } } },
@@ -96,6 +111,7 @@ export async function createBlast(input: CreateBlastInput) {
           bodyParams,
           ...(text ? { text } : {}),
           ...(flowToken ? { flowToken } : {}),
+          ...(headerMedia ?? {}),
         },
         opts: { delay: delayBase + i * 50 }, // stagger ringan
       };

@@ -38,6 +38,9 @@ export interface SendTemplateInput {
   languageCode: string;
   bodyParams?: string[];
   flowToken?: string; // bila template punya tombol Flow → korelasi balasan (broadcast Flow)
+  // Template ber-header media: tautan PUBLIK yang bisa diunduh vendor (mis. /uploads di app ini)
+  headerMediaType?: "image" | "document" | "video";
+  headerMediaUrl?: string;
 }
 
 export interface SendFlowInput {

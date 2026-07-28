@@ -14,6 +14,9 @@ export type BlastJob = {
   bodyParams: string[];
   text?: string; // teks final (dipakai vendor templateless mis. Baileys)
   flowToken?: string; // broadcast Flow: korelasi balasan flow ke survei
+  // Template ber-header media: tautan publik dikirim sebagai parameter header
+  headerMediaType?: "image" | "document" | "video";
+  headerMediaUrl?: string;
 };
 
 export const BLAST_QUEUE = "blast";

@@ -6,3 +6,7 @@ dist
 
 # Log error terstruktur (lokal)
 logs/
+
+# File upload header media (lokal & test)
+uploads/
+.test-uploads/

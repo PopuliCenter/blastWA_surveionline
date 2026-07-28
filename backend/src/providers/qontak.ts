@@ -28,6 +28,21 @@ export class QontakAdapter implements MessagingProvider {
       value_text: value,
     }));
 
+    // Template ber-header media: Qontak menerima parameters.header {format, params url/filename}.
+    // (Format field bisa berbeda antar versi API Qontak — cek Postman collection bila gagal.)
+    const header =
+      input.headerMediaType && input.headerMediaUrl
+        ? {
+            format: input.headerMediaType.toUpperCase(), // IMAGE | DOCUMENT | VIDEO
+            params: [
+              { key: "url", value: input.headerMediaUrl },
+              ...(input.headerMediaType === "document"
+                ? [{ key: "filename", value: input.headerMediaUrl.split("/").pop()?.split("?")[0] || "dokumen" }]
+                : []),
+            ],
+          }
+        : undefined;
+
     const res = await fetch(`${this.cfg.baseUrl}/broadcasts/whatsapp/direct`, {
       method: "POST",
       headers: {
@@ -40,7 +55,7 @@ export class QontakAdapter implements MessagingProvider {
         message_template_id: input.templateName, // di Qontak ini adalah Template ID
         channel_integration_id: this.cfg.channelIntegrationId,
         language: { code: input.languageCode },
-        parameters: { body: params },
+        parameters: { body: params, ...(header ? { header } : {}) },
       }),
     });
 

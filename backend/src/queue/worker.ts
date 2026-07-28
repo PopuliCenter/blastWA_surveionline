@@ -41,6 +41,7 @@ async function main() {
     BLAST_QUEUE,
     async (job, token) => {
       const { recipientId, blastId, vendor, to, templateName, templateLang, bodyParams, text, flowToken } = job.data;
+      const { headerMediaType, headerMediaUrl } = job.data;
 
       const recipient = await prisma.blastRecipient.findUnique({
         where: { id: recipientId },
@@ -88,6 +89,7 @@ async function main() {
             languageCode: templateLang,
             bodyParams,
             ...(flowToken ? { flowToken } : {}),
+            ...(headerMediaType && headerMediaUrl ? { headerMediaType, headerMediaUrl } : {}),
           });
 
       if (result.status === "failed") {

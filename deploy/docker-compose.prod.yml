@@ -30,8 +30,10 @@ services:
       REDIS_URL: redis://redis:6379
       BAILEYS_AUTH_DIR: /app/.baileys-auth
       ERROR_LOG_FILE: /app/logs/backend.log
+      UPLOAD_DIR: /app/uploads
     volumes:
       - baileys_auth:/app/.baileys-auth # sesi WhatsApp Langsung (QR) — bertahan saat restart
+      - uploads:/app/uploads # file header media template — bertahan saat rebuild
       - /var/log/populi-wa:/app/logs # log error terstruktur — bisa di-tail dari host
     restart: unless-stopped
     networks: [internal]
@@ -106,3 +108,4 @@ volumes:
   pgdata:
   redisdata:
   baileys_auth:
+  uploads:

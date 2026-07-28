@@ -48,6 +48,11 @@ export class MetaCloudAdapter implements MessagingProvider {
 
   async sendTemplate(input: SendTemplateInput): Promise<SendResult> {
     const components: unknown[] = [];
+    // Template ber-header media WAJIB diberi parameter header saat kirim — tanpa ini Meta
+    // menolak (error 132018 "issue with the parameters in your template").
+    if (input.headerMediaType && input.headerMediaUrl) {
+      components.push(mediaHeaderComponent(input.headerMediaType, input.headerMediaUrl));
+    }
     if (input.bodyParams && input.bodyParams.length) {
       components.push({ type: "body", parameters: input.bodyParams.map((text) => ({ type: "text", text })) });
     }
@@ -338,6 +343,16 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Komponen header media untuk kirim template (tautan publik).
+// Dokumen menyertakan filename (nama tampilan lampiran di WhatsApp).
+export function mediaHeaderComponent(type: "image" | "document" | "video", url: string): object {
+  if (type === "document") {
+    const filename = url.split("/").pop()?.split("?")[0] || "dokumen.pdf";
+    return { type: "header", parameters: [{ type: "document", document: { link: url, filename } }] };
+  }
+  return { type: "header", parameters: [{ type, [type]: { link: url } }] };
 }
 
 function tsFromUnix(ts: unknown): string {

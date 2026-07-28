@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { api, apiBase } from "../../lib/api";
 import { Button, Input, Textarea, Select, Modal, Badge, Icon, useIsMobile, theme } from "../../lib/ui";
 import {
   CATEGORIES,
@@ -24,6 +25,31 @@ export function TemplateEditor({ initial, onClose, onSave }) {
   const [showPreview, setShowPreview] = useState(false);
   const isMobile = useIsMobile();
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+
+  // Upload file header media → isi headerMediaUrl otomatis (URL publik /uploads/...)
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [upErr, setUpErr] = useState("");
+  const UPLOAD_ACCEPT = {
+    image: "image/jpeg,image/png,image/webp",
+    document: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx",
+    video: "video/mp4,video/3gpp",
+  };
+  const onPickedFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset agar file yang sama bisa dipilih ulang
+    if (!file) return;
+    setUploading(true);
+    setUpErr("");
+    try {
+      const r = await api.uploadMedia(file);
+      set("headerMediaUrl", `${apiBase}${r.path}`);
+    } catch (err) {
+      setUpErr(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const nVars = Math.max(maxVar(f.bodyText), maxVar(f.headerType === "text" ? f.headerText || "" : ""));
   const checks = useMemo(() => metaChecks(f, nVars), [f, nVars]);
@@ -107,13 +133,34 @@ export function TemplateEditor({ initial, onClose, onSave }) {
         />
       ) : null}
       {["image", "document", "video"].includes(f.headerType) ? (
-        <Input
-          label={`Contoh URL ${f.headerType === "image" ? "gambar" : f.headerType === "document" ? "dokumen (PDF)" : "video"}`}
-          value={f.headerMediaUrl}
-          onChange={(e) => set("headerMediaUrl", e.target.value)}
-          hint="Dipakai sebagai contoh saat pengajuan ke Meta & untuk preview. Saat blast, file aktual dilampirkan per pengiriman."
-          placeholder="https://..."
-        />
+        <>
+          <Input
+            label={`URL ${f.headerType === "image" ? "gambar" : f.headerType === "document" ? "dokumen (PDF)" : "video"}`}
+            value={f.headerMediaUrl}
+            onChange={(e) => set("headerMediaUrl", e.target.value)}
+            error={upErr}
+            hint="Klik Upload File (tersimpan di server ini) atau tempel URL publik. Dipakai untuk preview DAN dikirim sebagai header saat blast. Pengajuan template ber-media ke Meta tetap lewat WhatsApp Manager."
+            placeholder="https://..."
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            accept={UPLOAD_ACCEPT[f.headerType]}
+            style={{ display: "none" }}
+            onChange={onPickedFile}
+          />
+          <div style={{ marginTop: -8, marginBottom: 14 }}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="upload"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? "Mengunggah…" : "Upload File"}
+            </Button>
+          </div>
+        </>
       ) : null}
 
       {/* Body */}

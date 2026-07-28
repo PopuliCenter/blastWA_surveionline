@@ -126,6 +126,19 @@ export const api = {
   deleteTemplate: (id) => request(`/api/templates/${id}`, { method: "DELETE" }),
   submitTemplate: (id) => request(`/api/templates/${id}/submit`, { method: "POST" }),
   syncTemplates: () => request("/api/templates/sync", { method: "POST" }),
+  // Upload file media (header template). multipart → tidak lewat request() yang ber-JSON.
+  // Balikan { path: "/uploads/<nama>" } → susun URL absolut dengan apiBase.
+  uploadMedia: async (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${BASE}/api/uploads`, { method: "POST", headers, body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+    return data;
+  },
 
   // Pengaman pengiriman (anti-banned)
   getSendingPolicy: () => request("/api/sending-policy"),
