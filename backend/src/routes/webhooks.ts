@@ -17,9 +17,17 @@ async function log(vendor: string, event: string, status: string, payload: unkno
   await prisma.webhookLog.create({ data: { vendor, event, status, payload: payload as object, note } }).catch(() => {});
 }
 
+// Plafon rate-limit longgar khusus webhook — menimpa limit global 300/menit/IP.
+// Saat blast, Meta mengirim burst callback status (sent/delivered/read) + pesan responden
+// dari sedikit IP; 300/menit bisa men-throttle (429) sehingga statistik & balasan bot
+// tertunda (Meta me-retry, tapi telat). Sengaja BUKAN pengecualian total: plafon tetap
+// ada sebagai pagar banjir karena endpoint ini publik — signature fail-closed, tapi tiap
+// percobaan yang gagal pun menulis baris WebhookLog.
+const WEBHOOK_RATE_LIMIT = { config: { rateLimit: { max: 3000, timeWindow: "1 minute" } } };
+
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   // --- Meta: verifikasi GET (hub.challenge) ---
-  app.get("/webhook/meta", async (req, reply) => {
+  app.get("/webhook/meta", WEBHOOK_RATE_LIMIT, async (req, reply) => {
     const provider = getProvider("meta");
     const result = provider.verifyWebhook(toWebhookRequest(req));
     if (typeof result === "string") return reply.code(200).send(result); // echo challenge
@@ -27,17 +35,17 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // --- Meta: pesan & status ---
-  app.post("/webhook/meta", async (req, reply) => {
+  app.post("/webhook/meta", WEBHOOK_RATE_LIMIT, async (req, reply) => {
     await receive("meta", req, reply);
   });
 
   // --- Qontak: pesan & status ---
-  app.post("/webhook/qontak", async (req, reply) => {
+  app.post("/webhook/qontak", WEBHOOK_RATE_LIMIT, async (req, reply) => {
     await receive("qontak", req, reply);
   });
 
   // --- Pola umum BSP lain ---
-  app.post("/webhook/:vendor", async (req, reply) => {
+  app.post("/webhook/:vendor", WEBHOOK_RATE_LIMIT, async (req, reply) => {
     const vendor = (req.params as { vendor: string }).vendor;
     if (["meta", "qontak"].includes(vendor)) return; // sudah ditangani di atas
     await receive(vendor, req, reply);
