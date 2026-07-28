@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mediaHeaderComponent } from "../src/providers/meta.js";
+import { mediaHeaderComponent, headerFormatOf } from "../src/providers/meta.js";
 
 // Parameter header media kirim template Meta: tanpa ini, template ber-header media
 // ditolak Meta (error 132018 "issue with the parameters in your template").
@@ -24,5 +24,25 @@ describe("mediaHeaderComponent", () => {
       type: "header",
       parameters: [{ type: "document", document: { link: "https://x.id/uploads/rilis.pdf?v=2", filename: "rilis.pdf" } }],
     });
+  });
+});
+
+describe("headerFormatOf (deteksi header dari components Meta)", () => {
+  it("HEADER format IMAGE → 'image'", () => {
+    const comps = [
+      { type: "HEADER", format: "IMAGE" },
+      { type: "BODY", text: "Halo {{1}}" },
+    ];
+    expect(headerFormatOf(comps)).toBe("image");
+  });
+
+  it("tanpa komponen HEADER → null; components bukan array → null", () => {
+    expect(headerFormatOf([{ type: "BODY", text: "x" }])).toBeNull();
+    expect(headerFormatOf(undefined)).toBeNull();
+  });
+
+  it("format tak dikenal (mis. LOCATION) → null; TEXT → 'text'", () => {
+    expect(headerFormatOf([{ type: "HEADER", format: "LOCATION" }])).toBeNull();
+    expect(headerFormatOf([{ type: "HEADER", format: "TEXT", text: "Judul" }])).toBe("text");
   });
 });

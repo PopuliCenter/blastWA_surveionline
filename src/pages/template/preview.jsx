@@ -20,6 +20,59 @@ function WaText({ text }) {
   ));
 }
 
+// Nama file tampilan dari URL media (segmen akhir, tanpa query).
+function fileNameOf(url) {
+  try {
+    return decodeURIComponent((url || "").split("/").pop()?.split("?")[0] || "") || "dokumen";
+  } catch {
+    return "dokumen";
+  }
+}
+
+// Header media: render file ASLI bila URL terisi (gambar/video tampil, dokumen = chip nama
+// file); tanpa URL → placeholder label seperti semula.
+function WaMediaHeader({ type, url }) {
+  const u = (url || "").trim();
+  const label = { image: "🖼️ Gambar / Foto", document: "📄 Dokumen (PDF)", video: "🎬 Video" }[type];
+  if (!label) return null;
+  if (u && type === "image")
+    return <img src={u} alt="Header" style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "cover" }} />;
+  if (u && type === "video")
+    return <video src={u} controls style={{ display: "block", width: "100%", maxHeight: 220, background: "#000" }} />;
+  if (u && type === "document")
+    return (
+      <div
+        style={{
+          background: "#dfe7e2",
+          color: "#33413a",
+          padding: "14px 12px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          fontWeight: 600,
+          wordBreak: "break-all",
+        }}
+      >
+        📄 {fileNameOf(u)}
+      </div>
+    );
+  return (
+    <div
+      style={{
+        background: "#dfe7e2",
+        color: "#4a5a52",
+        padding: "22px 12px",
+        textAlign: "center",
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
 export function WaPreview({ tpl }) {
   const body = fillVars(tpl.bodyText || "", tpl.sampleParams);
   const header = tpl.headerType === "text" ? fillVars(tpl.headerText || "", tpl.sampleParams) : "";
@@ -39,20 +92,7 @@ export function WaPreview({ tpl }) {
             color: "#111",
           }}
         >
-          {mediaLabel ? (
-            <div
-              style={{
-                background: "#dfe7e2",
-                color: "#4a5a52",
-                padding: "22px 12px",
-                textAlign: "center",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {mediaLabel}
-            </div>
-          ) : null}
+          {mediaLabel ? <WaMediaHeader type={tpl.headerType} url={tpl.headerMediaUrl} /> : null}
           <div style={{ padding: "9px 12px 10px" }}>
             {header ? <div style={{ fontWeight: 700, marginBottom: 5 }}>{header}</div> : null}
             <div>

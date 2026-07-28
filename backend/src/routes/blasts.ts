@@ -40,6 +40,10 @@ export async function blastRoutes(app: FastifyInstance): Promise<void> {
         messageText: z.string().optional(), // teks langsung (wajib untuk baileys)
         bodyParams: z.array(z.string()).optional(),
         scheduledAt: z.string().optional(),
+        // Template ber-header media: URL publik yang dikirim sebagai parameter header.
+        // Bila tak diisi, fallback ke headerMediaUrl template lokal (lihat blastService).
+        headerMediaType: z.enum(["image", "document", "video"]).optional(),
+        headerMediaUrl: z.string().url().optional(),
       })
       // Baileys (templateless) butuh messageText; vendor resmi butuh templateName.
       .refine(

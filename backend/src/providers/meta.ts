@@ -104,10 +104,11 @@ export class MetaCloudAdapter implements MessagingProvider {
   }
 
   // Ambil daftar template dari Meta (WABA) — untuk dipilih saat broadcast (hindari salah nama/bahasa).
+  // components disertakan agar UI tahu template ber-header media (butuh file saat kirim).
   async listTemplates(): Promise<Record<string, unknown>> {
     if (!this.cfg.accessToken) return { error: "Access Token Meta belum diisi." };
     if (!this.cfg.wabaId) return { error: "WABA ID belum diisi — isi 'WhatsApp Business Account ID' di kartu Meta." };
-    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates?fields=name,language,status,category&limit=250`;
+    const url = `https://graph.facebook.com/${this.cfg.graphVersion}/${this.cfg.wabaId}/message_templates?fields=name,language,status,category,components&limit=250`;
     try {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${this.cfg.accessToken}` } });
       const json = (await res.json().catch(() => ({}))) as any;
@@ -119,6 +120,7 @@ export class MetaCloudAdapter implements MessagingProvider {
           language: t.language,
           status: t.status,
           category: t.category,
+          headerFormat: headerFormatOf(t.components),
         })),
       };
     } catch (e) {
@@ -343,6 +345,17 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Format header sebuah template dari daftar components Meta → lowercase; null bila tanpa header.
+// Dipakai UI blast untuk tahu template butuh file media saat kirim.
+export function headerFormatOf(components: unknown): "image" | "document" | "video" | "text" | null {
+  if (!Array.isArray(components)) return null;
+  const h = components.find((c: any) => String(c?.type ?? "").toUpperCase() === "HEADER") as
+    | { format?: unknown }
+    | undefined;
+  const f = String(h?.format ?? "").toLowerCase();
+  return f === "image" || f === "document" || f === "video" || f === "text" ? f : null;
 }
 
 // Komponen header media untuk kirim template (tautan publik).

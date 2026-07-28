@@ -11,6 +11,9 @@ export type CreateBlastInput = {
   messageText?: string;
   bodyParams?: string[];
   scheduledAt?: string; // ISO; bila ada → dijadwalkan
+  // Header media per blast (menimpa headerMediaUrl template lokal bila diisi)
+  headerMediaType?: "image" | "document" | "video";
+  headerMediaUrl?: string;
 };
 
 // Render teks pesan: ganti placeholder {{1}}, {{2}}, ... dengan bodyParams.
@@ -42,12 +45,14 @@ export async function createBlast(input: CreateBlastInput) {
       ? await prisma.messageTemplate.findFirst({ where: { name: templateName, language: templateLang } })
       : null;
   const headerMedia =
-    localTpl && ["image", "document", "video"].includes(localTpl.headerType) && localTpl.headerMediaUrl
-      ? {
-          headerMediaType: localTpl.headerType as "image" | "document" | "video",
-          headerMediaUrl: localTpl.headerMediaUrl,
-        }
-      : null;
+    input.headerMediaType && input.headerMediaUrl
+      ? { headerMediaType: input.headerMediaType, headerMediaUrl: input.headerMediaUrl }
+      : localTpl && ["image", "document", "video"].includes(localTpl.headerType) && localTpl.headerMediaUrl
+        ? {
+            headerMediaType: localTpl.headerType as "image" | "document" | "video",
+            headerMediaUrl: localTpl.headerMediaUrl,
+          }
+        : null;
 
   const segment = await prisma.segment.findUnique({
     where: { id: input.segmentId },

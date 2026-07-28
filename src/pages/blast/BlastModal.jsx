@@ -1,7 +1,14 @@
-import { useState } from "react";
-import { api } from "../../lib/api";
+import { useRef, useState } from "react";
+import { api, apiBase } from "../../lib/api";
 import { Modal, Select, Notice, Input, Textarea, Button, theme } from "../../lib/ui";
 import { loadRates, rupiah } from "./constants";
+
+const MEDIA_TYPES = ["image", "document", "video"];
+const MEDIA_ACCEPT = {
+  image: "image/jpeg,image/png,image/webp",
+  document: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx",
+  video: "video/mp4,video/3gpp",
+};
 
 export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const [f, setF] = useState({
@@ -14,10 +21,35 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     bodyParams: "",
     messageText: "",
     schedule: "",
+    headerMediaType: "",
+    headerMediaUrl: "",
   });
   const [saving, setSaving] = useState(false);
   const [rates] = useState(loadRates);
   const set = (k, v) => setF({ ...f, [k]: v });
+
+  // Upload/ganti file header media untuk blast ini
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [upErr, setUpErr] = useState("");
+  const onPickedFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setUpErr("");
+    try {
+      const r = await api.uploadMedia(file);
+      set("headerMediaUrl", `${apiBase}${r.path}`);
+    } catch (err) {
+      setUpErr(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+  // Prefill URL dari template lokal yang namanya sama (mis. padanan template Meta).
+  const localMediaUrl = (name, language) =>
+    templates.find((x) => x.name === name && (x.language || "id") === language)?.headerMediaUrl || "";
 
   // Ambil daftar template approved langsung dari Meta (hindari salah nama/bahasa).
   const [metaTpls, setMetaTpls] = useState(null);
@@ -40,16 +72,27 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const pickMetaTpl = (val) => {
     if (!val) return;
     const [name, language] = val.split("|");
-    setF({ ...f, templateName: name, templateLang: language || "id", templateId: "" });
+    // Template Meta ber-header media → wajib file saat kirim; deteksi dari headerFormat.
+    const mt = (metaTpls || []).find((t) => t.name === name && t.language === language);
+    const mediaType = MEDIA_TYPES.includes(mt?.headerFormat) ? mt.headerFormat : "";
+    setF({
+      ...f,
+      templateName: name,
+      templateLang: language || "id",
+      templateId: "",
+      headerMediaType: mediaType,
+      headerMediaUrl: mediaType ? localMediaUrl(name, language || "id") : "",
+    });
   };
 
   const pickTemplate = (id) => {
     const t = templates.find((x) => x.id === id);
     if (!t) {
-      setF({ ...f, templateId: "", templateName: "", bodyParams: "" });
+      setF({ ...f, templateId: "", templateName: "", bodyParams: "", headerMediaType: "", headerMediaUrl: "" });
       return;
     }
     const preview = (t.bodyText || "").replace(/\{\{(\d+)\}\}/g, (_, n) => t.sampleParams?.[+n - 1] || `{{${n}}}`);
+    const mediaType = MEDIA_TYPES.includes(t.headerType) ? t.headerType : "";
     setF({
       ...f,
       templateId: id,
@@ -57,6 +100,8 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
       templateLang: t.language || "id",
       bodyParams: (t.sampleParams || []).join(", "),
       messageText: preview,
+      headerMediaType: mediaType,
+      headerMediaUrl: mediaType ? t.headerMediaUrl || "" : "",
     });
   };
   const selectedTpl = templates.find((x) => x.id === f.templateId);
@@ -82,6 +127,9 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
         messageText: f.messageText,
         bodyParams: f.bodyParams.trim() ? f.bodyParams.split(",").map((s) => s.trim()) : undefined,
         scheduledAt: f.schedule || undefined,
+        ...(!isBaileys && f.headerMediaType && f.headerMediaUrl.trim()
+          ? { headerMediaType: f.headerMediaType, headerMediaUrl: f.headerMediaUrl.trim() }
+          : {}),
       });
     } finally {
       setSaving(false);
@@ -223,6 +271,62 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
             onChange={(e) => set("bodyParams", e.target.value)}
             hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel"
           />
+          <Select
+            label="Header media (bila template ber-header media)"
+            value={f.headerMediaType}
+            onChange={(e) => set("headerMediaType", e.target.value)}
+            options={[
+              { value: "", label: "— tanpa media —" },
+              { value: "image", label: "Gambar / Foto" },
+              { value: "document", label: "Dokumen (PDF)" },
+              { value: "video", label: "Video" },
+            ]}
+          />
+          {f.headerMediaType ? (
+            <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 12, marginBottom: 14 }}>
+              <Input
+                label="URL media"
+                value={f.headerMediaUrl}
+                onChange={(e) => set("headerMediaUrl", e.target.value)}
+                error={upErr}
+                hint="Terisi otomatis dari template lokal; klik Upload File untuk mengganti. WAJIB terisi — template ber-header media ditolak Meta bila dikirim tanpa file."
+                placeholder="https://..."
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept={MEDIA_ACCEPT[f.headerMediaType]}
+                style={{ display: "none" }}
+                onChange={onPickedFile}
+              />
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap", marginTop: -6 }}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon="upload"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? "Mengunggah…" : "Upload File"}
+                </Button>
+                {f.headerMediaUrl.trim() ? (
+                  f.headerMediaType === "image" ? (
+                    <img
+                      src={f.headerMediaUrl}
+                      alt="Preview header"
+                      style={{ maxHeight: 90, maxWidth: 160, borderRadius: 8, objectFit: "cover" }}
+                    />
+                  ) : f.headerMediaType === "video" ? (
+                    <video src={f.headerMediaUrl} controls style={{ maxHeight: 90, maxWidth: 200, borderRadius: 8 }} />
+                  ) : (
+                    <span style={{ fontSize: 12.5, color: theme.text, wordBreak: "break-all", paddingTop: 6 }}>
+                      📄 {decodeURIComponent(f.headerMediaUrl.split("/").pop()?.split("?")[0] || "dokumen")}
+                    </span>
+                  )
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <Textarea
             label="Preview Pesan (audit)"
             value={f.messageText}
@@ -269,7 +373,12 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
         <Button
           icon="send"
           onClick={submit}
-          disabled={!f.segmentId || (isBaileys ? !f.messageText.trim() : !f.templateName.trim()) || saving}
+          disabled={
+            !f.segmentId ||
+            (isBaileys ? !f.messageText.trim() : !f.templateName.trim()) ||
+            (!isBaileys && !!f.headerMediaType && !f.headerMediaUrl.trim()) ||
+            saving
+          }
         >
           {saving ? "Mengirim..." : "Kirim Blast"}
         </Button>
