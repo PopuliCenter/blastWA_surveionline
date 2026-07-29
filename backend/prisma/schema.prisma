@@ -66,6 +66,7 @@ model Survey {
   flowCta         String? // label tombol pembuka flow (mis. "Isi Survei")
   flowPerScreen   Int          @default(4) // mode flow: berapa pertanyaan per layar (multi-layar)
   privacyUrl      String? // tautan kebijakan privasi (EmbeddedLink di layar pertama flow)
+  bannerUrl       String? // gambar banner di pesan pembuka survei (header pesan Flow / caption di mode chat)
   closingMessage  String? // kata penutup custom saat survei selesai (kosong = pakai default)
   createdAt       DateTime     @default(now())
   questions       Question[]

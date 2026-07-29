@@ -48,6 +48,7 @@ export interface SendFlowInput {
   flowId: string;
   flowToken: string; // dikembalikan di response_json untuk korelasi
   cta: string; // label tombol pembuka flow
+  headerImageUrl?: string; // banner di atas pesan flow (header interaktif bertipe image)
   bodyText: string;
   headerText?: string;
   screen?: string; // id layar awal (default "SURVEY")
@@ -68,6 +69,8 @@ export interface MessagingProvider {
   markRead?(messageId: string): Promise<void>;
   /** Kirim pesan interaktif WhatsApp Flow (opsional; hanya vendor yang mendukung). */
   sendFlow?(input: SendFlowInput): Promise<SendResult>;
+  /** Kirim gambar + caption (banner pembuka survei mode chat). Opsional per vendor. */
+  sendImage?(input: { to: string; link: string; caption?: string }): Promise<SendResult>;
 
   /**
    * Verifikasi webhook.

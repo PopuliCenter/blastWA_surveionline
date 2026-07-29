@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { api, apiBase } from "../../lib/api";
 import { Button, Input, Textarea, Select, Toggle, Modal, theme, Icon } from "../../lib/ui";
 import { QTYPE_OPTIONS, HAS_CHOICES } from "./constants";
 import { QuestionItem } from "./QuestionItem";
@@ -19,6 +20,25 @@ export function SurveyModal({ survey, onClose, onSave }) {
   const [flowCta, setFlowCta] = useState(survey?.flowCta || "Isi Survei");
   const [flowPerScreen, setFlowPerScreen] = useState(survey?.flowPerScreen ?? 4);
   const [privacyUrl, setPrivacyUrl] = useState(survey?.privacyUrl || "");
+  const [bannerUrl, setBannerUrl] = useState(survey?.bannerUrl || "");
+  const bannerRef = useRef(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerErr, setBannerErr] = useState("");
+  const onPickBanner = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBannerUploading(true);
+    setBannerErr("");
+    try {
+      const r = await api.uploadMedia(file);
+      setBannerUrl(`${apiBase}${r.path}`);
+    } catch (err) {
+      setBannerErr(err.message);
+    } finally {
+      setBannerUploading(false);
+    }
+  };
   const [closingMessage, setClosingMessage] = useState(survey?.closingMessage || "");
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -84,6 +104,7 @@ export function SurveyModal({ survey, onClose, onSave }) {
         flowCta: mode === "flow" ? flowCta.trim() || "Isi Survei" : null,
         flowPerScreen: Math.min(20, Math.max(1, Number(flowPerScreen) || 4)),
         privacyUrl: mode === "flow" ? privacyUrl.trim() || null : null,
+        bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
@@ -106,6 +127,48 @@ export function SurveyModal({ survey, onClose, onSave }) {
       <Modal title={survey ? "Edit Survei" : "Buat Survei"} onClose={onClose} width={680}>
         <Input label="Judul" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Textarea label="Deskripsi" value={description} onChange={(e) => setDescription(e.target.value)} />
+
+        {/* Banner pesan pembuka — berlaku di kedua mode (header pesan Flow / gambar ber-caption di chat) */}
+        <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <Input
+            label="Banner pesan pembuka (opsional)"
+            value={bannerUrl}
+            onChange={(e) => setBannerUrl(e.target.value)}
+            error={bannerErr}
+            placeholder="https://..."
+            hint="Gambar di pesan saat survei dimulai. Mode Flow: jadi header pesan formulir. Mode Chat: dikirim sebagai gambar ber-caption. JPG/PNG, maks 10MB."
+          />
+          <input
+            ref={bannerRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            style={{ display: "none" }}
+            onChange={onPickBanner}
+          />
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap", marginTop: -6 }}>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon="upload"
+              onClick={() => bannerRef.current?.click()}
+              disabled={bannerUploading}
+            >
+              {bannerUploading ? "Mengunggah…" : "Upload Banner"}
+            </Button>
+            {bannerUrl.trim() ? (
+              <>
+                <img
+                  src={bannerUrl}
+                  alt="Banner"
+                  style={{ maxHeight: 70, maxWidth: 140, borderRadius: 8, objectFit: "cover" }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => setBannerUrl("")}>
+                  Hapus banner
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
         <Select
           label="Status"
           value={status}

@@ -104,6 +104,16 @@ export class MetaCloudAdapter implements MessagingProvider {
     });
   }
 
+  // Gambar + caption (banner pembuka survei mode chat). Hanya sah dalam sesi 24 jam.
+  async sendImage(input: { to: string; link: string; caption?: string }): Promise<SendResult> {
+    return this.post({
+      messaging_product: "whatsapp",
+      to: input.to,
+      type: "image",
+      image: { link: input.link, ...(input.caption ? { caption: input.caption } : {}) },
+    });
+  }
+
   // Ambil daftar template dari Meta (WABA) — untuk dipilih saat broadcast (hindari salah nama/bahasa).
   // components disertakan agar UI tahu template ber-header media (butuh file saat kirim).
   async listTemplates(): Promise<Record<string, unknown>> {
@@ -270,7 +280,12 @@ export class MetaCloudAdapter implements MessagingProvider {
       type: "interactive",
       interactive: {
         type: "flow",
-        ...(input.headerText ? { header: { type: "text", text: input.headerText } } : {}),
+        // Banner gambar diprioritaskan sebagai header; hanya SATU header per pesan.
+        ...(input.headerImageUrl
+          ? { header: { type: "image", image: { link: input.headerImageUrl } } }
+          : input.headerText
+            ? { header: { type: "text", text: input.headerText } }
+            : {}),
         body: { text: input.bodyText },
         action: {
           name: "flow",

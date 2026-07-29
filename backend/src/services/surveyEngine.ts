@@ -174,6 +174,7 @@ type SurveyLite = {
   mode: string;
   flowId: string | null;
   flowCta: string | null;
+  bannerUrl: string | null; // gambar pembuka (header pesan flow / caption di mode chat)
   questions: QLite[];
 };
 
@@ -198,6 +199,7 @@ async function startSurvey(
       cta: survey.flowCta || "Isi Survei",
       bodyText: body,
       screen: "SURVEY",
+      ...(survey.bannerUrl ? { headerImageUrl: survey.bannerUrl } : {}),
     });
     await prisma.message.create({
       data: {
@@ -218,6 +220,36 @@ async function startSurvey(
   });
   const first = formatQuestion(survey.questions[0]!);
   const intro = survey.description ? `${survey.description}\n\n${first}` : first;
+
+  // Banner: kirim sebagai gambar ber-caption supaya tetap SATU pesan (bukan gambar
+  // lalu teks terpisah). Vendor tanpa dukungan gambar → jatuh ke teks biasa.
+  if (survey.bannerUrl && typeof provider.sendImage === "function") {
+    try {
+      const result = await provider.sendImage({ to: phone, link: survey.bannerUrl, caption: intro });
+      if (result.status !== "failed") {
+        await prisma.message.create({
+          data: {
+            contactId,
+            direction: "out",
+            vendor,
+            vendorMessageId: result.vendorMessageId || null,
+            text: intro,
+            payload: result.raw as object,
+            isBot: true,
+          },
+        });
+        return;
+      }
+      // Gagal kirim gambar (mis. URL tak bisa diunduh Meta) → jangan biarkan survei
+      // batal; lanjut kirim versi teksnya.
+      logError("backend", new Error("Banner survei gagal dikirim, memakai teks biasa"), {
+        surveyId: survey.id,
+        bannerUrl: survey.bannerUrl,
+      });
+    } catch (e) {
+      logError("backend", e, { surveyId: survey.id, kind: "bannerSurvei" });
+    }
+  }
   await reply(vendor, phone, intro, contactId);
 }
 

@@ -26,6 +26,7 @@ const surveySchema = z.object({
   flowCta: z.string().optional().nullable(),
   flowPerScreen: z.coerce.number().int().min(1).max(20).default(4),
   privacyUrl: z.string().url().or(z.literal("")).optional().nullable(),
+  bannerUrl: z.string().url().or(z.literal("")).optional().nullable(),
   closingMessage: z.string().max(2000).optional().nullable(),
   questions: z.array(questionSchema).default([]),
 });
