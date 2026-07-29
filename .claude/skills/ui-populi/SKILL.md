@@ -140,6 +140,64 @@ Jangan pernah menyerahkan perubahan UI tanpa melihatnya. Alurnya:
 3. `read_console_messages` untuk memastikan tak ada galat.
 4. `resize_window` preset `mobile` untuk cek layar sempit.
 
+### Halaman terkunci login
+
+Seluruh dashboard ada di balik login, dan backend lokal biasanya tidak jalan. **Jangan mengisi
+kredensial siapa pun untuk menembusnya.** Pakai harness sementara: tambal metode `api` dengan
+data tiruan lalu render **komponen halaman yang asli** — bukan tiruan markup-nya, supaya yang
+diuji benar-benar kode yang dikirim.
+
+Buat dua berkas, lalu buka `http://localhost:5173/dev-preview.html` (Vite melayani HTML
+tambahan di root tanpa konfigurasi apa pun):
+
+```jsx
+// src/dev-preview.jsx — SEMENTARA, hapus setelah selesai
+import { createRoot } from "react-dom/client";
+import "./index.css"; // WAJIB — lihat catatan di bawah
+import { api } from "./lib/api";
+import { ConfirmHost } from "./lib/confirm";
+import Broadcast from "./pages/Broadcast";
+
+api.listBlasts = async () => MOCK; // tambal secukupnya; `api` objek biasa, bisa ditimpa
+createRoot(document.getElementById("root")).render(
+  <>
+    <main style={{ padding: "26px 30px", maxWidth: 1200 }}><Broadcast /></main>
+    <ConfirmHost />
+  </>,
+);
+```
+
+`dev-preview.html` cukup berisi `<div id="root">` + `<script type="module" src="/src/dev-preview.jsx">`.
+
+Tiga hal yang menyelamatkan waktu:
+
+- **Impor `./index.css`.** Tanpa itu harness memakai `content-box` dan `body { margin: 8px }`
+  bawaan browser, lalu muncul scroll horizontal palsu yang tidak ada di aplikasi sungguhan.
+- **Hapus kedua berkas sebelum commit.** Keduanya tidak boleh masuk repo.
+- Galat konsol `createRoot() on a container that has already been passed` dan
+  `[vite] Failed to reload /src/dev-preview.jsx` berasal dari HMR harness, bukan aplikasi.
+
+### Kalau screenshot gagal
+
+Bila `computer` → `screenshot` menjawab *"the Browser pane is not displayed"*, panel browser
+tidak sedang tampil dan gambar tidak bisa diambil. Jangan menyerah pada verifikasi — **ukur
+DOM-nya** lewat `javascript_tool`. Untuk klaim tata letak, angka justru lebih tegas daripada
+gambar:
+
+```js
+el.getBoundingClientRect()                                   // tinggi kartu, posisi baris tombol
+getComputedStyle(el).gridTemplateColumns                     // jumlah & lebar kolom
+document.documentElement.scrollWidth > clientWidth           // ada scroll horizontal?
+[...document.querySelectorAll('*')].filter(e => e.getBoundingClientRect().right > vw)  // cari biang overflow
+```
+
+Interaksi juga bisa diuji dari situ: `dispatchEvent(new MouseEvent(...))` pada latar modal,
+`new KeyboardEvent('keydown', { key: 'Escape' })`, dan untuk mengisi input React pakai setter
+asli `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set` lalu picu
+`new Event('input', { bubbles: true })` — menyetel `.value` langsung tidak akan terbaca React.
+
+### Service worker
+
 Aplikasi ini memasang **service worker**. Kalau browser menyajikan modul lama padahal sumbernya sudah benar, batalkan registrasi service worker dan hapus cache-nya lewat `javascript_tool` sebelum menduga ada bug di kode.
 
 ## Perintah
