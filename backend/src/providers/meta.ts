@@ -124,6 +124,7 @@ export class MetaCloudAdapter implements MessagingProvider {
           status: t.status,
           category: t.category,
           headerFormat: headerFormatOf(t.components),
+          buttonTypes: buttonTypesOf(t.components),
           quality: qualityScoreOf(t.quality_score),
           rejectedReason: t.rejected_reason ?? null,
         })),
@@ -391,6 +392,18 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Daftar TIPE tombol template menurut Meta, urut sesuai indeksnya.
+// mis. ["QUICK_REPLY","QUICK_REPLY"] atau ["FLOW"]. Dipakai untuk memastikan parameter
+// tombol Flow hanya dikirim ke template yang tombol index 0-nya memang FLOW.
+export function buttonTypesOf(components: unknown): string[] {
+  if (!Array.isArray(components)) return [];
+  const b = components.find((c: any) => String(c?.type ?? "").toUpperCase() === "BUTTONS") as
+    | { buttons?: unknown }
+    | undefined;
+  if (!b || !Array.isArray(b.buttons)) return [];
+  return (b.buttons as any[]).map((x) => String(x?.type ?? "").toUpperCase());
 }
 
 // Komponen HEADER untuk PEMBUATAN template ber-media: format + contoh asset handle

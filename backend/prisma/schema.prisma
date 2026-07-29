@@ -267,6 +267,7 @@ model MessageTemplate {
   metaStatus     String? // APPROVED | PENDING | IN_REVIEW | REJECTED | PAUSED | DISABLED. null = TIDAK ada di Meta
   metaQuality    String? // GREEN | YELLOW | RED | UNKNOWN (quality rating Meta)
   metaCategory   String? // kategori menurut Meta (bisa berbeda — Meta kadang mengklasifikasi ulang)
+  metaButtons    String[] @default([]) // TIPE tombol menurut Meta, urut indeks: QUICK_REPLY | URL | PHONE_NUMBER | FLOW
   metaHeaderFormat String? // format header MENURUT META: text | image | document | video (null = tanpa header).
   // Sumber kebenaran saat blast: parameter header yang dikirim WAJIB cocok dengan ini,
   // kalau tidak Meta menolak (#132012 "Parameter format does not match format in the created template").

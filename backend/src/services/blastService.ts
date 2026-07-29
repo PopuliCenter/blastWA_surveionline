@@ -22,6 +22,26 @@ const MEDIA_HEADERS = ["image", "document", "video"];
 export type HeaderMedia = { headerMediaType: "image" | "document" | "video"; headerMediaUrl: string } | null;
 
 /**
+ * Bolehkah parameter tombol Flow (flow_token) disertakan pada blast ini?
+ *
+ * flow_token hanya sah bila tombol INDEX 0 template bertipe FLOW. Bila template memakai
+ * QuickReply (mis. "Mulai Survei"), Meta menolak SELURUH kiriman dengan
+ * #132018 "buttons: Button at index 0 must be of type QuickReply".
+ *
+ * Template tanpa tombol Flow tetap boleh diblast — hanya tanpa flow_token. Responden
+ * memulai survei lewat kata kunci pemicu (mis. menekan QuickReply "Mulai Survei"),
+ * lalu formulir Flow dikirim oleh mesin survei dengan token korelasinya sendiri.
+ *
+ * `synced=false` (template belum disinkron) → tak bisa dipastikan; pertahankan perilaku
+ * lama (kirim flow_token) agar template Flow yang sah tidak kehilangan korelasi.
+ */
+export function shouldAttachFlowToken(args: { surveyIsFlow: boolean; synced: boolean; metaButtons: string[] }): boolean {
+  if (!args.surveyIsFlow) return false;
+  if (!args.synced) return true; // belum diketahui → jangan ubah perilaku
+  return args.metaButtons[0] === "FLOW";
+}
+
+/**
  * Tentukan parameter header untuk sebuah blast.
  *
  * Format header MENURUT META adalah sumber kebenaran: parameter yang dikirim WAJIB cocok
@@ -84,11 +104,9 @@ export async function createBlast(input: CreateBlastInput) {
   // Baileys tak punya template Meta → simpan label saja agar kolom tetap terisi.
   const templateName = input.templateName ?? (vendor === "baileys" ? "(teks langsung)" : "");
 
-  // Survei mode flow → kirim template ber-tombol Flow + flow_token untuk korelasi balasan
   const survey = input.surveyId
     ? await prisma.survey.findUnique({ where: { id: input.surveyId }, select: { id: true, mode: true } })
     : null;
-  const flowToken = survey?.mode === "flow" ? `srv_${survey.id}` : undefined;
 
   // Template lokal ber-header media → bawa URL-nya agar dikirim sebagai parameter header.
   // (Template yang dipilih langsung "dari Meta" tidak punya metadata lokal → dilewati;
@@ -97,6 +115,15 @@ export async function createBlast(input: CreateBlastInput) {
     templateName && vendor !== "baileys"
       ? await prisma.messageTemplate.findFirst({ where: { name: templateName, language: templateLang } })
       : null;
+
+  // Survei mode flow → sertakan flow_token HANYA bila tombol index 0 template bertipe FLOW.
+  // Template ber-QuickReply tetap boleh diblast; responden memulai survei lewat kata kunci.
+  const attachFlow = shouldAttachFlowToken({
+    surveyIsFlow: survey?.mode === "flow",
+    synced: Boolean(localTpl?.metaSyncedAt),
+    metaButtons: localTpl?.metaButtons ?? [],
+  });
+  const flowToken = attachFlow ? `srv_${survey!.id}` : undefined;
   const headerMedia = resolveHeaderMedia({
     templateName,
     metaHeaderFormat: localTpl?.metaHeaderFormat ?? null,

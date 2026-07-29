@@ -122,6 +122,17 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     const mt = (metaTpls || []).find((t) => t.name === f.templateName && t.language === f.templateLang);
     return mt ? { known: true, format: mt.headerFormat ?? null } : { known: false, format: null };
   })();
+  // Tombol template menurut Meta: menentukan apakah formulir Flow bisa dibuka langsung
+  // dari pesan blast. Tombol index 0 harus bertipe FLOW; kalau tidak, Meta menolak
+  // #132018 ("buttons: Button at index 0 must be of type QuickReply").
+  const flowButtonState = (() => {
+    const btns = selectedTpl?.metaSyncedAt
+      ? (selectedTpl.metaButtons ?? [])
+      : (metaTpls || []).find((t) => t.name === f.templateName && t.language === f.templateLang)?.buttonTypes;
+    if (!btns) return { known: false, hasFlow: false, first: null };
+    return { known: true, hasFlow: btns[0] === "FLOW", first: btns[0] ?? null };
+  })();
+
   // Tipe media efektif: dikunci ke format Meta bila diketahui — mencegah #132012
   // ("Parameter format does not match format in the created template").
   const effMediaType = knownHeader.known
@@ -170,10 +181,20 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
         ]}
       />
       {selSurvey?.mode === "flow" ? (
-        <Notice kind="info">
-          Survei <strong>Flow</strong>: pakai template yang punya <strong>tombol Flow</strong> (terhubung ke Flow ID
-          survei ini di Meta). Jawaban responden tertangkap otomatis tanpa tanya-jawab per pesan.
-        </Notice>
+        flowButtonState.known && !flowButtonState.hasFlow ? (
+          <Notice kind="info">
+            Template ini memakai tombol <strong>{flowButtonState.first || "biasa"}</strong> di Meta, bukan tombol{" "}
+            <strong>Flow</strong> — jadi formulir <strong>tidak</strong> terbuka langsung dari pesan blast. Responden
+            memulai survei dengan membalas <strong>kata kunci pemicu</strong> (mis. menekan tombol balasan cepat), lalu
+            formulir Flow dikirim otomatis. Agar terbuka langsung dari pesan, buat template ber-<strong>tombol Flow</strong>{" "}
+            di WhatsApp Manager.
+          </Notice>
+        ) : (
+          <Notice kind="info">
+            Survei <strong>Flow</strong>: pakai template yang punya <strong>tombol Flow</strong> (terhubung ke Flow ID
+            survei ini di Meta). Jawaban responden tertangkap otomatis tanpa tanya-jawab per pesan.
+          </Notice>
+        )
       ) : null}
       <Select
         label="Segmen"

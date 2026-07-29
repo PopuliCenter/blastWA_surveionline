@@ -14,6 +14,7 @@ type MetaTemplate = {
   quality?: string | null;
   rejectedReason?: string | null;
   headerFormat?: string | null; // text | image | document | video (null = tanpa header)
+  buttonTypes?: string[]; // urut indeks: QUICK_REPLY | URL | PHONE_NUMBER | FLOW
 };
 
 // Petakan status Meta → label lokal.
@@ -224,6 +225,7 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
           metaQuality: r.quality ?? null,
           metaCategory: r.category ?? null,
           metaHeaderFormat: r.headerFormat ?? null,
+          metaButtons: r.buttonTypes ?? [],
           metaId: r.id ?? null,
           metaReason: r.rejectedReason ?? null,
           metaSyncedAt: syncedAt,
