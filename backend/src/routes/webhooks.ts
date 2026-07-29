@@ -23,7 +23,12 @@ async function log(vendor: string, event: string, status: string, payload: unkno
 // tertunda (Meta me-retry, tapi telat). Sengaja BUKAN pengecualian total: plafon tetap
 // ada sebagai pagar banjir karena endpoint ini publik — signature fail-closed, tapi tiap
 // percobaan yang gagal pun menulis baris WebhookLog.
-const WEBHOOK_RATE_LIMIT = { config: { rateLimit: { max: 3000, timeWindow: "1 minute" } } };
+//
+// 6000/menit (100/detik). Perhitungannya: worker mengirim maksimal 20 pesan/detik
+// (queue/worker.ts), dan tiap pesan memicu callback sent lalu delivered yang datang
+// bertumpuk → puncak ±40/detik. Plafon lama 3000/menit (50/detik) hanya menyisakan
+// margin ~20% pada blast besar; 100/detik memberi ruang 2,5× tanpa melepas pagarnya.
+const WEBHOOK_RATE_LIMIT = { config: { rateLimit: { max: 6000, timeWindow: "1 minute" } } };
 
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
   // --- Meta: verifikasi GET (hub.challenge) ---

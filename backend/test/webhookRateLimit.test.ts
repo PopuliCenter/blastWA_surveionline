@@ -5,7 +5,7 @@ import { webhookRoutes } from "../src/routes/webhooks.js";
 import { loadProviders } from "../src/providers/registry.js";
 
 // Saat blast, Meta mengirim burst callback (sent/delivered/read) + pesan responden dari
-// sedikit IP — bisa >300/menit. Route webhook memakai plafon longgar (3000/menit) yang
+// sedikit IP — bisa >300/menit. Route webhook memakai plafon longgar (6000/menit) yang
 // menimpa limit global 300/menit; tanpa override itu, hit ke-301 dari IP yang sama kena
 // 429 dan statistik/balasan bot tertunda. Test memakai route webhook ASLI (bukan replika).
 async function build(): Promise<FastifyInstance> {
@@ -19,7 +19,7 @@ async function build(): Promise<FastifyInstance> {
   return app;
 }
 
-describe("rate limit webhook (plafon longgar 3000/menit)", () => {
+describe("rate limit webhook (plafon longgar 6000/menit)", () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     app = await build();
