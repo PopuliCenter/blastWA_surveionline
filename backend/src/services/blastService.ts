@@ -16,6 +16,59 @@ export type CreateBlastInput = {
   headerMediaUrl?: string;
 };
 
+// Format header yang memerlukan lampiran file saat kirim.
+const MEDIA_HEADERS = ["image", "document", "video"];
+
+export type HeaderMedia = { headerMediaType: "image" | "document" | "video"; headerMediaUrl: string } | null;
+
+/**
+ * Tentukan parameter header untuk sebuah blast.
+ *
+ * Format header MENURUT META adalah sumber kebenaran: parameter yang dikirim WAJIB cocok
+ * dengan template yang sudah dibuat, kalau tidak Meta menolak SEMUA penerima dengan
+ * #132012 "Parameter format does not match format in the created template"
+ * (mis. "expected TEXT, received IMAGE").
+ *
+ * Bila format Meta belum diketahui (template belum disinkron / nama diketik manual),
+ * kita tak bisa memvalidasi → ikuti input operator, lalu template lokal sebagai cadangan.
+ */
+export function resolveHeaderMedia(args: {
+  templateName: string;
+  metaHeaderFormat: string | null;
+  localHeaderType: string | null;
+  localHeaderMediaUrl: string | null;
+  inputType: "image" | "document" | "video" | null;
+  inputUrl: string | null;
+}): HeaderMedia {
+  const { templateName, metaHeaderFormat, localHeaderType, localHeaderMediaUrl, inputType, inputUrl } = args;
+
+  if (metaHeaderFormat) {
+    const wantsMedia = MEDIA_HEADERS.includes(metaHeaderFormat);
+    if (!wantsMedia) {
+      // Header TEXT (atau bukan media). Mengirim parameter media = ditolak Meta.
+      if (inputType)
+        throw new Error(
+          `Template "${templateName}" ber-header ${metaHeaderFormat.toUpperCase()} di Meta, bukan media. ` +
+            `Kosongkan "Header media" pada blast ini.`,
+        );
+      return null;
+    }
+    const url = inputUrl || localHeaderMediaUrl;
+    if (!url)
+      throw new Error(
+        `Template "${templateName}" ber-header ${metaHeaderFormat.toUpperCase()} di Meta — ` +
+          `wajib melampirkan file media pada blast ini.`,
+      );
+    return { headerMediaType: metaHeaderFormat as "image" | "document" | "video", headerMediaUrl: url };
+  }
+
+  // Format Meta belum diketahui.
+  if (inputType && inputUrl) return { headerMediaType: inputType, headerMediaUrl: inputUrl };
+  if (localHeaderType && MEDIA_HEADERS.includes(localHeaderType) && localHeaderMediaUrl)
+    return { headerMediaType: localHeaderType as "image" | "document" | "video", headerMediaUrl: localHeaderMediaUrl };
+  return null;
+}
+
 // Render teks pesan: ganti placeholder {{1}}, {{2}}, ... dengan bodyParams.
 function renderText(messageText: string | undefined, params: string[]): string {
   let t = messageText ?? "";
@@ -44,15 +97,14 @@ export async function createBlast(input: CreateBlastInput) {
     templateName && vendor !== "baileys"
       ? await prisma.messageTemplate.findFirst({ where: { name: templateName, language: templateLang } })
       : null;
-  const headerMedia =
-    input.headerMediaType && input.headerMediaUrl
-      ? { headerMediaType: input.headerMediaType, headerMediaUrl: input.headerMediaUrl }
-      : localTpl && ["image", "document", "video"].includes(localTpl.headerType) && localTpl.headerMediaUrl
-        ? {
-            headerMediaType: localTpl.headerType as "image" | "document" | "video",
-            headerMediaUrl: localTpl.headerMediaUrl,
-          }
-        : null;
+  const headerMedia = resolveHeaderMedia({
+    templateName,
+    metaHeaderFormat: localTpl?.metaHeaderFormat ?? null,
+    localHeaderType: localTpl?.headerType ?? null,
+    localHeaderMediaUrl: localTpl?.headerMediaUrl ?? null,
+    inputType: input.headerMediaType ?? null,
+    inputUrl: input.headerMediaUrl ?? null,
+  });
 
   const segment = await prisma.segment.findUnique({
     where: { id: input.segmentId },

@@ -93,7 +93,10 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
       return;
     }
     const preview = (t.bodyText || "").replace(/\{\{(\d+)\}\}/g, (_, n) => t.sampleParams?.[+n - 1] || `{{${n}}}`);
-    const mediaType = MEDIA_TYPES.includes(t.headerType) ? t.headerType : "";
+    // Utamakan format header versi META (yang menentukan diterima/ditolaknya kiriman);
+    // header lokal hanya dipakai bila template belum pernah disinkron.
+    const fmt = t.metaSyncedAt || t.metaHeaderFormat ? t.metaHeaderFormat : t.headerType;
+    const mediaType = MEDIA_TYPES.includes(fmt) ? fmt : "";
     setF({
       ...f,
       templateId: id,
@@ -107,6 +110,25 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   };
   const selectedTpl = templates.find((x) => x.id === f.templateId);
   const selSurvey = surveys.find((s) => s.id === f.surveyId);
+
+  // Format header MENURUT META untuk template terpilih — sumber kebenaran.
+  // { known:false } = belum bisa dipastikan (ketik manual / belum disinkron) → biarkan operator memilih.
+  // { known:true, format:null } = template TANPA header media → jangan kirim media sama sekali.
+  const knownHeader = (() => {
+    if (selectedTpl)
+      return selectedTpl.metaSyncedAt || selectedTpl.metaHeaderFormat
+        ? { known: true, format: selectedTpl.metaHeaderFormat ?? null }
+        : { known: false, format: null };
+    const mt = (metaTpls || []).find((t) => t.name === f.templateName && t.language === f.templateLang);
+    return mt ? { known: true, format: mt.headerFormat ?? null } : { known: false, format: null };
+  })();
+  // Tipe media efektif: dikunci ke format Meta bila diketahui — mencegah #132012
+  // ("Parameter format does not match format in the created template").
+  const effMediaType = knownHeader.known
+    ? MEDIA_TYPES.includes(knownHeader.format)
+      ? knownHeader.format
+      : ""
+    : f.headerMediaType;
   const isBaileys = f.vendor === "baileys"; // jalur tidak resmi: kirim teks langsung, tanpa template
 
   // Perkiraan biaya = jumlah kontak segmen × tarif kategori template (atau asumsi Marketing)
@@ -128,8 +150,8 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
         messageText: f.messageText,
         bodyParams: f.bodyParams.trim() ? f.bodyParams.split(",").map((s) => s.trim()) : undefined,
         scheduledAt: f.schedule || undefined,
-        ...(!isBaileys && f.headerMediaType && f.headerMediaUrl.trim()
-          ? { headerMediaType: f.headerMediaType, headerMediaUrl: f.headerMediaUrl.trim() }
+        ...(!isBaileys && effMediaType && f.headerMediaUrl.trim()
+          ? { headerMediaType: effMediaType, headerMediaUrl: f.headerMediaUrl.trim() }
           : {}),
       });
     } finally {
@@ -280,18 +302,28 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
             onChange={(e) => set("bodyParams", e.target.value)}
             hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel"
           />
-          <Select
-            label="Header media (bila template ber-header media)"
-            value={f.headerMediaType}
-            onChange={(e) => set("headerMediaType", e.target.value)}
-            options={[
-              { value: "", label: "— tanpa media —" },
-              { value: "image", label: "Gambar / Foto" },
-              { value: "document", label: "Dokumen (PDF)" },
-              { value: "video", label: "Video" },
-            ]}
-          />
-          {f.headerMediaType ? (
+          {/* Format header dikunci ke apa yang Meta laporkan. Operator hanya memilih sendiri
+              bila template belum bisa dipastikan (nama diketik manual / belum disinkron). */}
+          {!knownHeader.known ? (
+            <Select
+              label="Header media (bila template ber-header media)"
+              value={f.headerMediaType}
+              onChange={(e) => set("headerMediaType", e.target.value)}
+              hint="Template belum disinkron — pastikan pilihan ini SAMA dengan header template di Meta, kalau berbeda Meta menolak semua pengiriman."
+              options={[
+                { value: "", label: "— tanpa media —" },
+                { value: "image", label: "Gambar / Foto" },
+                { value: "document", label: "Dokumen (PDF)" },
+                { value: "video", label: "Video" },
+              ]}
+            />
+          ) : knownHeader.format && !MEDIA_TYPES.includes(knownHeader.format) ? (
+            <Notice kind="info">
+              Template ini ber-header <strong>{knownHeader.format.toUpperCase()}</strong> di Meta → tidak perlu
+              lampiran media.
+            </Notice>
+          ) : null}
+          {effMediaType ? (
             <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 12, marginBottom: 14 }}>
               <Input
                 label="URL media"
@@ -304,7 +336,7 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
               <input
                 ref={fileRef}
                 type="file"
-                accept={MEDIA_ACCEPT[f.headerMediaType]}
+                accept={MEDIA_ACCEPT[effMediaType]}
                 style={{ display: "none" }}
                 onChange={onPickedFile}
               />
@@ -319,13 +351,13 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
                   {uploading ? "Mengunggah…" : "Upload File"}
                 </Button>
                 {f.headerMediaUrl.trim() ? (
-                  f.headerMediaType === "image" ? (
+                  effMediaType === "image" ? (
                     <img
                       src={f.headerMediaUrl}
                       alt="Preview header"
                       style={{ maxHeight: 90, maxWidth: 160, borderRadius: 8, objectFit: "cover" }}
                     />
-                  ) : f.headerMediaType === "video" ? (
+                  ) : effMediaType === "video" ? (
                     <video src={f.headerMediaUrl} controls style={{ maxHeight: 90, maxWidth: 200, borderRadius: 8 }} />
                   ) : (
                     <span style={{ fontSize: 12.5, color: theme.text, wordBreak: "break-all", paddingTop: 6 }}>
@@ -385,7 +417,7 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
           disabled={
             !f.segmentId ||
             (isBaileys ? !f.messageText.trim() : !f.templateName.trim()) ||
-            (!isBaileys && !!f.headerMediaType && !f.headerMediaUrl.trim()) ||
+            (!isBaileys && !!effMediaType && !f.headerMediaUrl.trim()) ||
             saving
           }
         >

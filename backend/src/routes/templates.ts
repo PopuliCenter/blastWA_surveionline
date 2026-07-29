@@ -13,6 +13,7 @@ type MetaTemplate = {
   category?: string;
   quality?: string | null;
   rejectedReason?: string | null;
+  headerFormat?: string | null; // text | image | document | video (null = tanpa header)
 };
 
 // Petakan status Meta → label lokal.
@@ -222,6 +223,7 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
           metaStatus: String(r.status ?? "").toUpperCase() || null,
           metaQuality: r.quality ?? null,
           metaCategory: r.category ?? null,
+          metaHeaderFormat: r.headerFormat ?? null,
           metaId: r.id ?? null,
           metaReason: r.rejectedReason ?? null,
           metaSyncedAt: syncedAt,
