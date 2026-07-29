@@ -12,6 +12,7 @@ export type MetaConfig = {
   accessToken?: string;
   phoneNumberId?: string;
   wabaId?: string; // WhatsApp Business Account ID — untuk ambil daftar template
+  appId?: string; // App ID — khusus Resumable Upload API (pengajuan template ber-header media)
   appSecret?: string;
   verifyToken?: string;
   graphVersion: string;
@@ -132,7 +133,42 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
   }
 
-  // Ajukan template ke Meta untuk direview (POST message_templates). Header media belum didukung.
+  // Unggah file ke Meta lewat Resumable Upload API → kembalikan asset handle (`h`).
+  // Handle inilah yang dipakai sebagai example.header_handle saat membuat template
+  // ber-header media. Butuh App ID (endpoint upload memakai app, bukan WABA).
+  async uploadResumable(file: { buffer: Buffer; mime: string; filename: string }): Promise<string> {
+    if (!this.cfg.appId) throw new Error("App ID Meta belum diisi (kartu Meta di menu Akun WhatsApp).");
+    const base = `https://graph.facebook.com/${this.cfg.graphVersion}`;
+
+    // 1) Buka sesi upload
+    const q = new URLSearchParams({
+      file_name: file.filename,
+      file_length: String(file.buffer.byteLength),
+      file_type: file.mime,
+      access_token: this.cfg.accessToken ?? "",
+    });
+    const startRes = await fetch(`${base}/${this.cfg.appId}/uploads?${q}`, { method: "POST" });
+    const startJson = (await startRes.json().catch(() => ({}))) as any;
+    if (!startRes.ok || !startJson?.id)
+      throw new Error(startJson?.error?.message ?? "Gagal membuka sesi upload media ke Meta.");
+
+    // 2) Kirim binary-nya. Header Authorization di langkah ini berformat "OAuth <token>".
+    const upRes = await fetch(`${base}/${startJson.id}`, {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${this.cfg.accessToken}`,
+        file_offset: "0",
+        "Content-Type": "application/octet-stream",
+      },
+      body: new Uint8Array(file.buffer),
+    });
+    const upJson = (await upRes.json().catch(() => ({}))) as any;
+    if (!upRes.ok || !upJson?.h) throw new Error(upJson?.error?.message ?? "Gagal mengunggah media header ke Meta.");
+    return String(upJson.h);
+  }
+
+  // Ajukan template ke Meta untuk direview (POST message_templates).
+  // Header media didukung: file diunggah dulu (Resumable Upload) → header_handle.
   async createTemplate(input: {
     name: string;
     language: string;
@@ -143,16 +179,13 @@ export class MetaCloudAdapter implements MessagingProvider {
     footerText?: string | null;
     buttons?: { type: string; text: string; url?: string | null; phone?: string | null }[];
     sampleParams?: string[];
+    headerMedia?: { buffer: Buffer; mime: string; filename: string };
   }): Promise<{ ok: boolean; id?: string; status?: string; error?: string; raw?: unknown }> {
     if (!this.cfg.accessToken) return { ok: false, error: "Access Token Meta belum diisi." };
     if (!this.cfg.wabaId) return { ok: false, error: "WABA ID belum diisi di kartu Meta." };
-    if (input.headerType && ["image", "document", "video"].includes(input.headerType)) {
-      return {
-        ok: false,
-        error:
-          "Header media (gambar/dokumen/video) belum didukung untuk pengajuan otomatis. Pakai header Teks / None, atau ajukan manual di WhatsApp Manager.",
-      };
-    }
+    const isMediaHeader = Boolean(input.headerType && ["image", "document", "video"].includes(input.headerType));
+    if (isMediaHeader && !input.headerMedia)
+      return { ok: false, error: "Header media butuh file — upload/isi URL media di editor template dulu." };
 
     const maxVar = (s: string) => {
       let m = 0;
@@ -168,6 +201,15 @@ export class MetaCloudAdapter implements MessagingProvider {
       const comp: any = { type: "HEADER", format: "TEXT", text: input.headerText };
       if (maxVar(input.headerText) > 0) comp.example = { header_text: [sample(0)] };
       components.push(comp);
+    } else if (isMediaHeader && input.headerMedia) {
+      // Unggah file → handle, lalu sertakan sebagai contoh header.
+      let handle: string;
+      try {
+        handle = await this.uploadResumable(input.headerMedia);
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : "Gagal mengunggah media header ke Meta." };
+      }
+      components.push(mediaHeaderTemplateComponent(input.headerType!, handle));
     }
     const body: any = { type: "BODY", text: input.bodyText };
     const bv = maxVar(input.bodyText);
@@ -349,6 +391,12 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Komponen HEADER untuk PEMBUATAN template ber-media: format + contoh asset handle
+// hasil Resumable Upload. (Beda dari mediaHeaderComponent() yang dipakai saat KIRIM pesan.)
+export function mediaHeaderTemplateComponent(headerType: string, handle: string): object {
+  return { type: "HEADER", format: headerType.toUpperCase(), example: { header_handle: [handle] } };
 }
 
 // Quality rating template dari Meta → GREEN | YELLOW | RED | UNKNOWN (null bila tak ada).

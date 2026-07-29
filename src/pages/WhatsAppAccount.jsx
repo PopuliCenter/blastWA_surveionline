@@ -29,6 +29,7 @@ export default function WhatsAppAccount() {
     accessToken: "",
     phoneNumberId: "",
     wabaId: "",
+    appId: "",
     appSecret: "",
     verifyToken: "",
     graphVersion: "v23.0",
@@ -260,6 +261,13 @@ export default function WhatsAppAccount() {
             onChange={(e) => setMeta({ ...meta, wabaId: e.target.value })}
             placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "mis. 1027483456718760"}
             hint="Untuk mengambil daftar template dari Meta saat broadcast. WhatsApp Manager › Account tools / API Setup."
+          />
+          <Input
+            label="App ID"
+            value={meta.appId}
+            onChange={(e) => setMeta({ ...meta, appId: e.target.value })}
+            placeholder={vmeta?.hasStoredCredentials ? "tersimpan — isi untuk ganti" : "mis. 1234567890123456"}
+            hint="Meta for Developers › App › Settings › Basic › App ID. Dipakai saat mengajukan template ber-header media (gambar/PDF/video)."
           />
           <PasswordInput
             noAutofill

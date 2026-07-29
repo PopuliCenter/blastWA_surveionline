@@ -80,10 +80,11 @@ export function TemplateGuide() {
         ))}
       </div>
 
-      <GuideNote tone="danger">
-        <strong>Header media (Gambar/Dokumen/Video) belum bisa diajukan otomatis dari sini.</strong> Untuk template
-        berheader media, buat &amp; ajukan langsung di <strong>WhatsApp Manager → Message Templates</strong>. Dari
-        aplikasi ini, pakai header <strong>Teks</strong> atau <strong>Tanpa header</strong>.
+      <GuideNote tone="info">
+        <strong>Header media (Gambar/PDF/Video) bisa diajukan dari sini.</strong> Klik <strong>Upload File</strong> di
+        editor, lalu <strong>Ajukan ke Meta</strong> — filenya otomatis diunggah ke Meta sebagai contoh header. Syarat:{" "}
+        <strong>App ID</strong> terisi di menu Akun WhatsApp, dan tipe file <strong>JPG/PNG, PDF, atau MP4</strong>{" "}
+        (WebP &amp; dokumen Office tidak diterima Meta untuk header template).
       </GuideNote>
 
       <GuideNote tone="info">

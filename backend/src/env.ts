@@ -30,6 +30,9 @@ const schema = z.object({
   META_PHONE_NUMBER_ID: z.string().optional(),
   META_ACCESS_TOKEN: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
+  // App ID Meta — dipakai Resumable Upload API (POST /{app-id}/uploads) saat mengajukan
+  // template ber-header media. Hanya untuk itu; pengiriman pesan tak memerlukannya.
+  META_APP_ID: z.string().optional(),
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   META_GRAPH_VERSION: z.string().default("v21.0"),
 

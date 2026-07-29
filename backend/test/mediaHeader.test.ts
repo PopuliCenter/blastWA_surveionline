@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mediaHeaderComponent, headerFormatOf, qualityScoreOf } from "../src/providers/meta.js";
+import {
+  mediaHeaderComponent,
+  mediaHeaderTemplateComponent,
+  headerFormatOf,
+  qualityScoreOf,
+} from "../src/providers/meta.js";
 
 // Parameter header media kirim template Meta: tanpa ini, template ber-header media
 // ditolak Meta (error 132018 "issue with the parameters in your template").
@@ -24,6 +29,23 @@ describe("mediaHeaderComponent", () => {
       type: "header",
       parameters: [{ type: "document", document: { link: "https://x.id/uploads/rilis.pdf?v=2", filename: "rilis.pdf" } }],
     });
+  });
+});
+
+// Saat MEMBUAT template ber-media, Meta minta format + contoh asset handle
+// (hasil Resumable Upload) — bukan link seperti saat mengirim pesan.
+describe("mediaHeaderTemplateComponent (pengajuan template)", () => {
+  it("image → HEADER/IMAGE dengan example.header_handle", () => {
+    expect(mediaHeaderTemplateComponent("image", "4::aW1hZ2U=")).toEqual({
+      type: "HEADER",
+      format: "IMAGE",
+      example: { header_handle: ["4::aW1hZ2U="] },
+    });
+  });
+
+  it("document & video → format huruf besar", () => {
+    expect((mediaHeaderTemplateComponent("document", "h1") as any).format).toBe("DOCUMENT");
+    expect((mediaHeaderTemplateComponent("video", "h2") as any).format).toBe("VIDEO");
   });
 });
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { getProvider, loadProviders } from "../providers/registry.js";
+import { readMediaFromUrl } from "../lib/mediaFile.js";
 
 // Bentuk template sebagaimana dikembalikan MetaCloudAdapter.listTemplates().
 type MetaTemplate = {
@@ -135,6 +136,22 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
     const buttons = Array.isArray(t.buttons)
       ? (t.buttons as { type: string; text: string; url?: string | null; phone?: string | null }[])
       : [];
+
+    // Header media → siapkan isi filenya; Meta mewajibkan file diunggah (Resumable Upload)
+    // untuk mendapat header_handle sebelum template dibuat.
+    let headerMedia;
+    if (["image", "document", "video"].includes(t.headerType)) {
+      if (!t.headerMediaUrl)
+        return reply
+          .code(400)
+          .send({ error: "Template ber-header media butuh file — upload dulu di editor template." });
+      try {
+        headerMedia = await readMediaFromUrl(t.headerMediaUrl);
+      } catch (e) {
+        return reply.code(400).send({ error: e instanceof Error ? e.message : "Gagal membaca media header." });
+      }
+    }
+
     const result = await meta.createTemplate({
       name: t.name,
       language: t.language,
@@ -145,6 +162,7 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
       footerText: t.footerText,
       buttons,
       sampleParams: t.sampleParams,
+      headerMedia,
     });
     if (!result.ok) return reply.code(400).send({ error: result.error ?? "Gagal mengajukan template" });
 
