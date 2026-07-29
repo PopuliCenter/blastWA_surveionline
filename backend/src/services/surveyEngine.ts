@@ -2,6 +2,7 @@ import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
+import { ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
@@ -39,12 +40,20 @@ async function handleStatus(ev: NormalizedInbound): Promise<void> {
   if (!ev.refMessageId || !ev.deliveryStatus) return;
   const recipient = await prisma.blastRecipient.findUnique({ where: { vendorMessageId: ev.refMessageId } });
   if (!recipient) return;
-  const rank = { queued: 0, sent: 1, delivered: 2, read: 3, failed: 1 } as const;
   const next = ev.deliveryStatus;
-  if (rank[next] < rank[recipient.status]) return;
-  await prisma.blastRecipient.update({ where: { id: recipient.id }, data: { status: next } });
-  const field =
-    next === "delivered" ? "deliveredCount" : next === "read" ? "readCount" : next === "failed" ? "failedCount" : null;
+
+  // Perubahan status dilakukan BERSYARAT di database: updateMany hanya mengenai baris
+  // yang statusnya masih boleh berpindah ke `next`. Ini satu perintah UPDATE, jadi bila
+  // dua callback kembar datang bersamaan hanya satu yang lolos (count 1) dan penghitung
+  // pun naik sekali. Membaca dulu lalu menulis (findUnique + update) tidak aman di sini
+  // karena Meta mengirim status blast dalam burst.
+  const moved = await prisma.blastRecipient.updateMany({
+    where: { id: recipient.id, status: { in: [...ALLOWED_FROM[next]] } },
+    data: { status: next },
+  });
+  if (moved.count === 0) return; // callback duplikat atau transisi mundur → abaikan
+
+  const field = counterField(next);
   if (field) await prisma.blast.update({ where: { id: recipient.blastId }, data: { [field]: { increment: 1 } } });
 }
 

@@ -781,6 +781,48 @@ export function StatCard({ label, value, note, tone = "blue", icon }) {
   );
 }
 
+const TONE_FG = {
+  default: theme.text,
+  blue: theme.primary,
+  green: theme.green,
+  yellow: theme.yellow,
+  red: theme.red,
+  purple: theme.purple,
+};
+
+/**
+ * Deret angka ringkas — versi padat dari StatCard untuk dipakai BERULANG di dalam
+ * daftar (mis. tiap baris riwayat blast). StatCard terlalu tinggi kalau diulang;
+ * pakai itu hanya untuk ringkasan sekali di atas halaman.
+ *
+ * @param items [{ label, value, tone }]
+ * @param min lebar minimum tiap kolom. Bawaan 120 supaya empat angka jatuh rapi
+ *            jadi 2×2 di layar ponsel, bukan 3+1 dengan satu sel kosong.
+ */
+export function StatStrip({ items, min = 120 }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(auto-fit,minmax(${min}px,1fr))`,
+        gap: 1, // celah 1px di atas latar border → jadi garis pemisah rambut
+        background: theme.border,
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+    >
+      {items.map((it) => (
+        <div key={it.label} style={{ background: theme.surfaceAlt, padding: "9px 12px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25, color: TONE_FG[it.tone] || TONE_FG.default }}>
+            {it.value}
+          </div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 2 }}>{it.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // bodyStyle: gaya tambahan untuk wadah isi. Dipakai bila isi kartu perlu jadi kolom
 // flex — mis. agar baris tombol bisa didorong ke dasar kartu dengan marginTop:"auto".
 export function Card({ title, actions, children, pad = 18, style, bodyStyle }) {

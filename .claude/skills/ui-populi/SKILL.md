@@ -34,13 +34,15 @@ Sumber: `src/lib/ui.jsx`.
 |---|---|
 | Judul halaman + tombol aksi | `PageHeader` |
 | Panel konten | `Card` (`pad={0}` untuk daftar rapat) |
-| Angka ringkasan | `StatCard` |
+| Angka ringkasan sekali di atas halaman | `StatCard` |
+| Angka ringkasan **berulang** di tiap baris daftar | `StatStrip` — `StatCard` (angka 27px, padding 18) terlalu tinggi kalau diulang |
 | Label status | `Badge` |
 | Aksi | `Button` (`primary` `secondary` `ghost` `danger` `success`, `size="sm"`) |
 | Input | `Input` `Textarea` `Select` `PasswordInput` `Toggle` `Checkbox` |
 | Bungkus label + hint + error | `Field` |
 | Dialog | `Modal` |
 | Konfirmasi / tanya ya-tidak | `confirmDialog` dari `src/lib/confirm` — **jangan** `window.confirm` |
+| Minta satu baris teks | `promptDialog` dari `src/lib/confirm` → `Promise<string\|null>` — **jangan** `window.prompt` |
 | Pesan galat/sukses | `Notice` |
 | Daftar kosong | `Empty` |
 | Sedang memuat | `Loading` |
@@ -80,6 +82,14 @@ Sumber: `src/lib/ui.jsx`.
 Batasi 3–4 badge per item. Teks badge maksimal dua kata.
 
 **Baris tombol** selalu `flexWrap: "wrap"` dengan `gap: 8`. Tombol ikon-saja wajib punya `title` (`Button` otomatis menurunkannya jadi `aria-label`).
+
+**Memotong teks dengan elipsis** — `whiteSpace: "nowrap"` + `overflow: "hidden"` + `textOverflow: "ellipsis"` saja tidak cukup. Item flex **dan** item grid punya `min-width: auto` bawaan, jadi teks yang tak boleh membungkus akan melebarkan wadahnya dan memunculkan scroll horizontal. Pasang `minWidth: 0` pada **setiap** induk sepanjang rantai, dan untuk grid tulis kolomnya `minmax(0,1fr)` — bukan `1fr`:
+
+```jsx
+<div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
+```
+
+Beri juga `title={teksPenuh}` supaya isi yang terpotong masih bisa dibaca saat disentuh kursor.
 
 **Panel pengaturan di dalam form**: `{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }`.
 

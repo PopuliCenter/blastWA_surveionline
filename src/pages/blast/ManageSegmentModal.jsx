@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Modal, Notice, Loading, Input, Button, Badge, Empty, useLoader, theme } from "../../lib/ui";
-import { confirmDialog } from "../../lib/confirm";
+import { confirmDialog, promptDialog } from "../../lib/confirm";
 
 // Kelola anggota segmen: opt-out/opt-in, edit nama, keluarkan dari segmen, hapus kontak.
 export function ManageSegmentModal({ segment, onClose }) {
@@ -94,9 +94,15 @@ export function ManageSegmentModal({ segment, onClose }) {
     setBusy(c.id);
     act(() => api.updateContact(c.id, { subscribed: !c.subscribed }));
   };
-  const editName = (c) => {
-    const name = window.prompt("Nama kontak:", c.name || "");
-    if (name !== null) {
+  const editName = async (c) => {
+    const name = await promptDialog({
+      title: "Ubah nama kontak",
+      message: c.phone,
+      label: "Nama",
+      value: c.name || "",
+      placeholder: "Nama kontak",
+    });
+    if (name !== null && name !== (c.name || "")) {
       setBusy(c.id);
       act(() => api.updateContact(c.id, { name }));
     }

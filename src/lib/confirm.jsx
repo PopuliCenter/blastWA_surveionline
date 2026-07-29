@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { theme, card, Button, Icon, useIsMobile } from "./ui";
+import { theme, card, Button, Icon, Input, useIsMobile } from "./ui";
 import { registerConfirm } from "./confirmBus";
 
 // ===== Dialog konfirmasi in-app (pengganti window.confirm) =====
@@ -11,43 +11,56 @@ import { registerConfirm } from "./confirmBus";
 //   { title, message, confirmText, cancelText, tone: "danger"|"primary", icon, confirmIcon }
 // Mengembalikan Promise<boolean> (true = konfirmasi, false = batal).
 //
+// promptDialog meminta satu baris teks → Promise<string|null>:
+//   const nama = await promptDialog({ title: "Ganti nama", label: "Nama baru", value: lama });
+//
 // Fungsinya sendiri tinggal di confirmBus.js (tanpa dependensi UI) agar ui.jsx bisa
 // memakainya tanpa impor melingkar. Di-ekspor ulang di sini demi kompatibilitas pemanggil lama.
-export { confirmDialog } from "./confirmBus";
+export { confirmDialog, promptDialog } from "./confirmBus";
 
 // Host tunggal — dipasang sekali di root aplikasi. Render null sampai dipanggil.
 export function ConfirmHost() {
   const [state, setState] = useState(null); // { options, resolve }
+  const [text, setText] = useState("");
   const isMobile = useIsMobile();
 
   useEffect(() => registerConfirm((payload) => setState(payload)), []);
+
+  // Isi kotak teks dengan nilai awal setiap kali dialog prompt dibuka.
+  useEffect(() => {
+    if (state?.options?.prompt) setText(state.options.value || "");
+  }, [state]);
+
+  const isPrompt = Boolean(state?.options?.prompt);
+  // Batal → false untuk konfirmasi, null untuk prompt (bedanya penting bagi pemanggil).
+  const finish = (ok) => {
+    if (!state) return;
+    if (isPrompt && ok && !text.trim()) return; // jangan tutup kalau isian wajib masih kosong
+    state.resolve(ok ? (isPrompt ? text.trim() : true) : isPrompt ? null : false);
+    setState(null);
+  };
 
   useEffect(() => {
     if (!state) return undefined;
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        state.resolve(false);
-        setState(null);
+        finish(false);
       } else if (e.key === "Enter") {
         e.preventDefault();
-        state.resolve(true);
-        setState(null);
+        finish(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state]);
+  });
 
   if (!state) return null;
   const o = state.options;
   const danger = (o.tone || "primary") === "danger";
-  const iconName = o.icon || (danger ? "trash" : "check");
+  const iconName = o.icon || (isPrompt ? "edit" : danger ? "trash" : "check");
   const [iconBg, iconFg] = danger ? [theme.redSoft, theme.red] : [theme.primarySoft, theme.primary];
-  const done = (result) => {
-    state.resolve(result);
-    setState(null);
-  };
+  const done = finish;
 
   return (
     <div
@@ -93,12 +106,24 @@ export function ConfirmHost() {
             ) : null}
           </div>
         </div>
+        {isPrompt ? (
+          <div style={{ marginTop: 16 }}>
+            <Input
+              label={o.label}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={o.placeholder}
+              autoFocus
+              style={{ marginBottom: 0 }}
+            />
+          </div>
+        ) : null}
         <div
           style={{
             display: "flex",
             gap: 8,
             justifyContent: "flex-end",
-            marginTop: 22,
+            marginTop: isPrompt ? 8 : 22,
             flexDirection: isMobile ? "column-reverse" : "row",
           }}
         >
@@ -106,7 +131,8 @@ export function ConfirmHost() {
             {o.cancelText || "Batal"}
           </Button>
           <Button
-            autoFocus
+            autoFocus={!isPrompt}
+            disabled={isPrompt && !text.trim()}
             variant={danger ? "danger" : "primary"}
             icon={o.confirmIcon !== undefined ? o.confirmIcon || undefined : danger ? "trash" : undefined}
             onClick={() => done(true)}
@@ -115,7 +141,7 @@ export function ConfirmHost() {
               ...(isMobile ? { width: "100%" } : {}),
             }}
           >
-            {o.confirmText || (danger ? "Hapus" : "Lanjutkan")}
+            {o.confirmText || (isPrompt ? "Simpan" : danger ? "Hapus" : "Lanjutkan")}
           </Button>
         </div>
       </div>

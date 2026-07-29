@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
-import { confirmDialog } from "../lib/confirm";
+import { confirmDialog, promptDialog } from "../lib/confirm";
 import {
   PageHeader,
   Card,
   Button,
   Badge,
-  StatCard,
+  StatStrip,
   Notice,
   Loading,
   Empty,
@@ -57,9 +57,39 @@ export default function Broadcast() {
   };
 
   const renameSeg = async (s) => {
-    const name = window.prompt("Nama baru segmen:", s.name);
-    if (name && name.trim() && name.trim() !== s.name)
-      await run(() => api.renameSegment(s.id, name.trim()), [segments.reload]);
+    const name = await promptDialog({
+      title: "Ganti nama segmen",
+      label: "Nama baru",
+      value: s.name,
+      placeholder: "cth: Pemilih Jawa Barat",
+    });
+    if (name && name !== s.name) await run(() => api.renameSegment(s.id, name), [segments.reload]);
+  };
+
+  const delBlast = async (b) => {
+    if (
+      !(await confirmDialog({
+        title: "Hapus blast",
+        message: `Hapus riwayat blast "${b.surveyTitle}" beserta laporannya? Tindakan ini permanen. Pesan yang sudah terkirim ke responden tidak ikut ditarik.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
+    )
+      return;
+    await run(() => api.deleteBlast(b.id), [blasts.reload]);
+  };
+
+  const delSeg = async (s) => {
+    if (
+      !(await confirmDialog({
+        title: "Hapus segmen",
+        message: `Hapus segmen "${s.name}" berisi ${s.contacts.length} kontak? Tindakan ini permanen. Kontaknya sendiri tetap ada di menu Kontak.`,
+        confirmText: "Hapus",
+        tone: "danger",
+      }))
+    )
+      return;
+    await run(() => api.deleteSegment(s.id), [segments.reload]);
   };
 
   const bulkDel = async (which) => {
@@ -155,19 +185,37 @@ export default function Broadcast() {
               onClear={selBlast.clear}
               onDelete={() => bulkDel("blasts")}
             />
-            <div style={{ display: "grid", gap: 14 }}>
+            {/* minmax(0,1fr): item grid bawaannya min-width:auto, jadi teks template yang
+                nowrap akan melebarkan kolom dan memunculkan scroll horizontal tanpa ini. */}
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
               {blastList.map((b) => (
                 <Card key={b.id} style={selBlast.has(b.id) ? { outline: `2px solid ${theme.primary}` } : undefined}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", minWidth: 0 }}>
                       <div style={{ paddingTop: 2 }}>
                         <Checkbox checked={selBlast.has(b.id)} onChange={() => selBlast.toggle(b.id)} />
                       </div>
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>{b.surveyTitle}</div>
                         <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 4 }}>
-                          {b.segmentName} • vendor {b.vendor} • template {b.message || "-"} • {fmtDate(b.sentAt)}
+                          {b.segmentName} • {b.vendor} • {fmtDate(b.sentAt)}
                         </div>
+                        {/* Isi template dipotong satu baris — sebelumnya tumpah 2–3 baris penuh. */}
+                        {b.message ? (
+                          <div
+                            title={b.message}
+                            style={{
+                              color: theme.textMuted,
+                              fontSize: 12,
+                              marginTop: 3,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {b.message}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <Badge
@@ -184,29 +232,21 @@ export default function Broadcast() {
                       {b.status}
                     </Badge>
                   </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))",
-                      gap: 10,
-                      marginTop: 14,
-                    }}
-                  >
-                    <StatCard label="Sent" value={b.sent} tone="blue" />
-                    <StatCard label="Delivered" value={b.delivered} tone="green" />
-                    <StatCard label="Dibaca" value={b.opened} tone="purple" />
-                    <StatCard label="Gagal" value={b.failed} tone="yellow" />
+                  <div style={{ marginTop: 12 }}>
+                    <StatStrip
+                      items={[
+                        { label: "Terkirim", value: b.sent, tone: "blue" },
+                        { label: "Sampai", value: b.delivered, tone: "green" },
+                        { label: "Dibaca", value: b.opened, tone: "purple" },
+                        { label: "Gagal", value: b.failed, tone: b.failed ? "red" : "default" },
+                      ]}
+                    />
                   </div>
                   <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Button variant="secondary" size="sm" icon="report" onClick={() => setReportBlast(b)}>
                       Laporan
                     </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      icon="trash"
-                      onClick={() => run(() => api.deleteBlast(b.id), [blasts.reload])}
-                    >
+                    <Button variant="danger" size="sm" icon="trash" onClick={() => delBlast(b)}>
                       Hapus
                     </Button>
                   </div>
@@ -266,12 +306,7 @@ export default function Broadcast() {
                   <Button variant="ghost" size="sm" icon="edit" onClick={() => renameSeg(s)}>
                     Ganti Nama
                   </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon="trash"
-                    onClick={() => run(() => api.deleteSegment(s.id), [segments.reload])}
-                  >
+                  <Button variant="danger" size="sm" icon="trash" onClick={() => delSeg(s)}>
                     Hapus
                   </Button>
                 </div>

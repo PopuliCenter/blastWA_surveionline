@@ -20,21 +20,32 @@ export function isConfirmOpen() {
   return pending > 0;
 }
 
+function open(options, fallback, resolve) {
+  // Fallback aman bila host belum termuat → jangan sampai aksi terblokir.
+  if (!openRef) {
+    resolve(fallback());
+    return;
+  }
+  pending++;
+  openRef({
+    options,
+    resolve: (v) => {
+      pending = Math.max(0, pending - 1);
+      resolve(v);
+    },
+  });
+}
+
 export function confirmDialog(opts) {
   const options = typeof opts === "string" ? { message: opts } : opts || {};
-  return new Promise((resolve) => {
-    // Fallback aman bila host belum termuat → jangan sampai aksi terblokir.
-    if (!openRef) {
-      resolve(window.confirm(options.message || "Lanjutkan?"));
-      return;
-    }
-    pending++;
-    openRef({
-      options,
-      resolve: (v) => {
-        pending = Math.max(0, pending - 1);
-        resolve(v);
-      },
-    });
-  });
+  return new Promise((resolve) => open(options, () => window.confirm(options.message || "Lanjutkan?"), resolve));
+}
+
+// Minta satu baris teks. Mengembalikan Promise<string|null> — null bila dibatalkan.
+//   { title, message, label, value, placeholder, confirmText }
+export function promptDialog(opts) {
+  const options = typeof opts === "string" ? { message: opts } : opts || {};
+  return new Promise((resolve) =>
+    open({ ...options, prompt: true }, () => window.prompt(options.message || "", options.value || ""), resolve),
+  );
 }
