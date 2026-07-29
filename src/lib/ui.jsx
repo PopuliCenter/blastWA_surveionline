@@ -596,19 +596,28 @@ let scrollLocks = 0;
 let prevBodyOverflow = "";
 
 /**
- * Dialog. Menutupnya terjaga: bila `dirty` bernilai benar, klik latar dan tombol Esc
- * meminta konfirmasi dulu supaya isian yang belum disimpan tidak hilang.
+ * Dialog dengan penutupan terjaga.
  *
  * @param dirty boolean | (() => boolean) — wajib diisi untuk modal berisi form.
- *              Modal hanya-baca (pratinjau/laporan) biarkan kosong.
+ *              Kehadirannya menandai modal ini sebagai FORM, yang berakibat dua hal:
+ *              (1) klik latar tidak menutupnya sama sekali — salah klik saat mengisi
+ *                  form panjang tidak boleh membuang pekerjaan, sekalipun belum ada
+ *                  yang diketik (menemukan lagi segmen & vendor yang tadi dipilih itu
+ *                  tetap merepotkan);
+ *              (2) tombol Esc dan ✕ meminta konfirmasi bila ada perubahan.
+ *              Modal hanya-baca (pratinjau/laporan/penampil JSON) biarkan kosong —
+ *              klik luar untuk menutup memang yang diharapkan di situ.
+ * @param dismissible pengecualian: tetap bisa ditutup dengan klik latar walau punya
+ *              `dirty`. Untuk panel detail yang kebetulan menyimpan draf kecil.
  */
-export function Modal({ title, children, onClose, width = 600, dirty }) {
+export function Modal({ title, children, onClose, width = 600, dirty, dismissible }) {
   const isMobile = useIsMobile();
   const boxRef = useRef(null);
   const downOnOverlay = useRef(false);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const titleId = useId();
+  const isForm = dirty !== undefined && !dismissible;
 
   const requestClose = useCallback(async () => {
     if (needsDiscardConfirm(dirtyRef.current) && !(await confirmDiscard({ confirmText: "Tutup & buang" }))) return;
@@ -672,12 +681,14 @@ export function Modal({ title, children, onClose, width = 600, dirty }) {
     : { width: "100%", maxWidth: width, maxHeight: "86vh", padding: 22 };
   return (
     <div
-      // Tutup hanya bila tekan DAN lepas sama-sama di latar — supaya menyeret teks
-      // dari dalam input lalu melepas di luar tidak ikut menutup modal.
+      // Modal form (punya `dirty`) sengaja tidak menanggapi klik latar sama sekali.
+      // Untuk modal hanya-baca, tutup hanya bila tekan DAN lepas sama-sama di latar —
+      // supaya menyeret teks dari dalam lalu melepas di luar tidak ikut menutup.
       onMouseDown={(e) => {
         downOnOverlay.current = e.target === e.currentTarget;
       }}
       onClick={(e) => {
+        if (isForm) return;
         if (e.target === e.currentTarget && downOnOverlay.current) requestClose();
       }}
       onKeyDown={onKeyDownTrap}
@@ -755,28 +766,29 @@ export function StatCard({ label, value, note, tone = "blue", icon }) {
   };
   const [bg, fg] = map[tone] || map.blue;
   return (
-    <div style={{ ...card, padding: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ color: theme.textMuted, fontSize: 12.5, fontWeight: 500 }}>{label}</div>
+    <div style={{ ...card, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <div style={{ color: theme.textMuted, fontSize: 12.5, fontWeight: 500, minWidth: 0 }}>{label}</div>
         {icon ? (
           <span
             style={{
-              width: 32,
-              height: 32,
+              width: 26,
+              height: 26,
               borderRadius: 8,
               background: bg,
               color: fg,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            <Icon name={icon} size={16} />
+            <Icon name={icon} size={14} />
           </span>
         ) : null}
       </div>
-      <div style={{ fontSize: 27, fontWeight: 700, color: theme.text, marginTop: 10 }}>{value}</div>
-      {note ? <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>{note}</div> : null}
+      <div style={{ fontSize: 23, fontWeight: 700, color: theme.text, marginTop: 5, lineHeight: 1.2 }}>{value}</div>
+      {note ? <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 4 }}>{note}</div> : null}
     </div>
   );
 }

@@ -8,30 +8,31 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
   // Ajukan hanya masuk akal bila belum ada di Meta (atau ditolak → perbaiki lalu ajukan ulang).
   const canSubmit = ms.key === "unsynced" || ms.key === "missing" || ms.key === "REJECTED";
   return (
-    <Card pad={16}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontWeight: 700,
-              color: theme.text,
-              fontSize: 14.5,
-              fontFamily: "monospace",
-              wordBreak: "break-all",
-            }}
-          >
-            {t.name}
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
-            <Badge tone="blue">{t.category}</Badge>
-            <Badge tone="purple">{t.language}</Badge>
-            {t.useCase ? <Badge>{USECASE_LABEL[t.useCase] || t.useCase}</Badge> : null}
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end", flexShrink: 0 }}>
-          <Badge tone={ms.tone}>{ms.label}</Badge>
-          {quality ? <Badge tone={quality.tone}>{quality.label}</Badge> : null}
-        </div>
+    <Card
+      pad={16}
+      style={{ display: "flex", flexDirection: "column" }}
+      bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+    >
+      {/* Nama memakai lebar penuh; semua badge turun ke satu baris yang membungkus —
+          sebelumnya badge terbelah dua kelompok kiri-kanan dan mendesak nama panjang. */}
+      <div
+        style={{
+          fontWeight: 700,
+          color: theme.text,
+          fontSize: 14.5,
+          fontFamily: "monospace",
+          wordBreak: "break-all",
+          lineHeight: 1.35,
+        }}
+      >
+        {t.name}
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+        <Badge tone={ms.tone}>{ms.label}</Badge>
+        {quality ? <Badge tone={quality.tone}>{quality.label}</Badge> : null}
+        <Badge tone="blue">{t.category}</Badge>
+        <Badge tone="purple">{t.language}</Badge>
+        {t.useCase ? <Badge>{USECASE_LABEL[t.useCase] || t.useCase}</Badge> : null}
       </div>
 
       {/* Alasan penolakan & waktu sinkron — supaya jelas apa yang harus diperbaiki. */}
@@ -85,7 +86,10 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
         </div>
       ) : null}
 
+      {/* Dipotong per BARIS dengan elipsis. maxHeight mentah memenggal teks di tengah
+          baris sehingga hurufnya tampak terbelah separuh. */}
       <div
+        title={fillVars(t.bodyText, t.sampleParams)}
         style={{
           marginTop: 10,
           background: theme.surfaceAlt,
@@ -95,7 +99,9 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
           color: theme.text,
           lineHeight: 1.5,
           whiteSpace: "pre-wrap",
-          maxHeight: 96,
+          display: "-webkit-box",
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: "vertical",
           overflow: "hidden",
         }}
       >
@@ -106,7 +112,8 @@ export function TemplateCard({ t, onEdit, onDelete, onDuplicate, onSubmit, submi
         <div style={{ marginTop: 8, fontSize: 11.5, color: theme.textMuted }}>{t.buttons.length} tombol</div>
       ) : null}
 
-      <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+      {/* marginTop auto → baris tombol menempel di dasar kartu, sejajar antar kartu */}
+      <div style={{ display: "flex", gap: 6, marginTop: "auto", paddingTop: 12, flexWrap: "wrap" }}>
         {canSubmit ? (
           <Button size="sm" icon="send" onClick={onSubmit} disabled={submitting}>
             {submitting ? "Mengajukan…" : ms.key === "REJECTED" ? "Ajukan Ulang" : "Ajukan ke Meta"}

@@ -127,12 +127,14 @@ export default function Contacts() {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap", // di layar sempit tombol turun ke baris berikutnya
                   padding: "13px 18px",
                   borderTop: i ? `1px solid ${theme.border}` : "none",
                   background: sel.has(c.id) ? theme.primarySoft : "transparent",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: "1 1 190px" }}>
                   <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />
                   <div
                     style={{
@@ -146,11 +148,12 @@ export default function Contacts() {
                       justifyContent: "center",
                       fontWeight: 700,
                       fontSize: 14,
+                      flexShrink: 0,
                     }}
                   >
                     {(c.name || c.phone).slice(0, 1).toUpperCase()}
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div
                       style={{
                         fontWeight: 600,
@@ -164,13 +167,21 @@ export default function Contacts() {
                       {c.name || "(tanpa nama)"}
                       {c.subscribed === false ? <Badge tone="red">berhenti</Badge> : null}
                     </div>
-                    <div style={{ color: theme.textMuted, fontSize: 12.5 }}>
+                    <div
+                      style={{
+                        color: theme.textMuted,
+                        fontSize: 12.5,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {c.phone} • ditambah {fmtDate(c.createdAt)}
                       {c.consentSource ? ` • ${c.consentSource}` : ""}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
                   <Button
                     variant="secondary"
                     size="sm"

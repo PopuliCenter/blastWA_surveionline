@@ -104,20 +104,37 @@ export default function Surveys() {
                 {s.oncePerContact ? <Badge tone="yellow">sekali isi</Badge> : null}
               </div>
               {s.description ? (
-                <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 10, lineHeight: 1.5 }}>
+                /* Dibatasi 2 baris — deskripsi panjang membuat tinggi kartu tak terduga,
+                   dan seluruh baris grid ikut memanjang mengikuti yang tertinggi. */
+                <div
+                  title={s.description}
+                  style={{
+                    color: theme.textMuted,
+                    fontSize: 12.5,
+                    marginTop: 8,
+                    lineHeight: 1.5,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
                   {s.description}
                 </div>
               ) : null}
-              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 10 }}>
+              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
                 {s.questions.length} pertanyaan • {s.responses} respons
                 {s.triggerEnabled && s.triggerKeywords?.length
                   ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}`
                   : ""}
               </div>
               {/* marginTop auto → baris tombol menempel di dasar kartu, sejajar antar kartu */}
-              <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 12, flexWrap: "wrap" }}>
+                {/* Jumlahnya sudah tertulis di baris ringkasan di atas. Mengulangnya di
+                    label membuat lebar tombol ikut membesar — "Respons (1240)" akan
+                    memaksa baris tombol membungkus. */}
                 <Button variant="secondary" size="sm" icon="survey" onClick={() => setResponsesFor(s)}>
-                  Respons ({s.responses})
+                  Respons
                 </Button>
                 <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>
                   Preview
@@ -125,14 +142,10 @@ export default function Surveys() {
                 <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
                   Edit
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon="trash"
-                  title="Hapus survei"
-                  onClick={() => delSurvey(s)}
-                  style={{ marginLeft: "auto" }}
-                />
+                {/* Tanpa marginLeft:"auto" — di baris flex-wrap, margin auto menyerap
+                    seluruh sisa ruang sehingga tombol ini terdorong ke baris kedua
+                    padahal sebenarnya masih muat. */}
+                <Button variant="danger" size="sm" icon="trash" title="Hapus survei" onClick={() => delSurvey(s)} />
               </div>
             </Card>
           ))}

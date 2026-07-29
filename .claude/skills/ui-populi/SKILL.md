@@ -81,7 +81,12 @@ Sumber: `src/lib/ui.jsx`.
 
 Batasi 3–4 badge per item. Teks badge maksimal dua kata.
 
-**Baris tombol** selalu `flexWrap: "wrap"` dengan `gap: 8`. Tombol ikon-saja wajib punya `title` (`Button` otomatis menurunkannya jadi `aria-label`).
+**Baris tombol** selalu `flexWrap: "wrap"` dengan `gap: 8`. Tombol ikon-saja wajib punya `title` (`Button` otomatis menurunkannya jadi `aria-label`). Dua jebakan yang sudah pernah menaikkan tinggi kartu hampir dua kali lipat:
+
+- **Jangan pakai `marginLeft: "auto"` di baris yang membungkus.** Margin auto menyerap seluruh sisa ruang baris, sehingga elemen terakhir terdorong ke baris berikutnya padahal sebenarnya masih muat. Kalau ingin satu tombol menepi ke kanan, pastikan barisnya memang tidak akan pernah membungkus.
+- **Jangan menaruh angka yang panjangnya berubah-ubah di label tombol.** `Respons (1240)` jauh lebih lebar daripada `Respons (3)` dan bisa memaksa baris membungkus hanya karena datanya bertambah. Taruh angkanya di baris ringkasan, bukan di tombol.
+
+Kalau ragu apakah muat, ukur: jumlahkan lebar semua tombol + gap, lalu bandingkan dengan lebar barisnya (lihat bagian Verifikasi).
 
 **Memotong teks dengan elipsis** — `whiteSpace: "nowrap"` + `overflow: "hidden"` + `textOverflow: "ellipsis"` saja tidak cukup. Item flex **dan** item grid punya `min-width: auto` bawaan, jadi teks yang tak boleh membungkus akan melebarkan wadahnya dan memunculkan scroll horizontal. Pasang `minWidth: 0` pada **setiap** induk sepanjang rantai, dan untuk grid tulis kolomnya `minmax(0,1fr)` — bukan `1fr`:
 
@@ -90,6 +95,14 @@ Batasi 3–4 badge per item. Teks badge maksimal dua kata.
 ```
 
 Beri juga `title={teksPenuh}` supaya isi yang terpotong masih bisa dibaca saat disentuh kursor.
+
+Untuk memotong pada **beberapa baris**, pakai line-clamp — bukan `maxHeight` mentah, yang memenggal tepat di tengah baris sehingga hurufnya tampak terbelah separuh:
+
+```jsx
+display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden"
+```
+
+Batasi juga teks bebas seperti deskripsi (2 baris). Tinggi baris grid mengikuti kartu tertinggi, jadi satu deskripsi panjang memanjangkan seluruh baris.
 
 **Panel pengaturan di dalam form**: `{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }`.
 

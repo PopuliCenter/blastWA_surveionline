@@ -374,7 +374,7 @@ export default function Chat() {
           )}
         </div>
         {showDetails && active ? (
-          <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft}>
+          <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft} dismissible>
             <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
           </Modal>
         ) : null}
@@ -459,7 +459,7 @@ export default function Chat() {
         ) : null}
       </div>
       {!detailsInline && showDetails && active ? (
-        <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft}>
+        <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft} dismissible>
           <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
         </Modal>
       ) : null}

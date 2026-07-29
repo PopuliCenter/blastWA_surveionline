@@ -80,14 +80,19 @@ function BarRow({ label, value, max, tone, sub }) {
   return (
     <div style={{ marginBottom: 9 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, marginBottom: 3 }}>
+        {/* minWidth:0 + flex:1, BUKAN maxWidth persentase. Persentase diabaikan saat
+            browser menghitung lebar minimum, sehingga judul nowrap yang panjang tetap
+            menyumbang lebar penuhnya dan melebarkan kolom grid induknya. */}
         <span
           style={{
             color: theme.text,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            maxWidth: "68%",
+            minWidth: 0,
+            flex: 1,
           }}
+          title={label}
         >
           {label}
         </span>
@@ -171,7 +176,13 @@ export default function Dashboard() {
   const svByResp = [...(surveys.data || [])].sort((a, b) => (b.responses || 0) - (a.responses || 0)).slice(0, 6);
   const svMax = Math.max(1, ...svByResp.map((v) => v.responses || 0));
 
-  const grid2 = { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 };
+  // minmax(0,…) — tanpa itu kolom melebar mengikuti isi terpanjang, bukan lebar layar.
+  const grid2 = {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)",
+    gap: 16,
+    marginBottom: 16,
+  };
 
   return (
     <div>
