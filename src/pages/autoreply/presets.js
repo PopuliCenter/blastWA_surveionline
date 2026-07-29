@@ -133,27 +133,15 @@ export const PRESETS = [
       },
     ],
   },
-  {
-    key: "berhenti",
-    icon: "close",
-    title: "Permintaan berhenti",
-    desc: "Membalas responden yang minta tidak dikirimi lagi.",
-    // Ditandai supaya pemilih contoh bisa memberi peringatan: balasan ini TIDAK
-    // otomatis menghentikan pengiriman — status opt-out masih disetel manual.
-    manualFollowUp:
-      "Balasan ini hanya menjawab, TIDAK otomatis menghentikan pengiriman. " +
-      "Anda tetap harus menandai nomornya lewat menu Kontak → Berhenti.",
-    rules: [
-      {
-        name: "Permintaan berhenti",
-        keyword: "berhenti",
-        matchType: "contains",
-        priority: 95,
-        response:
-          "Baik, permintaan Anda sudah kami terima. 🙏\n\n" +
-          "Nomor Anda akan kami keluarkan dari daftar pengiriman survei. " +
-          "Mohon maaf atas ketidaknyamanannya, dan terima kasih atas waktu Anda.",
-      },
-    ],
-  },
 ];
+
+// Permintaan berhenti SENGAJA tidak dibuatkan aturan di sini. Sistem sudah menanganinya
+// sendiri di surveyEngine: kata seperti "STOP" / "berhenti" langsung mencabut langganan
+// kontak (subscribed = false) lalu membalas konfirmasi, dan blast berikutnya melewati
+// nomor itu. Aturan Auto Reply untuk kata yang sama tidak akan pernah terpakai karena
+// pemeriksaan opt-out berjalan lebih dulu — dan kalaupun terpakai, teksnya berisiko
+// menjanjikan hal yang berbeda dari yang dikerjakan sistem.
+export const OPT_OUT_INFO =
+  "Permintaan berhenti tidak perlu dibuatkan aturan. Sistem sudah otomatis mencabut " +
+  "langganan nomor yang membalas “STOP”, “berhenti”, atau “unsubscribe”, lalu mengirim " +
+  "konfirmasinya sendiri. Nomor itu juga otomatis dilewati pada blast berikutnya.";

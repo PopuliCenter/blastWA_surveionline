@@ -12,6 +12,26 @@ export function isFlowAbandoned(startedAt: Date, now: Date = new Date()): boolea
   return now.getTime() - startedAt.getTime() > FLOW_ABANDON_MS;
 }
 
+// Membalas apa saja setelah menerima blast dianggap "mau ikut survei" — itu memaafkan
+// responden yang menjawab "ya"/"ok" alih-alih mengetik kata pemicu. Tapi jalur ini dulu
+// dicek untuk SEMUA pesan berikutnya tanpa batas waktu, sehingga kontak yang pernah
+// diblast tidak pernah bisa sampai ke Auto Reply / Agen AI: sapaan biasa pun dijawab
+// "jawaban Anda sudah kami terima" terus-menerus.
+//
+// Dua syarat sekarang: survei belum diselesaikan kontak ini, DAN blast masih dalam
+// jendela sesi 24 jam WhatsApp (di luar itu balasan bebas memang tak bisa dikirim).
+export const BLAST_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function shouldStartSurveyFromBlast(args: {
+  blastSentAt: Date;
+  alreadyCompleted: boolean;
+  now?: Date;
+}): boolean {
+  if (args.alreadyCompleted) return false;
+  const now = args.now ?? new Date();
+  return now.getTime() - args.blastSentAt.getTime() <= BLAST_REPLY_WINDOW_MS;
+}
+
 // Kata penutup: pakai custom bila diisi, selain itu default.
 export function closingText(custom?: string | null): string {
   const c = (custom ?? "").trim();

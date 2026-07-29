@@ -3,6 +3,14 @@ import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
 import { ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
+import {
+  isOptOutExact,
+  isOptInExact,
+  isOptOutMessage,
+  isOptInMessage,
+  OPT_OUT_REPLY,
+  OPT_IN_REPLY,
+} from "../lib/optOut.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
@@ -12,6 +20,7 @@ import {
   closingText,
   nextStepWithBranch,
   isFlowAbandoned,
+  shouldStartSurveyFromBlast,
   type QLite,
 } from "../lib/surveyLogic.js";
 
@@ -22,8 +31,29 @@ import {
 // Logika murni (validasi, format, percabangan, penutup) ada di lib/surveyLogic.ts (teruji unit).
 
 const SKIP_WORDS = ["lewati", "skip", "lewat", "-"];
-const OPT_OUT_WORDS = ["berhenti", "stop", "unsubscribe", "unsub", "cabut", "hapus saya", "berhenti langganan"];
-const OPT_IN_WORDS = ["mulai", "langganan", "berlangganan", "subscribe", "daftar", "gabung"];
+// Simpan/cabut langganan + balas konfirmasinya. Dipakai dari dua tempat: pencocokan
+// ketat di awal, dan pencocokan longgar untuk kontak yang tidak sedang mengisi survei.
+async function doOptOut(contactId: string, vendor: string, phone: string): Promise<void> {
+  await prisma.contact.update({ where: { id: contactId }, data: { subscribed: false, optOutAt: new Date() } });
+  await reply(vendor, phone, OPT_OUT_REPLY, contactId, "optout");
+}
+
+async function doOptIn(
+  contact: { id: string; consentSource: string | null; consentAt: Date | null },
+  vendor: string,
+  phone: string,
+): Promise<void> {
+  await prisma.contact.update({
+    where: { id: contact.id },
+    data: {
+      subscribed: true,
+      optOutAt: null,
+      consentSource: contact.consentSource ?? "inbound",
+      consentAt: contact.consentAt ?? new Date(),
+    },
+  });
+  await reply(vendor, phone, OPT_IN_REPLY, contact.id, "optout");
+}
 
 export async function handleInboundEvents(events: NormalizedInbound[]): Promise<void> {
   for (const ev of events) {
@@ -89,30 +119,18 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     return;
   }
 
-  const lc = (ev.text ?? "").trim().toLowerCase();
-
-  // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi
-  if (OPT_OUT_WORDS.includes(lc)) {
-    await prisma.contact.update({ where: { id: contact.id }, data: { subscribed: false, optOutAt: new Date() } });
-    await reply(
-      ev.vendor,
-      phone,
-      "Anda telah berhenti menerima pesan dari kami. Balas *MULAI* untuk berlangganan kembali.",
-      contact.id,
-    );
+  // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi.
+  // Di sini sengaja dipakai pencocokan KETAT (seluruh pesan = satu perintah), karena
+  // blok ini juga dilewati kontak yang sedang mengisi survei. Di survei kebijakan
+  // publik, jawaban pendek seperti "cabut saja" atau "stop subsidi" adalah JAWABAN —
+  // bukan permintaan berhenti. Frasa yang lebih longgar diperiksa belakangan, hanya
+  // untuk kontak yang tidak sedang mengisi survei.
+  if (isOptOutExact(ev.text ?? "")) {
+    await doOptOut(contact.id, ev.vendor, phone);
     return;
   }
-  if (OPT_IN_WORDS.includes(lc)) {
-    await prisma.contact.update({
-      where: { id: contact.id },
-      data: {
-        subscribed: true,
-        optOutAt: null,
-        consentSource: contact.consentSource ?? "inbound",
-        consentAt: contact.consentAt ?? new Date(),
-      },
-    });
-    await reply(ev.vendor, phone, "Terima kasih, Anda kembali berlangganan pesan kami. 🙏", contact.id);
+  if (isOptInExact(ev.text ?? "")) {
+    await doOptIn(contact, ev.vendor, phone);
     return;
   }
   // Kontak yang membalas = persetujuan implisit (bila belum tercatat)
@@ -180,17 +198,37 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
   if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
-    if (await alreadyCompleted(recipient.blast.survey, contact.id)) {
-      await reply(ev.vendor, phone, ALREADY_DONE_TEXT, contact.id);
+    const sudahSelesai = await alreadyCompleted(recipient.blast.survey, contact.id);
+    if (shouldStartSurveyFromBlast({ blastSentAt: recipient.createdAt, alreadyCompleted: sudahSelesai })) {
+      await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
       return;
     }
-    await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
+    // Sengaja TIDAK return: pesan diteruskan ke Auto Reply / Agen AI. Dulu di sini
+    // dibalas "jawaban Anda sudah kami terima" lalu berhenti, sehingga kontak yang
+    // pernah diblast tak pernah bisa mendapat balasan sapaan. Pesan itu tetap dikirim
+    // pada jalur pemicu eksplisit di atas, tempat ia memang bermakna.
+  }
+
+  // 3b) Permintaan berhenti/berlangganan yang tidak persis satu perintah — mis. "STOP.",
+  // "berhenti ya", "saya mau berhenti". Diperiksa DI SINI, paling belakang, karena:
+  //  • kontak sudah dipastikan tidak sedang mengisi survei, jadi jawaban survei pendek
+  //    tidak mungkin disalahartikan; dan
+  //  • pemicu survei sudah dicek lebih dulu, sehingga "mulai survei" tetap memulai survei
+  //    dan tidak tertangkap sebagai perintah berlangganan.
+  // Membiarkan permintaan berhenti tak terjawab jauh lebih mahal: responden akan
+  // memblokir atau melaporkan nomor, dan itu menekan quality rating di Meta.
+  if (isOptOutMessage(ev.text ?? "")) {
+    await doOptOut(contact.id, ev.vendor, phone);
+    return;
+  }
+  if (isOptInMessage(ev.text ?? "")) {
+    await doOptIn(contact, ev.vendor, phone);
     return;
   }
 
   // 4) Auto Reply / Agen AI
   const auto = await findAutoResponse(contact.id, ev.text ?? "");
-  if (auto) await reply(ev.vendor, phone, auto, contact.id);
+  if (auto) await reply(ev.vendor, phone, auto.text, contact.id, auto.source);
 }
 
 const ALREADY_DONE_TEXT = "Terima kasih, jawaban Anda untuk survei ini sudah kami terima sebelumnya. 🙏";
@@ -452,7 +490,15 @@ async function saveAnswer(responseId: string, questionId: string, value: string)
   await prisma.answer.create({ data: { responseId, questionId, value } });
 }
 
-async function reply(vendor: string, to: string, text: string, contactId?: string): Promise<void> {
+// `source` mencatat ASAL balasan otomatis (survey | autoreply | ai | optout).
+// Kolom itulah yang dipakai menghitung kuota balasan AI per kontak.
+async function reply(
+  vendor: string,
+  to: string,
+  text: string,
+  contactId?: string,
+  source: "survey" | "autoreply" | "ai" | "optout" = "survey",
+): Promise<void> {
   if (!to) return;
   const result = await getProvider(vendor).sendText({ to, text });
   await prisma.message.create({
@@ -464,6 +510,7 @@ async function reply(vendor: string, to: string, text: string, contactId?: strin
       text,
       payload: result.raw as object,
       isBot: true,
+      source,
     },
   });
 }

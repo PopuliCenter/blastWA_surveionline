@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Button, Badge, Icon, Notice, theme } from "../../lib/ui";
-import { PRESETS } from "./presets";
+import { PRESETS, OPT_OUT_INFO } from "./presets";
 
 const MATCH_LABEL = { contains: "mengandung", exact: "sama persis", starts: "diawali" };
 
@@ -72,7 +72,6 @@ export function AutoReplyPresetPicker({ existingKeywords = [], onClose, onPick, 
 
               {terbuka ? (
                 <div style={{ padding: 13, borderTop: `1px solid ${theme.border}` }}>
-                  {p.manualFollowUp ? <Notice kind="error">⚠ {p.manualFollowUp}</Notice> : null}
                   <div style={{ display: "grid", gap: 9 }}>
                     {p.rules.map((r) => (
                       <div key={r.name} style={{ background: theme.surfaceAlt, borderRadius: 9, padding: 11 }}>
@@ -112,7 +111,11 @@ export function AutoReplyPresetPicker({ existingKeywords = [], onClose, onPick, 
         })}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+      <div style={{ marginTop: 14 }}>
+        <Notice kind="info">{OPT_OUT_INFO}</Notice>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <Button variant="ghost" onClick={onClose}>
           Tutup
         </Button>

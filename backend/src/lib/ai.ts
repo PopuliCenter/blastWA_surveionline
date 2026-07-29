@@ -9,6 +9,7 @@ export type AiProviderConfig = {
   baseUrl?: string; // untuk custom (OpenAI-compatible)
   systemPrompt: string;
   messages: AiMessage[];
+  maxTokens?: number; // batas panjang balasan; hemat token & menjaga balasan tetap ringkas
 };
 
 export async function generateReply(cfg: AiProviderConfig): Promise<string> {
@@ -29,7 +30,7 @@ async function anthropic(cfg: AiProviderConfig): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 512, system: cfg.systemPrompt, messages: cfg.messages }),
+    body: JSON.stringify({ model: cfg.model, max_tokens: cfg.maxTokens ?? 300, system: cfg.systemPrompt, messages: cfg.messages }),
   });
   const json = (await res.json().catch(() => ({}))) as any;
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${errText(json)}`);
@@ -49,7 +50,7 @@ async function openaiCompatible(cfg: AiProviderConfig, base: string): Promise<st
     headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: cfg.model,
-      max_tokens: 512,
+      max_tokens: cfg.maxTokens ?? 300,
       messages: [{ role: "system", content: cfg.systemPrompt }, ...cfg.messages],
     }),
   });
@@ -69,6 +70,7 @@ async function gemini(cfg: AiProviderConfig): Promise<string> {
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
       })),
+      generationConfig: { maxOutputTokens: cfg.maxTokens ?? 300 },
     }),
   });
   const json = (await res.json().catch(() => ({}))) as any;

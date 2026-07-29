@@ -170,10 +170,12 @@ model Message {
   text            String?
   payload         Json?
   isBot           Boolean   @default(false) // true = balasan otomatis (survei/auto-reply/AI), bukan kiriman agen
+  source          String? // asal balasan otomatis: survey | autoreply | ai | optout. null = kiriman agen
   createdAt       DateTime  @default(now())
 
   @@index([contactId])
   @@index([vendorMessageId])
+  @@index([contactId, source, createdAt]) // untuk menghitung kuota balasan AI per kontak
 }
 
 model SurveyResponse {
@@ -232,7 +234,12 @@ model AiConfig {
   baseUrl      String? // untuk provider custom (OpenAI-compatible)
   systemPrompt String   @default("Anda asisten layanan pelanggan via WhatsApp. Jawab singkat, ramah, dan jelas dalam Bahasa Indonesia.")
   apiKey       String? // terenkripsi (AES-256-GCM)
-  updatedAt    DateTime @updatedAt
+  // Pembatas biaya & waktu. Balasan WhatsApp memang harus pendek, jadi batas ketat
+  // di sini menghemat token tanpa mengurangi kegunaan.
+  maxTokens        Int      @default(300) // panjang maksimal satu balasan AI
+  historyLimit     Int      @default(6) // jumlah pesan terakhir yang dikirim sebagai konteks
+  maxRepliesPerDay Int      @default(5) // kuota balasan AI per kontak per 24 jam; 0 = tanpa batas
+  updatedAt        DateTime @updatedAt
 }
 
 model WebhookLog {

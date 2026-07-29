@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { clampAiSettings } from "../lib/aiLimits.js";
 import { prisma } from "../db.js";
 import { encryptJson } from "../lib/crypto.js";
 import { env } from "../env.js";
@@ -43,6 +44,9 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       model: cfg?.model ?? DEFAULTS.model,
       baseUrl: cfg?.baseUrl ?? "",
       systemPrompt: cfg?.systemPrompt ?? DEFAULTS.systemPrompt,
+      maxTokens: cfg?.maxTokens ?? 300,
+      historyLimit: cfg?.historyLimit ?? 6,
+      maxRepliesPerDay: cfg?.maxRepliesPerDay ?? 5,
       hasApiKey: Boolean(cfg?.apiKey) || Boolean(env.ANTHROPIC_API_KEY),
     };
   });
@@ -57,6 +61,11 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
         baseUrl: z.string().optional(),
         systemPrompt: z.string().optional(),
         apiKey: z.string().optional(), // bila diisi, simpan terenkripsi
+        // Pembatas biaya & waktu. Nilainya tetap ditahan lewat clampAiSettings
+        // supaya angka ekstrem dari API tidak lolos ke pemanggilan provider.
+        maxTokens: z.coerce.number().optional(),
+        historyLimit: z.coerce.number().optional(),
+        maxRepliesPerDay: z.coerce.number().optional(),
       })
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
@@ -73,6 +82,10 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
     if (parsed.data.baseUrl !== undefined) data.baseUrl = parsed.data.baseUrl || null;
     if (parsed.data.systemPrompt !== undefined) data.systemPrompt = parsed.data.systemPrompt;
     if (parsed.data.apiKey) data.apiKey = encryptJson(parsed.data.apiKey);
+    const limits = clampAiSettings(parsed.data);
+    if (parsed.data.maxTokens !== undefined) data.maxTokens = limits.maxTokens;
+    if (parsed.data.historyLimit !== undefined) data.historyLimit = limits.historyLimit;
+    if (parsed.data.maxRepliesPerDay !== undefined) data.maxRepliesPerDay = limits.maxRepliesPerDay;
 
     await prisma.aiConfig.upsert({
       where: { id: "default" },

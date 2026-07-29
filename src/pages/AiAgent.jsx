@@ -31,6 +31,27 @@ const MODEL_HINT = {
   gemini: "cth: gemini-2.0-flash, gemini-2.5-pro",
   custom: "model sesuai penyedia (mis. llama-3.1-70b, dll)",
 };
+// Contoh prompt yang MEMBATASI cakupan AI. Tanpa batas seperti ini, model akan
+// dengan senang hati menjawab apa pun — memanjangkan percakapan, menghabiskan token,
+// dan berisiko berbicara atas nama lembaga di luar wewenangnya.
+const PROMPT_SURVEI = `Anda asisten WhatsApp resmi Populi Center, lembaga riset dan survei opini publik.
+
+TUGAS ANDA HANYA:
+- Menjelaskan bahwa kami sedang mengadakan survei online singkat (±5 menit).
+- Memberi tahu cara ikut: balas dengan kata "isi survei".
+- Menjawab pertanyaan seputar survei: siapa kami, berapa lama, bagaimana data dipakai.
+- Menegaskan kami tidak pernah meminta OTP, PIN, atau nomor rekening.
+
+ATURAN:
+- Jawab maksimal 3 kalimat. Bahasa Indonesia, sopan, langsung ke inti.
+- Di luar topik di atas (politik praktis, curhat, permintaan bantuan lain, opini pribadi),
+  jawab singkat: "Maaf, saya hanya bisa membantu seputar survei ini." lalu tawarkan
+  untuk mulai mengisi survei.
+- Jangan mengarang data, hasil survei, angka, hadiah, atau janji apa pun.
+- Jangan menyebut Anda AI kecuali ditanya langsung.
+- Bila responden tampak keberatan atau marah, minta maaf singkat dan beri tahu bahwa
+  ia bisa membalas "STOP" untuk berhenti menerima pesan.`;
+
 const KEY_HINT = {
   anthropic: "Dapatkan di console.anthropic.com",
   openai: "Dapatkan di platform.openai.com/api-keys",
@@ -55,6 +76,9 @@ export default function AiAgent() {
         model: data.model,
         baseUrl: data.baseUrl || "",
         systemPrompt: data.systemPrompt,
+        maxTokens: data.maxTokens ?? 300,
+        historyLimit: data.historyLimit ?? 6,
+        maxRepliesPerDay: data.maxRepliesPerDay ?? 5,
       });
   }, [data]);
 
@@ -69,6 +93,9 @@ export default function AiAgent() {
         model: f.model,
         baseUrl: f.baseUrl,
         systemPrompt: f.systemPrompt,
+        maxTokens: f.maxTokens,
+        historyLimit: f.historyLimit,
+        maxRepliesPerDay: f.maxRepliesPerDay,
       };
       if (apiKey.trim()) payload.apiKey = apiKey.trim();
       await api.updateAiAgent(payload);
@@ -131,7 +158,51 @@ export default function AiAgent() {
             value={f.systemPrompt}
             onChange={(e) => set("systemPrompt", e.target.value)}
             style={{ minHeight: 120 }}
+            hint="Batas paling ampuh ada di sini: sebutkan topik yang boleh dijawab dan suruh AI menolak halus sisanya."
           />
+          <div style={{ marginTop: -6, marginBottom: 14 }}>
+            <Button size="sm" variant="secondary" icon="sparkle" onClick={() => set("systemPrompt", PROMPT_SURVEI)}>
+              Pakai contoh prompt survei
+            </Button>
+          </div>
+
+          {/* Pembatas biaya & waktu */}
+          <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: theme.text, marginBottom: 4 }}>Batas pemakaian</div>
+            <div style={{ fontSize: 11.5, color: theme.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+              Menjaga tagihan token tetap terkendali dan balasan tetap ringkas. Batas ini berlaku untuk Agen AI saja —
+              survei dan Auto Reply tidak terpengaruh.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+              <Input
+                label="Panjang balasan (token)"
+                type="number"
+                min={50}
+                max={2000}
+                value={f.maxTokens}
+                onChange={(e) => set("maxTokens", e.target.value)}
+                hint="300 ≈ 3–4 kalimat. Balasan WhatsApp memang sebaiknya pendek."
+              />
+              <Input
+                label="Pesan konteks"
+                type="number"
+                min={0}
+                max={30}
+                value={f.historyLimit}
+                onChange={(e) => set("historyLimit", e.target.value)}
+                hint="Jumlah pesan terakhir yang ikut dikirim. Makin banyak, makin mahal."
+              />
+            </div>
+            <Input
+              label="Kuota balasan AI per nomor (24 jam)"
+              type="number"
+              min={0}
+              max={100}
+              value={f.maxRepliesPerDay}
+              onChange={(e) => set("maxRepliesPerDay", e.target.value)}
+              hint="Setelah kuota habis, AI mengirim satu pesan alih ke tim lalu berhenti menjawab nomor itu sampai 24 jam berikutnya. Isi 0 untuk tanpa batas."
+            />
+          </div>
           <PasswordInput
             noAutofill
             label="API Key"
