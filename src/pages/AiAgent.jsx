@@ -32,14 +32,14 @@ const PROVIDERS = [
 const DEFAULT_MODEL = {
   anthropic: "claude-haiku-4-5-20251001",
   openai: "gpt-4o-mini",
-  gemini: "gemini-2.0-flash",
+  gemini: "gemini-2.5-flash",
   custom: "",
 };
 
 const MODEL_HINT = {
   anthropic: "cth: claude-haiku-4-5-20251001, claude-sonnet-5, claude-opus-4-8",
   openai: "cth: gpt-4o-mini, gpt-4o",
-  gemini: "cth: gemini-2.0-flash, gemini-2.5-pro",
+  gemini: "cth: gemini-2.5-flash, gemini-2.5-flash-lite (yang masih punya kuota gratis)",
   custom: "model sesuai penyedia (mis. llama-3.1-70b, dll)",
 };
 // Contoh prompt yang MEMBATASI cakupan AI. Tanpa batas seperti ini, model akan

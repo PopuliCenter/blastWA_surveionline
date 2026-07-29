@@ -84,7 +84,10 @@ async function gemini(cfg: AiProviderConfig): Promise<string> {
 }
 
 function errText(json: any): string {
-  return JSON.stringify(json?.error ?? json).slice(0, 300);
+  // 1000, bukan 300: bagian paling menentukan dari galat kuota Google justru ada di
+  // ekornya — nama metrik dan angka limitnya ("limit: 0" berarti proyek belum
+  // tervalidasi). Dengan 300 karakter, pesannya terpotong tepat sebelum itu.
+  return JSON.stringify(json?.error ?? json).slice(0, 1000);
 }
 function fallback(): string {
   return "Maaf, saya belum bisa menjawab saat ini.";
