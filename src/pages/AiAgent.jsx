@@ -25,6 +25,17 @@ const PROVIDERS = [
   { value: "custom", label: "Custom (OpenAI-compatible)" },
 ];
 
+// Model bawaan per provider. Berganti provider TANPA mengganti model adalah jebakan
+// yang mudah terjadi: kolomnya menerima teks apa pun, lalu gagal jauh kemudian saat
+// responden sungguhan mengirim pesan — dengan galat "model_not_found" yang tak terlihat
+// di mana-mana. Mengisinya otomatis membuat konfigurasi selalu berangkat dari yang sah.
+const DEFAULT_MODEL = {
+  anthropic: "claude-haiku-4-5-20251001",
+  openai: "gpt-4o-mini",
+  gemini: "gemini-2.0-flash",
+  custom: "",
+};
+
 const MODEL_HINT = {
   anthropic: "cth: claude-haiku-4-5-20251001, claude-sonnet-5, claude-opus-4-8",
   openai: "cth: gpt-4o-mini, gpt-4o",
@@ -151,7 +162,13 @@ export default function AiAgent() {
           <Select
             label="Provider AI"
             value={f.provider}
-            onChange={(e) => set("provider", e.target.value)}
+            onChange={(e) => {
+              // Ganti provider → isi ulang model dengan bawaan provider itu, supaya
+              // model milik provider lama tidak tertinggal dan menyebabkan 404.
+              const p = e.target.value;
+              setF({ ...f, provider: p, model: DEFAULT_MODEL[p] ?? f.model });
+              setTestResult(null);
+            }}
             options={PROVIDERS}
           />
           <Input
@@ -159,6 +176,11 @@ export default function AiAgent() {
             value={f.model}
             onChange={(e) => set("model", e.target.value)}
             hint={MODEL_HINT[f.provider]}
+            error={
+              f.provider !== "custom" && f.model.trim().toLowerCase() === f.provider
+                ? `"${f.model}" itu nama provider, bukan ID model. Isi mis. ${DEFAULT_MODEL[f.provider]}.`
+                : ""
+            }
           />
           {f.provider === "custom" ? (
             <Input
