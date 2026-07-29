@@ -20,6 +20,7 @@ const surveySchema = z.object({
   description: z.string().optional(),
   status: z.enum(["draft", "active", "closed"]).default("draft"),
   triggerEnabled: z.boolean().default(false),
+  oncePerContact: z.boolean().default(false),
   triggerKeywords: z.array(z.string().min(1)).max(50).default([]),
   mode: z.enum(["chat", "flow"]).default("chat"),
   flowId: z.string().optional().nullable(),

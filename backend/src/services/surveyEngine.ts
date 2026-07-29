@@ -155,6 +155,11 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   // 2) Pemicu kata kunci → mulai survei yang cocok (mis. responden ketik "isi survey")
   const triggered = await findTriggeredSurvey(ev.text ?? "");
   if (triggered && triggered.questions.length) {
+    // Survei "sekali saja": tolak halus, jangan diamkan (responden perlu tahu alasannya).
+    if (await alreadyCompleted(triggered, contact.id)) {
+      await reply(ev.vendor, phone, ALREADY_DONE_TEXT, contact.id);
+      return;
+    }
     await startSurvey(triggered, contact.id, phone, ev.vendor);
     return;
   }
@@ -166,6 +171,10 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
   if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
+    if (await alreadyCompleted(recipient.blast.survey, contact.id)) {
+      await reply(ev.vendor, phone, ALREADY_DONE_TEXT, contact.id);
+      return;
+    }
     await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
     return;
   }
@@ -173,6 +182,19 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   // 4) Auto Reply / Agen AI
   const auto = await findAutoResponse(contact.id, ev.text ?? "");
   if (auto) await reply(ev.vendor, phone, auto, contact.id);
+}
+
+const ALREADY_DONE_TEXT = "Terima kasih, jawaban Anda untuk survei ini sudah kami terima sebelumnya. 🙏";
+
+// Survei "sekali saja": sudah pernah DISELESAIKAN kontak ini?
+// Respons yang belum selesai tidak dihitung — responden yang batal mengisi tetap boleh mengulang.
+async function alreadyCompleted(survey: { id: string; oncePerContact: boolean }, contactId: string): Promise<boolean> {
+  if (!survey.oncePerContact) return false;
+  const done = await prisma.surveyResponse.findFirst({
+    where: { surveyId: survey.id, contactId, completedAt: { not: null } },
+    select: { id: true },
+  });
+  return Boolean(done);
 }
 
 // Cari survei aktif yang kata kunci pemicunya cocok dengan teks masuk.

@@ -43,6 +43,10 @@ export function SurveyGuide() {
       "Atur pemicu (opsional)",
       'Aktifkan "Mulai otomatis" lalu isi kata kunci pemicu, mis. "isi survei". Begitu responden mengirim kata itu, bot langsung memulai survei.',
     ],
+    [
+      "Tentukan batas pengisian",
+      'Pilih "Sekali saja" agar satu nomor hanya bisa menyelesaikan survei ini satu kali (disarankan untuk survei riset — mencegah jawaban ganda dari orang yang sama), atau "Berkali-kali" bila memang boleh diisi ulang. Responden yang batal mengisi tetap boleh mengulang.',
+    ],
     ["Aktifkan & uji", 'Set status ke "active" → simpan → kirim kata pemicu dari WhatsApp Anda untuk mencoba.'],
   ];
 

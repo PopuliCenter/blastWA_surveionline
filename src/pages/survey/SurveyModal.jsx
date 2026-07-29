@@ -13,6 +13,7 @@ export function SurveyModal({ survey, onClose, onSave }) {
     (survey?.questions || []).map((q) => ({ ...q, required: q.required ?? true })),
   );
   const [triggerEnabled, setTriggerEnabled] = useState(survey?.triggerEnabled ?? false);
+  const [oncePerContact, setOncePerContact] = useState(survey?.oncePerContact ?? false);
   const [triggerKeywords, setTriggerKeywords] = useState(survey?.triggerKeywords || []);
   const [kwInput, setKwInput] = useState("");
   const [mode, setMode] = useState(survey?.mode || "chat");
@@ -98,6 +99,7 @@ export function SurveyModal({ survey, onClose, onSave }) {
         description,
         status,
         triggerEnabled,
+        oncePerContact,
         triggerKeywords,
         mode,
         flowId: mode === "flow" ? flowId.trim() : null,
@@ -250,6 +252,33 @@ export function SurveyModal({ survey, onClose, onSave }) {
               </div>
             </>
           ) : null}
+        </div>
+
+        {/* Batas pengisian per responden */}
+        <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <Select
+            label="Batas pengisian per responden"
+            value={oncePerContact ? "once" : "many"}
+            onChange={(e) => setOncePerContact(e.target.value === "once")}
+            options={[
+              { value: "many", label: "Berkali-kali — boleh mengisi ulang kapan saja" },
+              { value: "once", label: "Sekali saja — dikunci setelah selesai" },
+            ]}
+          />
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: -8, lineHeight: 1.5 }}>
+            {oncePerContact ? (
+              <>
+                Nomor yang <strong>sudah menyelesaikan</strong> survei ini tidak bisa mengisi lagi — pemicu berikutnya
+                dibalas ucapan terima kasih. Yang <em>batal</em> mengisi tetap boleh mengulang. Disarankan untuk survei
+                riset agar satu responden tidak menyumbang banyak jawaban.
+              </>
+            ) : (
+              <>
+                Satu nomor bisa mengisi berulang kali dan setiap pengisian tercatat sebagai respons terpisah. Cocok
+                untuk uji coba, tapi hati-hati pada survei sungguhan — data bisa terkena jawaban ganda.
+              </>
+            )}
+          </div>
         </div>
 
         {/* Pemicu otomatis (bot) */}

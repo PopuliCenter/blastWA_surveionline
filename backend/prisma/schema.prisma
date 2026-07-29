@@ -60,6 +60,9 @@ model Survey {
   description     String?
   status          SurveyStatus @default(draft)
   triggerEnabled  Boolean      @default(false) // mulai survei otomatis bila pesan masuk cocok kata kunci
+  // true = satu kontak hanya boleh MENYELESAIKAN survei ini sekali (pemicu berikutnya ditolak
+  // halus). Penting untuk kualitas data riset. Default false = perilaku lama (boleh berulang).
+  oncePerContact  Boolean      @default(false)
   triggerKeywords String[]     @default([]) // kata kunci pemicu (mis. "isi survey", "survei")
   mode            String       @default("chat") // chat (tanya-jawab per pesan) | flow (formulir WhatsApp Flow)
   flowId          String? // ID Flow terbit di Meta (mode flow)

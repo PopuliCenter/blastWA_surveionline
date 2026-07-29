@@ -75,6 +75,7 @@ export default function Surveys() {
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                   {s.mode === "flow" ? <Badge tone="blue">flow</Badge> : null}
                   {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
+                  {s.oncePerContact ? <Badge tone="yellow">1× / nomor</Badge> : null}
                   <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>
                     {s.status}
                   </Badge>
