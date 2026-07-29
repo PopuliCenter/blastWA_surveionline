@@ -4,6 +4,14 @@ import type { NormalizedInbound } from "../providers/types.js";
 
 export type QLite = { id: string; text: string; type: string; required: boolean; options: any };
 
+// Formulir Flow yang sudah dikirim tapi tak kunjung diisi TIDAK boleh mengunci kontak
+// selamanya (dulu: setiap pesan berikutnya diabaikan, termasuk kata kunci pemicu).
+// Setelah jendela sesi 24 jam WhatsApp lewat, anggap ditinggalkan → pesan diproses normal.
+export const FLOW_ABANDON_MS = 24 * 60 * 60 * 1000;
+export function isFlowAbandoned(startedAt: Date, now: Date = new Date()): boolean {
+  return now.getTime() - startedAt.getTime() > FLOW_ABANDON_MS;
+}
+
 // Kata penutup: pakai custom bila diisi, selain itu default.
 export function closingText(custom?: string | null): string {
   const c = (custom ?? "").trim();

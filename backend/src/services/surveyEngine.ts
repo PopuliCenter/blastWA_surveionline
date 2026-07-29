@@ -5,7 +5,14 @@ import { normalizePhone } from "../lib/phone.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
-import { validateAnswer, formatQuestion, closingText, nextStepWithBranch, type QLite } from "../lib/surveyLogic.js";
+import {
+  validateAnswer,
+  formatQuestion,
+  closingText,
+  nextStepWithBranch,
+  isFlowAbandoned,
+  type QLite,
+} from "../lib/surveyLogic.js";
 
 // Mesin survei berbasis chat dengan tipe pertanyaan kaya:
 // text | rating (min-max, label jangkar opsional) | number | choice (1 pilihan) |
@@ -108,13 +115,30 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   }
 
   // 1) Sesi survei berjalan?
-  const active = await prisma.surveyResponse.findFirst({
+  let active = await prisma.surveyResponse.findFirst({
     where: { contactId: contact.id, completedAt: null },
     orderBy: { startedAt: "desc" },
     include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } },
   });
+
+  // Formulir Flow yang tak kunjung diisi TIDAK boleh mengunci kontak selamanya.
+  // Lewat jendela 24 jam → anggap ditinggalkan, pesan berikutnya diproses normal
+  // (pemicu survei, auto-reply, agen AI).
+  if (active && active.survey.mode === "flow" && isFlowAbandoned(active.startedAt)) active = null;
+
   if (active) {
-    if (active.survey.mode === "flow") return; // menunggu pengisian formulir flow, abaikan teks
+    if (active.survey.mode === "flow") {
+      // Formulir masih ditunggu → jangan balas teks apa pun. TAPI bila responden mengirim
+      // kata kunci pemicu lagi (formulir tak jadi diisi / chat dihapus / pesan hilang),
+      // kirim ulang formulirnya alih-alih mendiamkannya.
+      const again = await findTriggeredSurvey(ev.text ?? "");
+      if (again && again.questions.length) {
+        // Buang respons menggantung yang BELUM berisi jawaban agar tak menumpuk.
+        await prisma.surveyResponse.deleteMany({ where: { id: active.id, answers: { none: {} } } });
+        await startSurvey(again, contact.id, phone, ev.vendor);
+      }
+      return;
+    }
     await advanceSurvey(
       active.id,
       active.currentStep,

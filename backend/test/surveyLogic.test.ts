@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { validateAnswer, nextStepWithBranch, formatQuestion, closingText, type QLite } from "../src/lib/surveyLogic.js";
+import {
+  validateAnswer,
+  nextStepWithBranch,
+  formatQuestion,
+  closingText,
+  isFlowAbandoned,
+  FLOW_ABANDON_MS,
+  type QLite,
+} from "../src/lib/surveyLogic.js";
 import type { NormalizedInbound } from "../src/providers/types.js";
 
 // Bantu buat event masuk minimal.
@@ -112,5 +120,27 @@ describe("formatQuestion & closingText", () => {
     expect(closingText("Makasih ya!")).toBe("Makasih ya!");
     expect(closingText("")).toContain("Terima kasih");
     expect(closingText(null)).toContain("Terima kasih");
+  });
+});
+
+// Bug lapangan: formulir Flow yang dikirim tapi tak pernah diisi membuat kontak TERKUNCI —
+// setiap pesan berikutnya diabaikan, termasuk kata kunci pemicu. Menghapus chat tak menolong
+// karena statusnya ada di database. Setelah jendela 24 jam, anggap ditinggalkan.
+describe("isFlowAbandoned (formulir Flow tak kunjung diisi)", () => {
+  const now = new Date("2026-07-29T12:00:00Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms);
+
+  it("baru saja dikirim → masih ditunggu, bukan ditinggalkan", () => {
+    expect(isFlowAbandoned(ago(60_000), now)).toBe(false);
+    expect(isFlowAbandoned(ago(23 * 60 * 60 * 1000), now)).toBe(false);
+  });
+
+  it("lewat 24 jam → dianggap ditinggalkan (kontak tak lagi terkunci)", () => {
+    expect(isFlowAbandoned(ago(FLOW_ABANDON_MS + 1000), now)).toBe(true);
+    expect(isFlowAbandoned(ago(7 * 24 * 60 * 60 * 1000), now)).toBe(true);
+  });
+
+  it("tepat di batas 24 jam → belum ditinggalkan (harus LEWAT)", () => {
+    expect(isFlowAbandoned(ago(FLOW_ABANDON_MS), now)).toBe(false);
   });
 });
