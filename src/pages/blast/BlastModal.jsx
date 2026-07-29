@@ -122,6 +122,14 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     const mt = (metaTpls || []).find((t) => t.name === f.templateName && t.language === f.templateLang);
     return mt ? { known: true, format: mt.headerFormat ?? null } : { known: false, format: null };
   })();
+  // Jumlah variabel {{n}} yang diharapkan template menurut Meta. null = belum diketahui.
+  // Jumlah parameter yang dikirim wajib sama persis (#132000 bila tidak).
+  const expectedParams = (() => {
+    if (selectedTpl) return selectedTpl.metaSyncedAt ? (selectedTpl.metaBodyParams ?? 0) : null;
+    const mt = (metaTpls || []).find((t) => t.name === f.templateName && t.language === f.templateLang);
+    return mt ? (mt.bodyParamCount ?? 0) : null;
+  })();
+
   // Tombol template menurut Meta: menentukan apakah formulir Flow bisa dibuka langsung
   // dari pesan blast. Tombol index 0 harus bertipe FLOW; kalau tidak, Meta menolak
   // #132018 ("buttons: Button at index 0 must be of type QuickReply").
@@ -321,7 +329,14 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
             label="Parameter (pisah koma, opsional)"
             value={f.bodyParams}
             onChange={(e) => set("bodyParams", e.target.value)}
-            hint="nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel"
+            disabled={expectedParams === 0}
+            hint={
+              expectedParams === null
+                ? "nilai untuk {{1}}, {{2}}, … — kosongkan bila template tanpa variabel"
+                : expectedParams === 0
+                  ? "Template ini TIDAK punya variabel — parameter tidak dikirim."
+                  : `Template ini punya ${expectedParams} variabel ({{1}}${expectedParams > 1 ? `…{{${expectedParams}}}` : ""}). Yang kosong diisi nama kontak.`
+            }
           />
           {/* Format header dikunci ke apa yang Meta laporkan. Operator hanya memilih sendiri
               bila template belum bisa dipastikan (nama diketik manual / belum disinkron). */}

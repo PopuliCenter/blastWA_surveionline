@@ -135,6 +135,7 @@ export class MetaCloudAdapter implements MessagingProvider {
           category: t.category,
           headerFormat: headerFormatOf(t.components),
           buttonTypes: buttonTypesOf(t.components),
+          bodyParamCount: bodyParamCountOf(t.components),
           quality: qualityScoreOf(t.quality_score),
           rejectedReason: t.rejected_reason ?? null,
         })),
@@ -407,6 +408,20 @@ export class MetaCloudAdapter implements MessagingProvider {
     }
     return out;
   }
+}
+
+// Jumlah variabel {{n}} pada BODY template menurut Meta (indeks tertinggi yang dipakai).
+// Meta menolak bila jumlah parameter yang dikirim tak sama persis: #132000
+// "number of localizable_params (N) does not match the expected number of params (M)".
+export function bodyParamCountOf(components: unknown): number {
+  if (!Array.isArray(components)) return 0;
+  const b = components.find((c: any) => String(c?.type ?? "").toUpperCase() === "BODY") as
+    | { text?: unknown }
+    | undefined;
+  const text = String(b?.text ?? "");
+  let max = 0;
+  for (const m of text.matchAll(/\{\{(\d+)\}\}/g)) max = Math.max(max, Number(m[1]) || 0);
+  return max;
 }
 
 // Daftar TIPE tombol template menurut Meta, urut sesuai indeksnya.

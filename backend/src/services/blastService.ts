@@ -22,6 +22,30 @@ const MEDIA_HEADERS = ["image", "document", "video"];
 export type HeaderMedia = { headerMediaType: "image" | "document" | "video"; headerMediaUrl: string } | null;
 
 /**
+ * Tentukan parameter body untuk SATU penerima.
+ *
+ * Jumlahnya WAJIB sama persis dengan variabel {{n}} di template, kalau tidak Meta menolak
+ * seluruh kiriman: #132000 "number of localizable_params (1) does not match the expected
+ * number of params (0)" — mis. saat template tanpa variabel tapi sistem tetap mengirim
+ * nama kontak sebagai {{1}}.
+ *
+ * `expected = null` (template belum disinkron) → tak bisa dipastikan; pertahankan perilaku
+ * lama: pakai isian operator, atau nama kontak sebagai satu-satunya parameter.
+ */
+export function resolveBodyParams(args: {
+  expected: number | null;
+  provided?: string[];
+  contactName: string;
+}): string[] {
+  const provided = args.provided ?? [];
+  if (args.expected === null) return provided.length ? provided : [args.contactName];
+  if (args.expected === 0) return []; // template tanpa variabel → JANGAN kirim parameter
+  // Ada variabel: pakai isian operator; kekurangannya diisi nama kontak agar jumlahnya pas
+  // (parameter kosong ditolak Meta), kelebihannya dipotong.
+  return Array.from({ length: args.expected }, (_, i) => provided[i]?.trim() || args.contactName);
+}
+
+/**
  * Bolehkah parameter tombol Flow (flow_token) disertakan pada blast ini?
  *
  * flow_token hanya sah bila tombol INDEX 0 template bertipe FLOW. Bila template memakai
@@ -179,8 +203,12 @@ export async function createBlast(input: CreateBlastInput) {
   await blastQueue.addBulk(
     recipients.map((r, i) => {
       const c = contactById.get(r.contactId)!;
-      // Personalisasi sederhana: bila bodyParams kosong, pakai [nama]
-      const bodyParams = input.bodyParams ?? [c.name ?? "Pelanggan"];
+      // Jumlah parameter mengikuti variabel {{n}} template menurut Meta (lihat resolveBodyParams).
+      const bodyParams = resolveBodyParams({
+        expected: localTpl?.metaSyncedAt ? (localTpl.metaBodyParams ?? 0) : null,
+        provided: input.bodyParams,
+        contactName: c.name ?? "Pelanggan",
+      });
       // Teks final untuk vendor templateless (Baileys): {{1}},{{2}}.. → bodyParams.
       const text = renderText(input.messageText, bodyParams);
       return {
