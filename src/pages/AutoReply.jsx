@@ -18,12 +18,16 @@ import {
   useDirty,
   theme,
 } from "../lib/ui";
+import { AutoReplyPresetPicker } from "./autoreply/PresetPicker";
 
 const MATCH_LABEL = { contains: "mengandung", exact: "sama persis", starts: "diawali" };
 
 export default function AutoReply() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listAutoReplies(), []));
   const [modal, setModal] = useState(null);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const rules = data || [];
   const run = async (fn) => {
@@ -36,6 +40,35 @@ export default function AutoReply() {
     }
   };
 
+  // Buat satu paket contoh sekaligus. Aturan dibuat berurutan agar galat pada salah
+  // satunya tidak menyembunyikan yang lain — yang terlanjur dibuat tetap tersimpan.
+  const pakaiPreset = async (preset) => {
+    setPresetBusy(true);
+    setErr("");
+    setNote("");
+    let dibuat = 0;
+    try {
+      for (const r of preset.rules) {
+        await api.createAutoReply({
+          name: r.name,
+          keyword: r.keyword,
+          matchType: r.matchType,
+          response: r.response,
+          priority: r.priority,
+          enabled: true,
+        });
+        dibuat += 1;
+      }
+      setNote(`${dibuat} aturan "${preset.title}" dibuat. Tinjau teksnya lalu sesuaikan bila perlu.`);
+      setPresetOpen(false);
+    } catch (e) {
+      setErr(`Gagal pada aturan ke-${dibuat + 1}: ${e.message}`);
+    } finally {
+      setPresetBusy(false);
+      await reload();
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -45,12 +78,16 @@ export default function AutoReply() {
           <Button key="r" variant="ghost" icon="refresh" onClick={reload}>
             Refresh
           </Button>,
+          <Button key="c" variant="secondary" icon="sparkle" onClick={() => setPresetOpen(true)}>
+            Pakai Contoh
+          </Button>,
           <Button key="n" icon="plus" onClick={() => setModal({})}>
             Tambah Aturan
           </Button>,
         ]}
       />
       <Notice>{error || err}</Notice>
+      <Notice kind="success">{note}</Notice>
       <Notice kind="info">
         Aturan dicek saat pesan masuk yang TIDAK sedang dalam alur survei. Prioritas lebih tinggi dicek dulu. Jika tak
         ada yang cocok dan Agen AI aktif, AI yang menjawab.
@@ -102,9 +139,21 @@ export default function AutoReply() {
         </div>
       ) : (
         <Card>
-          <Empty icon="autoreply" title="Belum ada aturan" note="Tambah aturan balas otomatis pertama Anda." />
+          <Empty
+            icon="autoreply"
+            title="Belum ada aturan"
+            note='Mulai cepat lewat "Pakai Contoh" — ada paket sapaan & tanya-jawab untuk survei online.'
+          />
         </Card>
       )}
+      {presetOpen ? (
+        <AutoReplyPresetPicker
+          existingKeywords={rules.map((r) => r.keyword)}
+          busy={presetBusy}
+          onClose={() => setPresetOpen(false)}
+          onPick={pakaiPreset}
+        />
+      ) : null}
       {modal !== null ? (
         <RuleModal
           rule={modal.id ? modal : null}
