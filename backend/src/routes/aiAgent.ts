@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clampAiSettings } from "../lib/aiLimits.js";
 import { prisma } from "../db.js";
-import { encryptJson } from "../lib/crypto.js";
+import { encryptJson, decryptJson } from "../lib/crypto.js";
+import { generateReply } from "../lib/ai.js";
 import { env } from "../env.js";
 
 const DEFAULTS = {
@@ -93,5 +94,41 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       create: { id: "default", ...DEFAULTS, ...data },
     });
     return { ok: true };
+  });
+
+  // Uji konfigurasi sekarang juga dan KEMBALIKAN pesan galat aslinya.
+  // Tanpa ini, Agen AI yang salah konfigurasi (paling sering: nama model salah ketik)
+  // hanya tampak sebagai "tidak menjawab" tanpa petunjuk apa pun.
+  app.post("/api/ai-agent/test", async (req, reply) => {
+    if (req.user.role === "viewer") return reply.code(403).send({ error: "forbidden" });
+    const parsed = z.object({ message: z.string().max(500).optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+
+    const cfg = await prisma.aiConfig.findUnique({ where: { id: "default" } });
+    if (!cfg) return reply.send({ ok: false, error: "Agen AI belum pernah disimpan." });
+
+    let apiKey: string | undefined;
+    try {
+      apiKey = cfg.apiKey ? decryptJson<string>(cfg.apiKey) : env.ANTHROPIC_API_KEY;
+    } catch {
+      return reply.send({ ok: false, error: "API key tersimpan tidak bisa dibaca. Isi ulang lalu simpan." });
+    }
+    if (!apiKey) return reply.send({ ok: false, error: "API key belum diisi." });
+
+    const started = Date.now();
+    try {
+      const text = await generateReply({
+        provider: cfg.provider,
+        apiKey,
+        model: cfg.model,
+        baseUrl: cfg.baseUrl ?? undefined,
+        systemPrompt: cfg.systemPrompt,
+        messages: [{ role: "user", content: parsed.data.message?.trim() || "Halo, ini tes koneksi." }],
+        maxTokens: cfg.maxTokens,
+      });
+      return reply.send({ ok: true, reply: text, ms: Date.now() - started, model: cfg.model });
+    } catch (err) {
+      return reply.send({ ok: false, error: err instanceof Error ? err.message : String(err), model: cfg.model });
+    }
   });
 }

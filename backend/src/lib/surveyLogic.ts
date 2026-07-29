@@ -32,6 +32,47 @@ export function shouldStartSurveyFromBlast(args: {
   return now.getTime() - args.blastSentAt.getTime() <= BLAST_REPLY_WINDOW_MS;
 }
 
+// Kata tanya pembuka yang lazim dipakai responden.
+const QUESTION_STARTERS = [
+  "apa",
+  "apakah",
+  "bagaimana",
+  "gimana",
+  "gmn",
+  "cara",
+  "berapa",
+  "kenapa",
+  "mengapa",
+  "kapan",
+  "dimana",
+  "di mana",
+  "siapa",
+  "bisakah",
+  "bolehkah",
+  "adakah",
+  "mohon info",
+  "tanya",
+];
+
+/**
+ * Apakah pesan ini terdengar seperti PERTANYAAN tentang survei, bukan perintah memulainya?
+ *
+ * Pemicu survei dicocokkan sebagai substring, sehingga "cara isi survei" ikut mengandung
+ * kata kunci "isi survei" dan dulu langsung memulai survei — padahal responden sedang
+ * bertanya. Penjaga ini membuat pertanyaan diteruskan ke Auto Reply / Agen AI.
+ */
+export function looksLikeQuestion(text: string): boolean {
+  if (!text) return false;
+  if (text.includes("?")) return true;
+  const t = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return false;
+  return QUESTION_STARTERS.some((q) => t === q || t.startsWith(`${q} `));
+}
+
 // Kata penutup: pakai custom bila diisi, selain itu default.
 export function closingText(custom?: string | null): string {
   const c = (custom ?? "").trim();

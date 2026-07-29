@@ -67,6 +67,21 @@ export default function AiAgent() {
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    setErr("");
+    try {
+      setTestResult(await api.testAiAgent("Halo, ini tes koneksi."));
+    } catch (e) {
+      setTestResult({ ok: false, error: e.message });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   useEffect(() => {
     if (data)
@@ -211,18 +226,46 @@ export default function AiAgent() {
             placeholder={data.hasApiKey ? "•••••• (tersimpan, isi untuk ganti)" : "API key provider"}
             hint={`Disimpan terenkripsi. ${KEY_HINT[f.provider]}`}
           />
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Menyimpan..." : "Simpan Pengaturan"}
-          </Button>
+          {/* Hasil tes ditampilkan apa adanya — termasuk pesan galat dari provider,
+              karena itulah satu-satunya petunjuk saat AI "tidak menjawab". */}
+          {testResult ? (
+            <Notice kind={testResult.ok ? "success" : "error"}>
+              {testResult.ok ? (
+                <>
+                  <strong>Berhasil</strong> ({testResult.ms} ms, model {testResult.model}):
+                  <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{testResult.reply}</div>
+                </>
+              ) : (
+                <>
+                  <strong>Gagal</strong>
+                  {testResult.model ? ` (model "${testResult.model}")` : ""}:
+                  <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{testResult.error}</div>
+                </>
+              )}
+            </Notice>
+          ) : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Button onClick={save} disabled={saving || testing}>
+              {saving ? "Menyimpan..." : "Simpan Pengaturan"}
+            </Button>
+            <Button variant="secondary" icon="chat" onClick={runTest} disabled={saving || testing}>
+              {testing ? "Menguji…" : "Tes Agen AI"}
+            </Button>
+          </div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+            Tes memakai pengaturan yang <strong>sudah tersimpan</strong> — simpan dulu bila baru diubah.
+          </div>
         </Card>
 
         <Card title="Cara kerja">
           <div style={{ display: "grid", gap: 11, fontSize: 13 }}>
             {[
               "Pesan yang sedang dalam alur survei tetap diproses survei (prioritas).",
+              "Pertanyaan tentang survei (mis. “cara isi survei”) tidak memulai survei.",
               "Lalu aturan Auto Reply dicek.",
               "Bila tak ada yang cocok & AI aktif, AI menjawab.",
-              "AI memakai 10 pesan terakhir sebagai konteks.",
+              `AI memakai ${f.historyLimit} pesan terakhir sebagai konteks.`,
+              `Maks ${f.maxRepliesPerDay || "∞"} balasan AI per nomor tiap 24 jam.`,
               "Ganti provider kapan saja tanpa ubah kode.",
             ].map((t, i) => (
               <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>

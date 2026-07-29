@@ -3,6 +3,7 @@ import { decryptJson } from "../lib/crypto.js";
 import { env } from "../env.js";
 import { generateReply, type AiMessage } from "../lib/ai.js";
 import { decideAiReply, AI_QUOTA_WINDOW_MS, AI_QUOTA_REACHED_REPLY } from "../lib/aiLimits.js";
+import { logError } from "../lib/errorLog.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
 // Urutan: aturan Auto Reply (cocok kata kunci) → Agen AI (bila aktif).
@@ -70,7 +71,10 @@ export async function findAutoResponse(contactId: string, text: string): Promise
     });
     return reply ? { text: reply, source: "ai" } : null;
   } catch (err) {
-    console.error("AI reply gagal:", err);
+    // Dulu hanya console.error, sehingga AI yang gagal tampak seperti "tidak menjawab
+    // tanpa sebab" — penyebab tersering: nama model salah ketik. Sekarang masuk log
+    // error terstruktur, dan halaman Agen AI punya tombol Tes untuk memunculkannya.
+    logError("ai-agent", err, { provider: ai.provider, model: ai.model });
     return null;
   }
 }

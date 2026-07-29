@@ -118,6 +118,7 @@ export const api = {
   // AI Agent
   getAiAgent: () => request("/api/ai-agent"),
   updateAiAgent: (data) => request("/api/ai-agent", { method: "PUT", body: data }),
+  testAiAgent: (message) => request("/api/ai-agent/test", { method: "POST", body: { message } }),
 
   // Template pesan WhatsApp
   listTemplates: () => request("/api/templates"),

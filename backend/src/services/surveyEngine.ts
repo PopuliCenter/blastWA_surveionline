@@ -21,6 +21,7 @@ import {
   nextStepWithBranch,
   isFlowAbandoned,
   shouldStartSurveyFromBlast,
+  looksLikeQuestion,
   type QLite,
 } from "../lib/surveyLogic.js";
 
@@ -252,11 +253,19 @@ async function findTriggeredSurvey(text: string) {
     where: { triggerEnabled: true, status: "active" },
     include: { questions: { orderBy: { order: "asc" } } },
   });
-  for (const s of surveys) {
-    const kws = (s.triggerKeywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean);
-    // Cocok bila teks sama persis, mengandung kata kunci, atau kata kunci muncul sebagai kata utuh
-    if (kws.some((k) => t === k || t.includes(k))) return s;
-  }
+  const kataKunci = (s: (typeof surveys)[number]): string[] =>
+    (s.triggerKeywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean);
+
+  // 1) Pesan PERSIS sama dengan kata kunci → selalu memulai survei, apa pun bentuknya.
+  for (const s of surveys) if (kataKunci(s).some((k) => t === k)) return s;
+
+  // 2) Pertanyaan TENTANG survei bukan perintah memulainya. "Cara isi survei" mengandung
+  // kata kunci "isi survei", tapi maksudnya bertanya — biarkan Auto Reply / Agen AI yang
+  // menjawab, jangan langsung melempar responden ke dalam survei.
+  if (looksLikeQuestion(t)) return null;
+
+  // 3) Kata kunci muncul di dalam kalimat, mis. "saya mau isi survei".
+  for (const s of surveys) if (kataKunci(s).some((k) => t.includes(k))) return s;
   return null;
 }
 
