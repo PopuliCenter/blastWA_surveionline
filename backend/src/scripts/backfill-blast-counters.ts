@@ -15,9 +15,13 @@
  *   npm run backfill:blast-counters -- --apply # benar-benar menyimpan perubahan
  *
  * Aman diulang: menjalankannya dua kali tidak mengubah apa pun pada kali kedua.
+ *
+ * Berkas ini sengaja berada di dalam src/ supaya ikut ter-compile ke dist/ dan bisa
+ * dijalankan dengan `node` biasa di image produksi — image itu dibangun dengan
+ * `npm ci --omit=dev`, jadi tsx (devDependency) tidak tersedia di sana.
  */
-import { prisma } from "../src/db.js";
-import { countersFromStatuses } from "../src/lib/deliveryStatus.js";
+import { prisma } from "../db.js";
+import { countersFromStatuses } from "../lib/deliveryStatus.js";
 
 type Row = {
   id: string;
