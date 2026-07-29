@@ -192,15 +192,40 @@ async function startSurvey(
       data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) },
     });
     const body = survey.description ? `${survey.title}\n\n${survey.description}` : survey.title;
-    const result = await provider.sendFlow({
+    const flowInput = {
       to: phone,
       flowId: survey.flowId,
       flowToken: `resp_${resp.id}`,
       cta: survey.flowCta || "Isi Survei",
       bodyText: body,
       screen: "SURVEY",
+    };
+    let result = await provider.sendFlow({
+      ...flowInput,
       ...(survey.bannerUrl ? { headerImageUrl: survey.bannerUrl } : {}),
     });
+    // Gagal-aman: banner hanyalah estetika — jangan sampai formulir survei batal terkirim
+    // karena gambarnya ditolak Meta (URL tak bisa diunduh, ukuran/rasio, dll).
+    // Ulangi TANPA banner, dan catat penyebab aslinya agar bisa ditelusuri.
+    if (result.status === "failed" && survey.bannerUrl) {
+      logError("backend", new Error("Banner Flow ditolak — mengirim ulang tanpa banner"), {
+        surveyId: survey.id,
+        bannerUrl: survey.bannerUrl,
+        metaResponse: result.raw,
+      });
+      result = await provider.sendFlow(flowInput);
+    }
+    // Formulir benar-benar tak terkirim → buang respons yang terlanjur dibuat, supaya
+    // kontak tidak tercatat "sedang mengisi" padahal tak pernah menerima apa pun
+    // (dan pemicu berikutnya tetap bisa memulai survei).
+    if (result.status === "failed") {
+      logError("backend", new Error("Formulir Flow gagal dikirim"), {
+        surveyId: survey.id,
+        metaResponse: result.raw,
+      });
+      await prisma.surveyResponse.delete({ where: { id: resp.id } }).catch(() => {});
+      return;
+    }
     await prisma.message.create({
       data: {
         contactId,
