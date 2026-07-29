@@ -22,7 +22,12 @@ export function AddContactsModal({ segment, onClose, onDone }) {
     }
   };
   return (
-    <Modal title={`Tambah Kontak — ${segment.name}`} onClose={onClose} width={540}>
+    <Modal
+      title={`Tambah Kontak — ${segment.name}`}
+      onClose={onClose}
+      width={540}
+      dirty={() => !result && contacts.length > 0}
+    >
       <Notice>{err}</Notice>
       {result ? (
         <div>

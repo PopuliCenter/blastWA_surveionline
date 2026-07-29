@@ -238,7 +238,7 @@ function BulkModal({ onClose, onDone }) {
   };
 
   return (
-    <Modal title="Impor Kontak Massal" onClose={onClose} width={540}>
+    <Modal title="Impor Kontak Massal" onClose={onClose} width={540} dirty={() => !result && contacts.length > 0}>
       <Notice>{err}</Notice>
       {result ? (
         <Notice kind="success">
@@ -277,7 +277,12 @@ function ContactModal({ contact, onClose, onSave }) {
     }
   };
   return (
-    <Modal title={contact ? "Edit Kontak" : "Tambah Kontak"} onClose={onClose} width={460}>
+    <Modal
+      title={contact ? "Edit Kontak" : "Tambah Kontak"}
+      onClose={onClose}
+      width={460}
+      dirty={() => name !== (contact?.name || "") || phone !== (contact?.phone || "")}
+    >
       <Input label="Nama" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama kontak" />
       <Input
         label="Nomor WhatsApp"

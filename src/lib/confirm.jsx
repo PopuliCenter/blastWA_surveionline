@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { theme, card, Button, Icon, useIsMobile } from "./ui";
+import { registerConfirm } from "./confirmBus";
 
 // ===== Dialog konfirmasi in-app (pengganti window.confirm) =====
 // Pemakaian imperatif dari mana saja:
@@ -7,34 +8,19 @@ import { theme, card, Button, Icon, useIsMobile } from "./ui";
 //   if (!(await confirmDialog({ message: "Hapus?", tone: "danger" }))) return;
 //
 // confirmDialog menerima string atau objek opsi:
-//   { title, message, confirmText, cancelText, tone: "danger"|"primary", icon }
+//   { title, message, confirmText, cancelText, tone: "danger"|"primary", icon, confirmIcon }
 // Mengembalikan Promise<boolean> (true = konfirmasi, false = batal).
-
-let openRef = null; // opener yang didaftarkan oleh <ConfirmHost/> (host tunggal)
-
-export function confirmDialog(opts) {
-  const options = typeof opts === "string" ? { message: opts } : opts || {};
-  return new Promise((resolve) => {
-    // Fallback aman bila host belum termuat → jangan sampai aksi terblokir.
-    if (!openRef) {
-      resolve(window.confirm(options.message || "Lanjutkan?"));
-      return;
-    }
-    openRef({ options, resolve });
-  });
-}
+//
+// Fungsinya sendiri tinggal di confirmBus.js (tanpa dependensi UI) agar ui.jsx bisa
+// memakainya tanpa impor melingkar. Di-ekspor ulang di sini demi kompatibilitas pemanggil lama.
+export { confirmDialog } from "./confirmBus";
 
 // Host tunggal — dipasang sekali di root aplikasi. Render null sampai dipanggil.
 export function ConfirmHost() {
   const [state, setState] = useState(null); // { options, resolve }
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    openRef = (payload) => setState(payload);
-    return () => {
-      openRef = null;
-    };
-  }, []);
+  useEffect(() => registerConfirm((payload) => setState(payload)), []);
 
   useEffect(() => {
     if (!state) return undefined;
@@ -122,7 +108,7 @@ export function ConfirmHost() {
           <Button
             autoFocus
             variant={danger ? "danger" : "primary"}
-            icon={danger ? "trash" : undefined}
+            icon={o.confirmIcon !== undefined ? o.confirmIcon || undefined : danger ? "trash" : undefined}
             onClick={() => done(true)}
             style={{
               ...(danger ? { background: theme.red, color: "#fff", border: "none" } : {}),

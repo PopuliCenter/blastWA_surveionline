@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { api, apiBase } from "../../lib/api";
-import { Modal, Select, Notice, Input, Textarea, Button, theme } from "../../lib/ui";
+import { Modal, Select, Notice, Input, Textarea, Button, useDirty, theme } from "../../lib/ui";
 import { loadRates, rupiah } from "./constants";
 import { metaState } from "../template/constants";
 
@@ -28,6 +28,7 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
   const [rates] = useState(loadRates);
   const set = (k, v) => setF({ ...f, [k]: v });
+  const dirty = useDirty(f);
 
   // Upload/ganti file header media untuk blast ini
   const fileRef = useRef(null);
@@ -178,7 +179,7 @@ export function BlastModal({ surveys, segments, templates, onClose, onSave }) {
     }
   };
   return (
-    <Modal title="Buat Blast" onClose={onClose}>
+    <Modal title="Buat Blast" onClose={onClose} dirty={dirty}>
       <Select
         label="Survei (opsional)"
         value={f.surveyId}

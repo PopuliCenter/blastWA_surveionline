@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { api, apiBase } from "../../lib/api";
-import { Button, Input, Textarea, Select, Modal, Badge, Icon, useIsMobile, theme } from "../../lib/ui";
+import { Button, Input, Textarea, Select, Modal, Badge, Icon, useIsMobile, useDirty, theme } from "../../lib/ui";
 import {
   CATEGORIES,
   LANGS,
@@ -25,6 +25,7 @@ export function TemplateEditor({ initial, onClose, onSave }) {
   const [showPreview, setShowPreview] = useState(false);
   const isMobile = useIsMobile();
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const dirty = useDirty(f);
 
   // Upload file header media → isi headerMediaUrl otomatis (URL publik /uploads/...)
   const fileRef = useRef(null);
@@ -292,7 +293,7 @@ export function TemplateEditor({ initial, onClose, onSave }) {
   );
 
   return (
-    <Modal title={initial.id ? "Edit Template" : "Buat Template"} onClose={onClose} width={920}>
+    <Modal title={initial.id ? "Edit Template" : "Buat Template"} onClose={onClose} width={920} dirty={dirty}>
       {isMobile ? (
         <>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>

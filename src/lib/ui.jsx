@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { confirmDialog, isConfirmOpen } from "./confirmBus";
+import { isChanged, needsDiscardConfirm } from "./formGuard";
 
 // ===== Tema terang & clean (SaaS modern) =====
 export const theme = {
@@ -566,15 +568,119 @@ export function Tabs({ tabs, active, onChange, style }) {
   );
 }
 
-export function Modal({ title, children, onClose, width = 600 }) {
+// Konfirmasi baku saat meninggalkan isian yang belum tersimpan. Dipakai Modal dan
+// halaman builder supaya kalimatnya seragam di seluruh aplikasi.
+export function confirmDiscard(opts = {}) {
+  return confirmDialog({
+    title: "Ada perubahan belum disimpan",
+    message: "Kalau Anda keluar sekarang, perubahan itu hilang.",
+    confirmText: "Keluar & buang",
+    cancelText: "Lanjut mengisi",
+    tone: "danger",
+    icon: "close",
+    confirmIcon: null,
+    ...opts,
+  });
+}
+
+// Elemen yang bisa menerima fokus di dalam sebuah wadah (untuk jebakan fokus modal).
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const focusablesIn = (el) =>
+  el ? [...el.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null || n === document.activeElement) : [];
+
+// Tumpukan modal — Esc hanya menutup yang paling atas (mis. FlowJsonModal di atas builder).
+const modalStack = [];
+// Kunci scroll halaman selama modal terbuka; dihitung agar modal bersarang tetap benar.
+let scrollLocks = 0;
+let prevBodyOverflow = "";
+
+/**
+ * Dialog. Menutupnya terjaga: bila `dirty` bernilai benar, klik latar dan tombol Esc
+ * meminta konfirmasi dulu supaya isian yang belum disimpan tidak hilang.
+ *
+ * @param dirty boolean | (() => boolean) — wajib diisi untuk modal berisi form.
+ *              Modal hanya-baca (pratinjau/laporan) biarkan kosong.
+ */
+export function Modal({ title, children, onClose, width = 600, dirty }) {
   const isMobile = useIsMobile();
+  const boxRef = useRef(null);
+  const downOnOverlay = useRef(false);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const titleId = useId();
+
+  const requestClose = useCallback(async () => {
+    if (needsDiscardConfirm(dirtyRef.current) && !(await confirmDiscard({ confirmText: "Tutup & buang" }))) return;
+    onClose?.();
+  }, [onClose]);
+  const closeRef = useRef(requestClose);
+  closeRef.current = requestClose;
+
+  // Daftar ke tumpukan modal, kunci scroll body, pasang Esc, dan kembalikan fokus saat tutup.
+  useEffect(() => {
+    const token = {};
+    modalStack.push(token);
+    if (scrollLocks++ === 0) {
+      prevBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+
+    const prevFocus = document.activeElement;
+    // Arahkan fokus ke isian pertama bila ada; kalau tidak, ke kotak modal itu sendiri
+    // (tombol tutup sengaja dilewati agar tidak jadi target fokus awal).
+    const firstField = boxRef.current?.querySelector("input,select,textarea");
+    (firstField || boxRef.current)?.focus?.({ preventScroll: true });
+
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (isConfirmOpen()) return; // Esc itu untuk dialog konfirmasi, bukan modal di belakangnya
+      if (modalStack[modalStack.length - 1] !== token) return; // bukan modal teratas
+      e.preventDefault();
+      closeRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      if (--scrollLocks === 0) document.body.style.overflow = prevBodyOverflow;
+      prevFocus?.focus?.({ preventScroll: true });
+    };
+  }, []);
+
+  // Jebakan fokus: Tab tidak boleh keluar dari modal.
+  const onKeyDownTrap = (e) => {
+    if (e.key !== "Tab") return;
+    const list = focusablesIn(boxRef.current);
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   const overlay = isMobile ? { padding: 0, alignItems: "stretch" } : { padding: "6vh 16px", alignItems: "flex-start" };
   const box = isMobile
     ? { width: "100%", maxWidth: "100%", minHeight: "100vh", borderRadius: 0, padding: 20 }
     : { width: "100%", maxWidth: width, maxHeight: "86vh", padding: 22 };
   return (
     <div
-      onClick={onClose}
+      // Tutup hanya bila tekan DAN lepas sama-sama di latar — supaya menyeret teks
+      // dari dalam input lalu melepas di luar tidak ikut menutup modal.
+      onMouseDown={(e) => {
+        downOnOverlay.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && downOnOverlay.current) requestClose();
+      }}
+      onKeyDown={onKeyDownTrap}
       style={{
         position: "fixed",
         inset: 0,
@@ -586,11 +692,22 @@ export function Modal({ title, children, onClose, width = 600 }) {
         ...overlay,
       }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ ...card, overflow: "auto", ...box }}>
+      <div
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        style={{ ...card, overflow: "auto", outline: "none", ...box }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 17, color: theme.text }}>{title}</h3>
+          <h3 id={titleId} style={{ margin: 0, fontSize: 17, color: theme.text }}>
+            {title}
+          </h3>
           <button
-            onClick={onClose}
+            onClick={requestClose}
+            aria-label="Tutup"
+            title="Tutup"
             style={{
               border: "none",
               background: "transparent",
@@ -664,7 +781,9 @@ export function StatCard({ label, value, note, tone = "blue", icon }) {
   );
 }
 
-export function Card({ title, actions, children, pad = 18, style }) {
+// bodyStyle: gaya tambahan untuk wadah isi. Dipakai bila isi kartu perlu jadi kolom
+// flex — mis. agar baris tombol bisa didorong ke dasar kartu dengan marginTop:"auto".
+export function Card({ title, actions, children, pad = 18, style, bodyStyle }) {
   return (
     <div style={{ ...card, ...style }}>
       {title || actions ? (
@@ -681,7 +800,7 @@ export function Card({ title, actions, children, pad = 18, style }) {
           {actions}
         </div>
       ) : null}
-      <div style={{ padding: pad }}>{children}</div>
+      <div style={{ padding: pad, ...bodyStyle }}>{children}</div>
     </div>
   );
 }
@@ -768,6 +887,15 @@ export function useLoader(loader) {
     reload();
   }, [reload]);
   return { data, loading, error, reload, setData };
+}
+
+// Penanda "ada perubahan belum tersimpan": bandingkan isi form sekarang dengan
+// snapshot saat komponen pertama dirender. Hasilnya dipasang ke prop `dirty` milik Modal.
+//   const dirty = useDirty(f);
+//   <Modal dirty={dirty} …>
+export function useDirty(value) {
+  const initial = useRef(value); // useRef hanya memakai argumen pada render pertama
+  return useCallback(() => isChanged(value, initial.current), [value]);
 }
 
 // Hook seleksi banyak item (pilih untuk hapus massal)

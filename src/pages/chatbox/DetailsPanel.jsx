@@ -13,18 +13,24 @@ function DetailRow({ label, value }) {
   );
 }
 
-export function DetailsPanel({ convo, onResolve, bare }) {
+// onDraft: dipanggil saat draf catatan berubah. Dipakai pemanggil yang membungkus panel ini
+// dalam Modal (tampilan ponsel) agar catatan setengah jadi tidak hilang saat klik di luar.
+export function DetailsPanel({ convo, onResolve, bare, onDraft }) {
   const notes = useLoader(useCallback(() => api.listNotes(convo.id), [convo.id]));
   const [noteText, setNoteText] = useState("");
   const [adding, setAdding] = useState(false);
   const sess = sessionInfo(convo);
+  const setDraft = (v) => {
+    setNoteText(v);
+    onDraft?.(Boolean(v.trim()));
+  };
 
   const addNote = async () => {
     if (!noteText.trim()) return;
     setAdding(true);
     try {
       await api.addNote(convo.id, noteText.trim());
-      setNoteText("");
+      setDraft("");
       await notes.reload();
     } finally {
       setAdding(false);
@@ -112,7 +118,7 @@ export function DetailsPanel({ convo, onResolve, bare }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <input
             value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
+            onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !adding && addNote()}
             placeholder="Tambah catatan..."
             style={{

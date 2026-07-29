@@ -706,7 +706,7 @@ function ChangePasswordModal({ onClose }) {
   };
 
   return (
-    <Modal title="Ganti Password" onClose={onClose} width={440}>
+    <Modal title="Ganti Password" onClose={onClose} width={440} dirty={() => !ok && Boolean(cur || next || confirm)}>
       {ok ? (
         <div>
           <Notice kind="success">Password berhasil diganti. Gunakan password baru saat login berikutnya.</Notice>

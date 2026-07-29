@@ -15,6 +15,7 @@ import {
   Toggle,
   useLoader,
   useIsMobile,
+  useDirty,
   theme,
 } from "../lib/ui";
 
@@ -133,6 +134,7 @@ function RuleModal({ rule, onClose, onSave }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
+  const dirty = useDirty(f);
   const submit = async () => {
     setSaving(true);
     try {
@@ -142,7 +144,7 @@ function RuleModal({ rule, onClose, onSave }) {
     }
   };
   return (
-    <Modal title={rule ? "Edit Aturan" : "Tambah Aturan"} onClose={onClose} width={520}>
+    <Modal title={rule ? "Edit Aturan" : "Tambah Aturan"} onClose={onClose} width={520} dirty={dirty}>
       <Input label="Nama aturan" value={f.name} onChange={(e) => set("name", e.target.value)} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <Select

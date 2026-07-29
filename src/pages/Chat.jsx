@@ -31,6 +31,7 @@ export default function Chat() {
   const [search, setSearch] = useState("");
   const [sortNewest, setSortNewest] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(false); // ada catatan setengah jadi di panel detail
   const [actionErr, setActionErr] = useState("");
   const sel = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -373,8 +374,8 @@ export default function Chat() {
           )}
         </div>
         {showDetails && active ? (
-          <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420}>
-            <DetailsPanel convo={active} onResolve={resolve} bare />
+          <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft}>
+            <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
           </Modal>
         ) : null}
       </div>
@@ -458,8 +459,8 @@ export default function Chat() {
         ) : null}
       </div>
       {!detailsInline && showDetails && active ? (
-        <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420}>
-          <DetailsPanel convo={active} onResolve={resolve} bare />
+        <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft}>
+          <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
         </Modal>
       ) : null}
     </div>

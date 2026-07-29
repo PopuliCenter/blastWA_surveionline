@@ -16,7 +16,7 @@ export function SegmentModal({ onClose, onSave }) {
   };
   const attrKeys = [...new Set(contacts.flatMap((c) => Object.keys(c.attributes || {})))];
   return (
-    <Modal title="Tambah Segmen" onClose={onClose} width={540}>
+    <Modal title="Tambah Segmen" onClose={onClose} width={540} dirty={() => Boolean(name.trim()) || contacts.length > 0}>
       <Input
         label="Nama Segmen"
         value={name}

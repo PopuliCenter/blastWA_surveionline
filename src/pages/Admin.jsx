@@ -6,12 +6,14 @@ import {
   Button,
   Badge,
   Input,
+  PasswordInput,
   Select,
   Modal,
   Notice,
   Loading,
   useLoader,
   useIsMobile,
+  useDirty,
   theme,
 } from "../lib/ui";
 
@@ -123,6 +125,7 @@ function UserModal({ user, onClose, onSave }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF({ ...f, [k]: v });
+  const dirty = useDirty(f);
   const submit = async () => {
     setSaving(true);
     try {
@@ -134,17 +137,17 @@ function UserModal({ user, onClose, onSave }) {
     }
   };
   return (
-    <Modal title={user ? "Edit User" : "Tambah User"} onClose={onClose}>
+    <Modal title={user ? "Edit User" : "Tambah User"} onClose={onClose} dirty={dirty}>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
         <Input label="Nama" value={f.name} onChange={(e) => set("name", e.target.value)} />
         <Input label="Username" value={f.username} onChange={(e) => set("username", e.target.value)} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-        <Input
+        <PasswordInput
           label={user ? "Password (kosongkan = tetap)" : "Password"}
-          type="password"
           value={f.password}
           onChange={(e) => set("password", e.target.value)}
+          hint={user ? "Biarkan kosong bila password tidak diganti." : "Minimal 8 karakter."}
         />
         <Input label="Email" value={f.email} onChange={(e) => set("email", e.target.value)} />
       </div>
