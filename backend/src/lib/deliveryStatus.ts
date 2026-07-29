@@ -33,3 +33,26 @@ export function counterField(to: DeliveryStatus): "deliveredCount" | "readCount"
   if (to === "failed") return "failedCount";
   return null;
 }
+
+// Hitung ulang penghitung blast dari jumlah baris BlastRecipient per status.
+// Baris penerima adalah sumber kebenaran: satu baris per nomor, berisi status terkini.
+//
+// Penghitungnya bersifat corong (kumulatif), bukan status saat ini: nomor yang sudah
+// "read" pasti pernah "delivered", jadi ikut dihitung di deliveredCount.
+//
+// sentCount SENGAJA tidak dihitung ulang. Nilainya dinaikkan worker sekali per
+// pengiriman yang berhasil dan tidak pernah disentuh webhook, jadi tidak pernah
+// membengkak — sementara menghitungnya dari status akan salah untuk nomor yang
+// sudah terkirim lalu dilaporkan gagal oleh Meta.
+export function countersFromStatuses(byStatus: Record<string, number>): {
+  deliveredCount: number;
+  readCount: number;
+  failedCount: number;
+} {
+  const n = (s: string): number => byStatus[s] ?? 0;
+  return {
+    deliveredCount: n("delivered") + n("read"),
+    readCount: n("read"),
+    failedCount: n("failed"),
+  };
+}

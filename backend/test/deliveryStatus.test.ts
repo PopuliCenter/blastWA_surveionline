@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canTransition, counterField, ALLOWED_FROM } from "../src/lib/deliveryStatus.js";
+import { canTransition, counterField, countersFromStatuses, ALLOWED_FROM } from "../src/lib/deliveryStatus.js";
 
 describe("canTransition", () => {
   it("menolak callback duplikat — status yang sama tidak boleh diproses dua kali", () => {
@@ -62,6 +62,45 @@ describe("counterField", () => {
 
   it("tidak menaikkan apa pun untuk 'sent' — sentCount sudah diisi saat pengiriman", () => {
     expect(counterField("sent")).toBeNull();
+  });
+});
+
+describe("countersFromStatuses (dipakai skrip backfill)", () => {
+  it("menghitung nomor yang sudah dibaca sebagai sudah sampai juga", () => {
+    // Corong: 'read' pasti melewati 'delivered'.
+    expect(countersFromStatuses({ sent: 2, delivered: 3, read: 5 })).toEqual({
+      deliveredCount: 8,
+      readCount: 5,
+      failedCount: 0,
+    });
+  });
+
+  it("menghasilkan nol untuk blast yang belum menghasilkan status apa pun", () => {
+    expect(countersFromStatuses({ queued: 10 })).toEqual({ deliveredCount: 0, readCount: 0, failedCount: 0 });
+  });
+
+  it("menghitung gagal sekali per nomor, bukan sebanyak percobaan ulangnya", () => {
+    expect(countersFromStatuses({ sent: 7, failed: 3 }).failedCount).toBe(3);
+  });
+
+  it("tidak pernah menghasilkan angka sampai melebihi jumlah penerima", () => {
+    const byStatus = { queued: 1, sent: 2, delivered: 3, read: 4, failed: 5 };
+    const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+    const c = countersFromStatuses(byStatus);
+    expect(c.deliveredCount).toBeLessThanOrEqual(total);
+    expect(c.readCount).toBeLessThanOrEqual(c.deliveredCount); // dibaca <= sampai
+  });
+
+  it("memperbaiki kasus nyata: sampai 12 dari terkirim 10 menjadi konsisten", () => {
+    // 10 penerima: 8 sampai (3 di antaranya dibaca), 1 masih 'sent', 1 gagal.
+    const c = countersFromStatuses({ sent: 1, delivered: 5, read: 3, failed: 1 });
+    expect(c).toEqual({ deliveredCount: 8, readCount: 3, failedCount: 1 });
+    expect(c.deliveredCount).toBeLessThanOrEqual(10);
+  });
+
+  it("hasilnya stabil bila dijalankan berulang kali", () => {
+    const byStatus = { sent: 2, delivered: 3, read: 5, failed: 1 };
+    expect(countersFromStatuses(byStatus)).toEqual(countersFromStatuses(byStatus));
   });
 });
 

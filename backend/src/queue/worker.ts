@@ -93,11 +93,17 @@ async function main() {
           });
 
       if (result.status === "failed") {
-        await prisma.blastRecipient.update({
-          where: { id: recipientId },
-          data: { status: "failed", error: JSON.stringify(result.raw).slice(0, 1000) },
+        const error = JSON.stringify(result.raw).slice(0, 1000);
+        // Job ini dilempar ulang agar BullMQ mencoba lagi, jadi blok ini bisa dijalani
+        // beberapa kali untuk penerima YANG SAMA. failedCount hanya boleh naik pada
+        // percobaan pertama — kalau tidak, satu nomor gagal terhitung sebanyak retry-nya.
+        const marked = await prisma.blastRecipient.updateMany({
+          where: { id: recipientId, status: { not: "failed" } },
+          data: { status: "failed", error },
         });
-        await prisma.blast.update({ where: { id: blastId }, data: { failedCount: { increment: 1 } } });
+        if (marked.count > 0)
+          await prisma.blast.update({ where: { id: blastId }, data: { failedCount: { increment: 1 } } });
+        else await prisma.blastRecipient.update({ where: { id: recipientId }, data: { error } }); // perbarui keterangannya saja
         throw new Error(`Kirim gagal ke ${to}`); // biar BullMQ retry
       }
 
