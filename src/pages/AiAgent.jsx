@@ -187,7 +187,8 @@ export default function AiAgent() {
               label="Base URL (OpenAI-compatible)"
               value={f.baseUrl}
               onChange={(e) => set("baseUrl", e.target.value)}
-              placeholder="https://openrouter.ai/api/v1"
+              placeholder="https://api.groq.com/openai/v1"
+              hint="Groq: https://api.groq.com/openai/v1 (model llama-3.3-70b-versatile) · OpenRouter: https://openrouter.ai/api/v1 · DeepSeek: https://api.deepseek.com/v1. Wajib https — alamat lokal/privat ditolak demi keamanan."
             />
           ) : null}
           <Textarea
