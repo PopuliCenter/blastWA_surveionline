@@ -4,6 +4,7 @@ import { env } from "../env.js";
 import { generateReply, type AiMessage } from "../lib/ai.js";
 import { decideAiReply, AI_QUOTA_WINDOW_MS, AI_QUOTA_REACHED_REPLY } from "../lib/aiLimits.js";
 import { logError } from "../lib/errorLog.js";
+import { buildContactFacts } from "../lib/aiContext.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
 // Urutan: aturan Auto Reply (cocok kata kunci) → Agen AI (bila aktif).
@@ -45,6 +46,27 @@ export async function findAutoResponse(contactId: string, text: string): Promise
   if (decision.action === "silent") return null;
   if (decision.action === "handoff") return { text: AI_QUOTA_REACHED_REPLY, source: "ai" };
 
+  // Fakta keadaan pengirim (sudah mengisi survei atau belum) disisipkan ke system
+  // prompt. Tanpa ini AI menebak dan mengarang proses yang tidak ada.
+  const aktif = await prisma.survey.findMany({
+    where: { status: "active" },
+    select: {
+      title: true,
+      triggerKeywords: true,
+      triggerEnabled: true,
+      oncePerContact: true,
+      responses: { where: { contactId, completedAt: { not: null } }, select: { id: true }, take: 1 },
+    },
+  });
+  const facts = buildContactFacts(
+    aktif.map((s) => ({
+      title: s.title,
+      triggers: s.triggerEnabled ? (s.triggerKeywords ?? []) : [],
+      oncePerContact: s.oncePerContact,
+      completedByContact: s.responses.length > 0,
+    })),
+  );
+
   // Konteks: ambil beberapa pesan terakhir kontak ini, urut lama→baru.
   const history = await prisma.message.findMany({
     where: { contactId },
@@ -65,7 +87,7 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       apiKey,
       model: ai.model,
       baseUrl: ai.baseUrl ?? undefined,
-      systemPrompt: ai.systemPrompt,
+      systemPrompt: `${ai.systemPrompt}\n\n${facts}`,
       messages,
       maxTokens: ai.maxTokens,
     });
