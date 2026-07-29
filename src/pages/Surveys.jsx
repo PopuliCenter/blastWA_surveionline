@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
 import { PageHeader, Card, Button, Badge, Notice, Loading, Empty, useLoader, theme } from "../lib/ui";
 import { SurveyBuilder } from "./survey/SurveyBuilder";
-import { ResponsesModal } from "./survey/ResponsesModal";
+import { SurveyResponses } from "./survey/SurveyResponses";
 import { SurveyPreviewModal } from "./survey/SurveyPreviewModal";
 import { SurveyGuide } from "./survey/SurveyGuide";
 
@@ -44,6 +44,10 @@ export default function Surveys() {
       return;
     run(() => api.deleteSurvey(s.id));
   };
+
+  // Daftar respons juga mengambil alih halaman: satu survei bisa mengumpulkan ribuan
+  // responden, yang butuh ruang untuk pencarian, saringan, dan paginasi.
+  if (responsesFor) return <SurveyResponses survey={responsesFor} onClose={() => setResponsesFor(null)} />;
 
   // Builder mengambil alih seluruh halaman — pertanyaan & pengaturannya terlalu banyak untuk modal.
   if (modal !== null)
@@ -139,7 +143,6 @@ export default function Surveys() {
         </Card>
       )}
 
-      {responsesFor ? <ResponsesModal survey={responsesFor} onClose={() => setResponsesFor(null)} /> : null}
       {previewFor ? <SurveyPreviewModal survey={previewFor} onClose={() => setPreviewFor(null)} /> : null}
     </div>
   );
