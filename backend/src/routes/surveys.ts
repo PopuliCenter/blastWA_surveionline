@@ -136,7 +136,10 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       where: { surveyId: id },
       orderBy: { startedAt: "desc" },
       include: {
-        contact: { select: { phone: true, name: true, attributes: true } },
+        // consentSource ikut ditarik untuk kolom "Sumber Kontak" di ekspor: kolom Nama
+        // tidak bisa membedakan rekrutan surveyor (impor) dari responden organik
+        // (pesan masuk), padahal komposisi itulah yang dilaporkan di metodologi.
+        contact: { select: { phone: true, name: true, attributes: true, consentSource: true } },
         answers: { include: { question: { select: { text: true, order: true } } } },
       },
     });
@@ -144,6 +147,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       id: r.id,
       phone: r.contact.phone,
       name: r.contact.name,
+      consentSource: r.contact.consentSource,
       attributes: r.contact.attributes ?? {},
       startedAt: r.startedAt,
       completedAt: r.completedAt,

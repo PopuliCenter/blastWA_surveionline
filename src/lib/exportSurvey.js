@@ -3,8 +3,33 @@
 // Atribut internal chat yang tidak ikut diekspor sebagai kolom pembobot
 export const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"]);
 
+// Label kolom "Sumber Kontak". Nilai mentahnya dari Contact.consentSource, yang terisi
+// otomatis: "import" saat impor kontak/segmen, "manual" dari dashboard, dan "inbound"
+// saat kontak baru mengirim pesan.
+//
+// Kolom Nama tidak bisa menjawab pertanyaan ini karena nama impor dan nama profil WA
+// menempati kolom yang sama. Padahal bedanya penting untuk laporan: rekrutan surveyor
+// (impor) adalah sampel terencana, sedangkan responden organik (pesan masuk) masuk
+// sendiri — dan komposisi keduanyalah yang dilaporkan di bagian metodologi.
+export const CONTACT_SOURCE_LABELS = {
+  import: "Impor",
+  manual: "Manual",
+  inbound: "Pesan masuk",
+  form: "Formulir",
+};
+
+// Nilai tak dikenal SENGAJA diteruskan apa adanya, bukan dijadikan "(tidak diketahui)":
+// kalau kelak ada sumber baru, ia harus terlihat di ekspor, bukan tersembunyi.
+export function contactSourceLabel(source) {
+  const s = typeof source === "string" ? source.trim() : "";
+  if (!s) return "(tidak diketahui)";
+  return CONTACT_SOURCE_LABELS[s] ?? s;
+}
+
 // Bentuk tabel respons (MURNI — tanpa I/O, mudah diuji): header + baris.
-// Kolom = Nomor, Nama, pembobot (urut kemunculan), lalu 1 kolom/pertanyaan.
+// Kolom = Nomor, Nama, Sumber Kontak, pembobot (urut kemunculan), lalu 1 kolom/pertanyaan.
+// Pengenal dan metadata di depan, variabel analisis di belakang, agar kolom pembobot dan
+// jawaban tetap bersebelahan saat diolah.
 // opts.upper = HURUF KAPITAL. Spasi berlebih selalu dirapikan (cleaning ringan).
 export function buildResponseRows(survey, responses, opts = {}) {
   const questions = (survey.questions || []).map((q) => q.text);
@@ -20,7 +45,7 @@ export function buildResponseRows(survey, responses, opts = {}) {
     if (opts.upper) s = s.toUpperCase();
     return s;
   };
-  const header = ["Nomor", "Nama", ...attrKeys, ...questions];
+  const header = ["Nomor", "Nama", "Sumber Kontak", ...attrKeys, ...questions];
   const rows = responses.map((r) => {
     const map = {};
     (r.answers || []).forEach((a) => {
@@ -30,6 +55,7 @@ export function buildResponseRows(survey, responses, opts = {}) {
     return [
       clean(r.phone),
       clean(r.name || ""),
+      clean(contactSourceLabel(r.consentSource)),
       ...attrKeys.map((k) => clean(attrs[k] ?? "")),
       ...questions.map((q) => clean(map[q] ?? "")),
     ];
