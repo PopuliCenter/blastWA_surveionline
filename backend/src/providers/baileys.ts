@@ -19,6 +19,7 @@ import makeWASocket, {
   type WAMessageContent,
 } from "@whiskeysockets/baileys";
 import { env } from "../env.js";
+import { cleanProfileName } from "../lib/profileName.js";
 import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 type GwStatus = "disconnected" | "connecting" | "qr" | "connected" | "logged_out";
@@ -216,6 +217,7 @@ class BaileysGateway {
             vendor: this.name,
             kind: "message",
             from,
+            senderName: cleanProfileName(m.pushName),
             text,
             messageId: key.id ?? undefined,
             timestamp: new Date(tsNum * 1000).toISOString(),

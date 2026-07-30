@@ -13,6 +13,10 @@ export type NormalizedInbound = {
   vendor: string;
   kind: "message" | "status";
   from?: string; // E.164 (tanpa +)
+  // Nama profil WhatsApp pengirim (push name), sudah disaring cleanProfileName.
+  // Hanya ada pada pesan MASUK: tak satu pun vendor menyediakan cara menanyakan nama
+  // dari sebuah nomor. Diatur sendiri oleh pemilik nomor, jadi tidak terverifikasi.
+  senderName?: string;
   text?: string;
   mediaType?: "image" | "audio" | "video" | "document" | "sticker";
   mediaId?: string;

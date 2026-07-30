@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { cleanProfileName } from "../lib/profileName.js";
 import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 // ⚠️ SUMBER KEBENARAN: Postman collection Qontak Anda
@@ -153,11 +154,14 @@ export class QontakAdapter implements MessagingProvider {
       // Pesan masuk
       const from = it.from ?? it.sender_id ?? it.phone ?? it.account_uniq_id ?? it.contact?.phone;
       const text = it.text?.body ?? it.text ?? it.message ?? it.data_message?.text ?? it.body;
+      // Bentuk field nama belum dipastikan dari koleksi Postman — coba yang lazim.
+      const senderName = it.contact?.name ?? it.sender_name ?? it.profile?.name ?? it.push_name;
       if (from || text) {
         out.push({
           vendor: this.name,
           kind: "message",
           from: from ? String(from) : undefined,
+          senderName: cleanProfileName(senderName),
           text: typeof text === "string" ? text : undefined,
           messageId: it.id ? String(it.id) : undefined,
           timestamp: it.created_at ?? it.timestamp ?? new Date().toISOString(),

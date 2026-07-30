@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { cleanProfileName } from "../lib/profileName.js";
 import type {
   MessagingProvider,
   NormalizedInbound,
@@ -339,6 +340,16 @@ export class MetaCloudAdapter implements MessagingProvider {
       for (const change of changes) {
         const value = change?.value ?? {};
 
+        // value.contacts[] memuat nama profil pengirim; wa_id-nya sepadan dengan
+        // msg.from. Meta hanya mengirimkannya bersama pesan masuk — tidak ada endpoint
+        // untuk menanyakan nama dari sebuah nomor.
+        const names = new Map<string, string>();
+        for (const c of Array.isArray(value?.contacts) ? value.contacts : []) {
+          const name = cleanProfileName(c?.profile?.name);
+          if (name && c?.wa_id) names.set(String(c.wa_id), name);
+        }
+        const nameOf = (from: unknown) => (from ? names.get(String(from)) : undefined);
+
         for (const msg of value?.messages ?? []) {
           // Balasan WhatsApp Flow (form terkirim) → parse response_json
           const nfm = msg?.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : null;
@@ -355,6 +366,7 @@ export class MetaCloudAdapter implements MessagingProvider {
               vendor: this.name,
               kind: "message",
               from: msg?.from,
+              senderName: nameOf(msg?.from),
               interactiveType: "nfm_reply",
               flowResponse,
               messageId: msg?.id,
@@ -380,6 +392,7 @@ export class MetaCloudAdapter implements MessagingProvider {
             vendor: this.name,
             kind: "message",
             from: msg?.from,
+            senderName: nameOf(msg?.from),
             text:
               msg?.text?.body ??
               msg?.button?.text ??

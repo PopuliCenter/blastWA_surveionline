@@ -91,7 +91,19 @@ async function handleStatus(ev: NormalizedInbound): Promise<void> {
 async function handleMessage(ev: NormalizedInbound): Promise<void> {
   if (!ev.from) return;
   const phone = normalizePhone(ev.from);
-  const contact = await prisma.contact.upsert({ where: { phone }, update: {}, create: { phone } });
+  // Nama profil WhatsApp dipakai HANYA untuk mengisi kekosongan. Nama dari impor atau
+  // input manual lebih mungkin akurat, sedangkan push name bisa diubah pemilik nomor
+  // kapan saja — jadi `update: {}` sengaja dibiarkan kosong agar tak pernah menimpa.
+  const contact = await prisma.contact.upsert({
+    where: { phone },
+    update: {},
+    create: { phone, name: ev.senderName },
+  });
+  if (ev.senderName && !contact.name) {
+    // Predikat `name: null` membuat penulisannya bersyarat di database, jadi dua pesan
+    // yang datang bersamaan dari nomor yang sama tidak saling menimpa.
+    await prisma.contact.updateMany({ where: { id: contact.id, name: null }, data: { name: ev.senderName } });
+  }
 
   const storedText =
     ev.interactiveType === "nfm_reply"
