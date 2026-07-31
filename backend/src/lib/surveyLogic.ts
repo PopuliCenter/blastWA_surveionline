@@ -26,9 +26,15 @@ export const BLAST_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 export function shouldStartSurveyFromBlast(args: {
   blastSentAt: Date;
   alreadyCompleted: boolean;
+  text?: string;
   now?: Date;
 }): boolean {
   if (args.alreadyCompleted) return false;
+  // Pertanyaan bukan kesediaan. "Apakah ada survei" sesudah blast itu orang MENANYAKAN
+  // dulu sebelum memutuskan ikut; melemparnya langsung ke formulir/pertanyaan 1 membuat
+  // pertanyaannya tak pernah terjawab (laporan lapangan). Biarkan jatuh ke Auto Reply /
+  // Agen AI — balasan berikutnya ("ya", "mau", "oke") tetap memulai lewat jendela ini.
+  if (looksLikeQuestion(args.text ?? "")) return false;
   const now = args.now ?? new Date();
   return now.getTime() - args.blastSentAt.getTime() <= BLAST_REPLY_WINDOW_MS;
 }

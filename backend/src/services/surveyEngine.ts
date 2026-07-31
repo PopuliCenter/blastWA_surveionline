@@ -169,15 +169,35 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
 
   if (active) {
     if (active.survey.mode === "flow") {
-      // Formulir masih ditunggu → jangan balas teks apa pun. TAPI bila responden mengirim
-      // kata kunci pemicu lagi (formulir tak jadi diisi / chat dihapus / pesan hilang),
-      // kirim ulang formulirnya alih-alih mendiamkannya.
+      // Formulir masih ditunggu. Bila responden mengirim kata kunci pemicu lagi
+      // (formulir tak jadi diisi / chat dihapus / pesan hilang), kirim ulang formulirnya.
       const again = await findTriggeredSurvey(ev.text ?? "");
       if (again && again.questions.length) {
         // Buang respons menggantung yang BELUM berisi jawaban agar tak menumpuk.
         await prisma.surveyResponse.deleteMany({ where: { id: active.id, answers: { none: {} } } });
         await startSurvey(again, contact.id, phone, ev.vendor);
+        return;
       }
+      // Dulu teks lain DIDIAMKAN TOTAL sampai formulir disubmit. Laporan lapangan:
+      // responden menyapa dan bertanya dulu ("Apakah ada survei") sebelum menekan
+      // tombol, dan kebisuan total terbaca seperti nomor mati — merusak kepercayaan
+      // justru pada momen orang menimbang mau ikut atau tidak. Berbeda dari mode chat
+      // di bawah, jawaban flow datang lewat FORMULIR, bukan teks, jadi teks bebas di
+      // sini tidak mungkin jawaban survei dan aman dialihkan:
+      //  • permintaan berhenti/langganan longgar (aman — bukan jawaban survei);
+      //  • sisanya ke Auto Reply / Agen AI, yang tahu survei aktif dan kata pemicunya
+      //    (menyuruh balas kata pemicu pun tak apa: cabang di atas mengirim ulang
+      //    formulirnya).
+      if (isOptOutMessage(ev.text ?? "")) {
+        await doOptOut(contact.id, ev.vendor, phone);
+        return;
+      }
+      if (isOptInMessage(ev.text ?? "")) {
+        await doOptIn(contact, ev.vendor, phone);
+        return;
+      }
+      const auto = await findAutoResponse(contact.id, ev.text ?? "");
+      if (auto) await reply(ev.vendor, phone, auto.text, contact.id, auto.source);
       return;
     }
     await advanceSurvey(
@@ -213,7 +233,13 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   });
   if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
     const sudahSelesai = await alreadyCompleted(recipient.blast.survey, contact.id);
-    if (shouldStartSurveyFromBlast({ blastSentAt: recipient.createdAt, alreadyCompleted: sudahSelesai })) {
+    if (
+      shouldStartSurveyFromBlast({
+        blastSentAt: recipient.createdAt,
+        alreadyCompleted: sudahSelesai,
+        text: ev.text ?? "",
+      })
+    ) {
       await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
       return;
     }

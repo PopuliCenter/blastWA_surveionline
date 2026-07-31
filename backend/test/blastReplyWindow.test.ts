@@ -35,4 +35,28 @@ describe("shouldStartSurveyFromBlast", () => {
   it("sudah selesai tetap menang walau blast baru saja dikirim", () => {
     expect(shouldStartSurveyFromBlast({ blastSentAt: NOW, alreadyCompleted: true, now: NOW })).toBe(false);
   });
+
+  it("pertanyaan sesudah blast TIDAK memulai survei", () => {
+    // Laporan lapangan: "Apakah ada survei" dijawab dengan melempar formulir/pertanyaan 1,
+    // sehingga pertanyaannya sendiri tak pernah dijawab. Harus jatuh ke Auto Reply / AI.
+    const tanya = (t: string) =>
+      shouldStartSurveyFromBlast({ blastSentAt: jamLalu(1), alreadyCompleted: false, text: t, now: NOW });
+    expect(tanya("Apakah ada survei")).toBe(false);
+    expect(tanya("gimana")).toBe(false);
+    expect(tanya("ini survei resmi?")).toBe(false);
+    expect(tanya("cara isi survei")).toBe(false);
+  });
+
+  it("kesediaan dan sapaan tetap memulai survei", () => {
+    const balas = (t: string) =>
+      shouldStartSurveyFromBlast({ blastSentAt: jamLalu(1), alreadyCompleted: false, text: t, now: NOW });
+    expect(balas("ya")).toBe(true);
+    expect(balas("mau")).toBe(true);
+    expect(balas("oke, lanjut")).toBe(true);
+    expect(balas("assalamualaikum")).toBe(true);
+  });
+
+  it("tanpa text (pemanggil lama / media) berperilaku seperti sebelumnya", () => {
+    expect(shouldStartSurveyFromBlast({ blastSentAt: jamLalu(1), alreadyCompleted: false, now: NOW })).toBe(true);
+  });
 });
