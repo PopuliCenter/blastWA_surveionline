@@ -26,6 +26,7 @@ const Surveys = lazy(() => import("./pages/Surveys"));
 const Reports = lazy(() => import("./pages/Reports"));
 const AutoReply = lazy(() => import("./pages/AutoReply"));
 const AiAgent = lazy(() => import("./pages/AiAgent"));
+const Sheets = lazy(() => import("./pages/Sheets"));
 const WhatsAppAccount = lazy(() => import("./pages/WhatsAppAccount"));
 const Webhook = lazy(() => import("./pages/Webhook"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -61,6 +62,7 @@ const NAV = [
     items: [
       { id: "autoreply", label: "Auto Reply", icon: "autoreply" },
       { id: "ai", label: "Agen AI", icon: "ai" },
+      { id: "sheets", label: "Google Sheets", icon: "sheet" },
       { id: "leads", label: "Daily Leads", icon: "leads", soon: true },
       { id: "invoice", label: "Invoice", icon: "invoice", soon: true },
     ],
@@ -545,6 +547,7 @@ export default function PopuliApp() {
       reports: <Reports />,
       autoreply: <AutoReply />,
       ai: <AiAgent />,
+      sheets: <Sheets />,
       leads: (
         <ComingSoon
           title="Daily Leads"

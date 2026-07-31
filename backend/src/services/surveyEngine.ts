@@ -12,6 +12,7 @@ import {
   OPT_IN_REPLY,
 } from "../lib/optOut.js";
 import { findAutoResponse } from "./autoResponder.js";
+import { enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
 import {
@@ -513,6 +514,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     where: { id: surveyResponse.id },
     data: { completedAt: new Date(), currentStep: surveyResponse.survey.questions.length },
   });
+  await enqueueSheetSync(surveyResponse.id);
   await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
 }
 
@@ -529,6 +531,7 @@ async function advanceSurvey(
   const current = questions[step];
   if (!current) {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { completedAt: new Date() } });
+    await enqueueSheetSync(responseId);
     return;
   }
 
@@ -561,6 +564,7 @@ async function advanceSurvey(
       where: { id: responseId },
       data: { currentStep: questions.length, completedAt: new Date() },
     });
+    await enqueueSheetSync(responseId);
     await reply(vendor, phone, closingText(closingMessage), contactId);
   }
 }

@@ -120,6 +120,12 @@ export const api = {
   updateAiAgent: (data) => request("/api/ai-agent", { method: "PUT", body: data }),
   testAiAgent: (message) => request("/api/ai-agent/test", { method: "POST", body: { message } }),
 
+  // Google Sheets
+  getSheets: () => request("/api/sheets"),
+  updateSheets: (data) => request("/api/sheets", { method: "PUT", body: data }),
+  testSheets: () => request("/api/sheets/test", { method: "POST" }),
+  backfillSheets: () => request("/api/sheets/backfill", { method: "POST" }),
+
   // Template pesan WhatsApp
   listTemplates: () => request("/api/templates"),
   createTemplate: (data) => request("/api/templates", { method: "POST", body: data }),

@@ -5,7 +5,12 @@ const bullConnection = connection as unknown as ConnectionOptions;
 import { prisma } from "../db.js";
 import { loadProviders, getProvider } from "../providers/registry.js";
 import { BLAST_QUEUE, type BlastJob } from "./blastQueue.js";
+import { SHEET_QUEUE, type SheetJob } from "./sheetQueue.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "../lib/errorLog.js";
+import { decryptJson } from "../lib/crypto.js";
+import { parseServiceAccount } from "../lib/googleAuth.js";
+import { sheetTabName, sheetHeader, sheetRow } from "../lib/sheetRows.js";
+import { ensureTab, appendRow } from "../services/sheetPush.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
 // Pengaman anti-banned: lewati kontak opt-out, batas harian + jitter (warm-up).
@@ -132,6 +137,51 @@ async function main() {
     console.log(`Job ${job.id} selesai → ${job.returnvalue}`);
   });
 
+  // Pendorong respons survei → Google Sheets. Serial (concurrency 1): kuota Sheets
+  // per-menit longgar untuk laju survei, dan urutan baris jadi kronologis.
+  const sheetWorker = new Worker<SheetJob>(
+    SHEET_QUEUE,
+    async (job) => {
+      const cfg = await prisma.sheetConfig.findUnique({ where: { id: "default" } });
+      if (!cfg?.enabled || !cfg.spreadsheetId || !cfg.serviceAccountJson) return "skip-nonaktif";
+      const sa = parseServiceAccount(decryptJson<string>(cfg.serviceAccountJson));
+
+      const r = await prisma.surveyResponse.findUnique({
+        where: { id: job.data.responseId },
+        include: {
+          contact: { select: { phone: true, name: true, consentSource: true } },
+          survey: { select: { title: true, questions: { orderBy: { order: "asc" }, select: { id: true, text: true } } } },
+          answers: { select: { questionId: true, value: true } },
+        },
+      });
+      if (!r || !r.completedAt) return "skip-belum-selesai";
+      // Penjaga idempoten: retry BullMQ maupun job ganda tidak boleh jadi dua baris.
+      if (r.sheetSyncedAt) return "skip-sudah";
+
+      const tab = sheetTabName(r.survey.title);
+      await ensureTab(sa, cfg.spreadsheetId, tab, sheetHeader(r.survey.questions));
+      await appendRow(
+        sa,
+        cfg.spreadsheetId,
+        tab,
+        sheetRow({
+          phone: r.contact.phone,
+          name: r.contact.name,
+          consentSource: r.contact.consentSource,
+          startedAt: r.startedAt,
+          completedAt: r.completedAt,
+          questions: r.survey.questions,
+          answers: r.answers,
+        }),
+      );
+      await prisma.surveyResponse.update({ where: { id: r.id }, data: { sheetSyncedAt: new Date() } });
+      return "ok";
+    },
+    { connection: bullConnection, concurrency: 1 },
+  );
+  sheetWorker.on("failed", (job, err) => logError("worker", err, { scope: "sheetWorker", jobId: job?.id }));
+  sheetWorker.on("error", (err) => logError("worker", err, { scope: "sheetWorker" }));
+
   console.log("✅ Blast worker berjalan, menunggu job...");
 
   // Graceful shutdown: tunggu job yang sedang diproses selesai sebelum keluar
@@ -140,6 +190,7 @@ async function main() {
     console.log(`${sig} diterima — menutup worker (menunggu job aktif)…`);
     try {
       await worker.close(); // BullMQ menunggu job aktif rampung
+      await sheetWorker.close();
       await prisma.$disconnect();
     } catch (e) {
       logErrorSync("worker", e, { kind: "shutdown" });

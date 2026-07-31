@@ -118,6 +118,12 @@ export function Icon({ name, size = 18 }) {
         <circle cx="15" cy="13" r="1" fill="currentColor" />
       </svg>
     ),
+    sheet: (
+      <svg {...c}>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 10h18M9 4v16M15 10v10" />
+      </svg>
+    ),
     invoice: (
       <svg {...c}>
         <path d="M6 2h9l4 4v16l-2-1-2 1-2-1-2 1-2-1-2 1V2Z" />

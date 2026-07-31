@@ -189,7 +189,10 @@ model SurveyResponse {
   currentStep Int       @default(0) // indeks pertanyaan berikutnya (untuk alur chat)
   startedAt   DateTime  @default(now())
   completedAt DateTime?
-  answers     Answer[]
+  // Sudah tertulis ke Google Sheets. Penjaga idempoten worker sheets sekaligus dasar
+  // backfill (completedAt terisi + sheetSyncedAt kosong = belum terdorong).
+  sheetSyncedAt DateTime?
+  answers       Answer[]
 
   @@index([contactId])
 }
@@ -240,6 +243,18 @@ model AiConfig {
   historyLimit     Int      @default(6) // jumlah pesan terakhir yang dikirim sebagai konteks
   maxRepliesPerDay Int      @default(5) // kuota balasan AI per kontak per 24 jam; 0 = tanpa batas
   updatedAt        DateTime @updatedAt
+}
+
+// Integrasi Google Sheets: tiap respons survei selesai didorong worker jadi satu baris
+// di spreadsheet tim (satu tab per survei) — tanpa ekspor manual. Lihat services/sheetPush.ts.
+model SheetConfig {
+  id            String  @id // singleton: "default"
+  enabled       Boolean @default(false)
+  spreadsheetId String?
+  // Kunci service account Google (JSON utuh), terenkripsi AES-256-GCM.
+  // Spreadsheet harus di-share ke client_email service account sebagai Editor.
+  serviceAccountJson String?
+  updatedAt          DateTime @updatedAt
 }
 
 model WebhookLog {
