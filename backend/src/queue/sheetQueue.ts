@@ -31,7 +31,21 @@ export const sheetQueue = new Queue<SheetJob, string, string>(SHEET_QUEUE, {
 // penjaga sheetSyncedAt di worker, satu respons tidak mungkin jadi dua baris.
 export async function enqueueSheetSync(responseId: string): Promise<void> {
   try {
-    await sheetQueue.add("sync", { responseId }, { jobId: `sheet_${responseId}` });
+    const jobId = `sheet_${responseId}`;
+    // BullMQ MENGABAIKAN add() diam-diam bila jobId-nya masih diduduki job lama di
+    // daftar completed/failed (removeOnComplete/Fail menyimpannya ribuan). Kejadian
+    // nyata: survei selesai SEBELUM integrasi dikonfigurasi → job jalan → "skip-
+    // nonaktif" → completed; backfill sesudahnya mengantre ulang dengan id sama dan
+    // dibuang tanpa suara — Tertunda macet di angka yang sama selamanya. Singkirkan
+    // dulu bangkainya supaya add() benar-benar mengantre. Yang masih menunggu/aktif
+    // dibiarkan — justru itulah gunanya dedupe.
+    const existing = await sheetQueue.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state !== "completed" && state !== "failed") return; // masih antre/aktif
+      await existing.remove();
+    }
+    await sheetQueue.add("sync", { responseId }, { jobId });
   } catch (err) {
     logError("backend", err, { scope: "sheetQueue", responseId });
   }
