@@ -232,11 +232,20 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
   if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
-    const sudahSelesai = await alreadyCompleted(recipient.blast.survey, contact.id);
+    // Pernah selesai SEKALI saja — apa pun pengaturan boleh-ulang — cukup untuk berhenti
+    // menawarkan otomatis. BUKAN alreadyCompleted(): helper itu mengembalikan false untuk
+    // survei boleh-ulang, sehingga mesin menawarkan formulir lagi pada SETIAP pesan dalam
+    // jendela 24 jam dan Auto Reply / Agen AI tak pernah kebagian. Tugas jalur blast
+    // (mengubah penerima jadi responden) tuntas pada pengisian pertama; mengulang tetap
+    // bisa lewat kata pemicu.
+    const pernahSelesai = await prisma.surveyResponse.findFirst({
+      where: { surveyId: recipient.blast.survey.id, contactId: contact.id, completedAt: { not: null } },
+      select: { id: true },
+    });
     if (
       shouldStartSurveyFromBlast({
         blastSentAt: recipient.createdAt,
-        alreadyCompleted: sudahSelesai,
+        alreadyCompleted: Boolean(pernahSelesai),
         text: ev.text ?? "",
       })
     ) {
@@ -444,12 +453,31 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       include: withQuestions,
     });
     if (!surveyResponse) {
-      const exists = await prisma.survey.findUnique({ where: { id: surveyId }, select: { id: true } });
-      if (exists)
+      const survey = await prisma.survey.findUnique({
+        where: { id: surveyId },
+        select: { id: true, oncePerContact: true },
+      });
+      if (survey) {
+        // Tombol formulir di template blast tetap bisa ditekan lagi kapan pun, jadi
+        // jalur inilah penjaga aturan sekali-isi. Tanpa pemeriksaan ini, tiap submit
+        // ulang MEMBUAT RESPONS BARU: satu orang bisa "memilih" berkali-kali dan
+        // penghitung respons menggelembung diam-diam (kejadian nyata saat uji blast).
+        // Tolak halus dengan pesan yang sama seperti jalur kata pemicu.
+        if (survey.oncePerContact) {
+          const done = await prisma.surveyResponse.findFirst({
+            where: { contactId, surveyId, completedAt: { not: null } },
+            select: { id: true },
+          });
+          if (done) {
+            await reply(vendor, phone, ALREADY_DONE_TEXT, contactId);
+            return;
+          }
+        }
         surveyResponse = await prisma.surveyResponse.create({
           data: { surveyId, contactId, currentStep: 0 },
           include: withQuestions,
         });
+      }
     }
   }
   // Fallback: respons flow belum selesai milik kontak ini
