@@ -22,6 +22,7 @@ import {
   isFlowAbandoned,
   shouldStartSurveyFromBlast,
   looksLikeQuestion,
+  matchesTriggerInSentence,
   type QLite,
 } from "../lib/surveyLogic.js";
 
@@ -276,8 +277,11 @@ async function findTriggeredSurvey(text: string) {
   // menjawab, jangan langsung melempar responden ke dalam survei.
   if (looksLikeQuestion(t)) return null;
 
-  // 3) Kata kunci muncul di dalam kalimat, mis. "saya mau isi survei".
-  for (const s of surveys) if (kataKunci(s).some((k) => t.includes(k))) return s;
+  // 3) Kata kunci muncul sebagai frasa utuh di kalimat pendek, mis. "saya mau isi survei".
+  // BUKAN includes() mentah — itu dulu menjaring "sudah saya isi surveinya" (potongan
+  // kata) dan kalimat panjang yang cuma menyebut survei, lalu melempar pengirimnya ke
+  // pertanyaan 1. Yang tak cocok di sini jatuh ke Auto Reply / Agen AI, bukan didiamkan.
+  for (const s of surveys) if (kataKunci(s).some((k) => matchesTriggerInSentence(t, k))) return s;
   return null;
 }
 

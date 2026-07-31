@@ -6,6 +6,8 @@ import {
   closingText,
   isFlowAbandoned,
   FLOW_ABANDON_MS,
+  matchesTriggerInSentence,
+  MAX_TRIGGER_SENTENCE_WORDS,
   type QLite,
 } from "../src/lib/surveyLogic.js";
 import type { NormalizedInbound } from "../src/providers/types.js";
@@ -142,5 +144,56 @@ describe("isFlowAbandoned (formulir Flow tak kunjung diisi)", () => {
 
   it("tepat di batas 24 jam → belum ditinggalkan (harus LEWAT)", () => {
     expect(isFlowAbandoned(ago(FLOW_ABANDON_MS), now)).toBe(false);
+  });
+});
+
+describe("matchesTriggerInSentence (pemicu di dalam kalimat)", () => {
+  const k = "isi survei";
+
+  it("permintaan pendek yang wajar → cocok", () => {
+    expect(matchesTriggerInSentence("saya mau isi survei", k)).toBe(true);
+    expect(matchesTriggerInSentence("halo kak mau isi survei dong", k)).toBe(true);
+    expect(matchesTriggerInSentence("isi survei", k)).toBe(true);
+  });
+
+  it("tanda baca dan huruf besar tidak menghalangi", () => {
+    expect(matchesTriggerInSentence("Isi survei!", k)).toBe(true);
+    expect(matchesTriggerInSentence("MAU ISI SURVEI YA.", k)).toBe(true);
+  });
+
+  it("potongan kata BUKAN frasa: 'surveinya' tidak memicu", () => {
+    // Kasus nyata yang dilaporkan: survei mulai sendiri padahal isi pesannya soal lain.
+    expect(matchesTriggerInSentence("kemarin isi surveinya lama", k)).toBe(false);
+    expect(matchesTriggerInSentence("surveinya bagus", "survei")).toBe(false);
+  });
+
+  it("kalimat berkata pengingkar/pengabar → bukan permintaan mulai", () => {
+    expect(matchesTriggerInSentence("saya tidak mau isi survei", k)).toBe(false);
+    expect(matchesTriggerInSentence("sudah saya isi survei kemarin", k)).toBe(false);
+    expect(matchesTriggerInSentence("belum sempat isi survei", k)).toBe(false);
+    expect(matchesTriggerInSentence("jangan kirim isi survei lagi", k)).toBe(false);
+  });
+
+  it("kalimat panjang yang cuma menyebut survei → tidak memicu", () => {
+    const cerita = "terima kasih banyak infonya kemarin nanti kalau ada waktu luang saya coba isi survei ya kak";
+    expect(cerita.split(" ").length).toBeGreaterThan(MAX_TRIGGER_SENTENCE_WORDS);
+    expect(matchesTriggerInSentence(cerita, k)).toBe(false);
+  });
+
+  it("tepat di batas kata masih cocok", () => {
+    const pas = "halo kak saya mau sekali isi survei"; // 7 kata + frasa 2 kata = tepat 8? tidak — hitung: 7
+    expect(pas.split(" ").length).toBeLessThanOrEqual(MAX_TRIGGER_SENTENCE_WORDS);
+    expect(matchesTriggerInSentence(pas, k)).toBe(true);
+  });
+
+  it("teks atau kata kunci kosong → tidak cocok", () => {
+    expect(matchesTriggerInSentence("", k)).toBe(false);
+    expect(matchesTriggerInSentence("isi survei", "")).toBe(false);
+    expect(matchesTriggerInSentence("   ", k)).toBe(false);
+  });
+
+  it("kata kunci sebagian kata lain tidak bocor dua arah", () => {
+    // kata kunci "survei" tidak boleh cocok pada "surveior" (mis. typo surveyor)
+    expect(matchesTriggerInSentence("saya surveior lapangan", "survei")).toBe(false);
   });
 });

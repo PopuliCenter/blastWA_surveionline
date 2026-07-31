@@ -264,9 +264,20 @@ export default function AiAgent() {
           {/* Hasil tes ditampilkan apa adanya — termasuk pesan galat dari provider,
               karena itulah satu-satunya petunjuk saat AI "tidak menjawab". */}
           {testResult ? (
-            <Notice kind={testResult.ok ? "success" : "error"}>
+            <Notice kind={!testResult.ok ? "error" : testResult.enabled === false ? "warning" : "success"}>
               {testResult.ok ? (
                 <>
+                  {/* Tes memanggil provider LANGSUNG, melewati saklar Aktifkan Agen AI. Jadi
+                      "Berhasil" saja bisa menyesatkan: provider sehat, tapi agen yang mati
+                      tetap membisu di WhatsApp. Keadaan itu harus dinyatakan di sini, bukan
+                      dibiarkan terbaca sebagai lampu hijau. */}
+                  {testResult.enabled === false ? (
+                    <div style={{ marginBottom: 6 }}>
+                      <strong>Provider sehat, tetapi Agen AI NONAKTIF.</strong> Sambungan ke model
+                      berhasil, namun selama saklar di atas mati, pesan WhatsApp tidak akan dibalas
+                      AI sama sekali. Nyalakan lalu simpan.
+                    </div>
+                  ) : null}
                   <strong>Berhasil</strong> ({testResult.ms} ms, model {testResult.model}):
                   <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{testResult.reply}</div>
                 </>

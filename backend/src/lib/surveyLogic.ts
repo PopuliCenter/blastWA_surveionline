@@ -1,5 +1,6 @@
 // Logika MURNI mesin survei (tanpa efek samping: tanpa DB, tanpa jaringan, tanpa env).
 // Dipisah dari services/surveyEngine.ts agar mudah diuji unit. Lihat surveyLogic.test.ts.
+import { normalizeMessage } from "./optOut.js";
 import type { NormalizedInbound } from "../providers/types.js";
 
 export type QLite = { id: string; text: string; type: string; required: boolean; options: any };
@@ -71,6 +72,50 @@ export function looksLikeQuestion(text: string): boolean {
     .trim();
   if (!t) return false;
   return QUESTION_STARTERS.some((q) => t === q || t.startsWith(`${q} `));
+}
+
+// ===== Pencocokan kata pemicu di dalam kalimat (tingkat 3 findTriggeredSurvey) =====
+//
+// Dulu tingkat ini memakai includes() mentah, dan itu menjaring dua hal yang bukan
+// permintaan memulai survei (laporan nyata: survei tiba-tiba mulai padahal isi pesannya
+// soal lain):
+//   • potongan kata — "sudah saya isi surveinya" mengandung "isi survei";
+//   • kalimat panjang yang cuma MENYEBUT survei di tengah cerita.
+// looksLikeQuestion tidak menolong di sini karena keduanya pernyataan, bukan pertanyaan.
+//
+// Tiga syarat sekarang, meniru pola matcher opt-out yang sudah terbukti:
+//   1. kalimatnya pendek (perintah itu singkat; cerita itu panjang);
+//   2. tidak memuat kata pengingkar/pengabar ("tidak mau isi survei", "sudah isi survei");
+//   3. kata kunci muncul sebagai FRASA UTUH, bukan potongan kata.
+// Pesan yang gagal di sini tidak hilang: ia jatuh ke Auto Reply / Agen AI, yang tahu kata
+// pemicunya dan bisa menyebutkannya. Pesan yang PERSIS sama dengan kata kunci tidak lewat
+// sini — tingkat 1 sudah menerimanya, berapa pun panjangnya.
+
+export const MAX_TRIGGER_SENTENCE_WORDS = 8;
+
+// Kalimat yang memuat kata ini sedang bercerita/menolak, bukan meminta mulai.
+export const TRIGGER_NEGATION_WORDS = [
+  "tidak",
+  "ngga",
+  "nggak",
+  "gak",
+  "ga",
+  "jangan",
+  "belum",
+  "sudah",
+  "udah",
+  "telah",
+  "batal",
+] as const;
+
+export function matchesTriggerInSentence(text: string, keyword: string): boolean {
+  const norm = normalizeMessage(text);
+  const kw = normalizeMessage(keyword);
+  if (!norm || !kw) return false;
+  const words = norm.split(" ");
+  if (words.length > MAX_TRIGGER_SENTENCE_WORDS) return false;
+  if (TRIGGER_NEGATION_WORDS.some((n) => words.includes(n))) return false;
+  return ` ${norm} `.includes(` ${kw} `);
 }
 
 // Kata penutup: pakai custom bila diisi, selain itu default.

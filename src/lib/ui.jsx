@@ -864,6 +864,10 @@ export function Notice({ kind = "error", children }) {
   const map = {
     error: [theme.redSoft, theme.red],
     success: [theme.greenSoft, theme.green],
+    // Untuk hasil yang berhasil TAPI belum berarti beres — mis. sambungan provider AI
+    // sehat sementara agennya sendiri masih nonaktif. Hijau akan terbaca sebagai lampu
+    // hijau yang menyesatkan, merah berlebihan karena tak ada yang gagal.
+    warning: [theme.yellowSoft, theme.yellow],
     info: [theme.primarySoft, theme.primary],
   };
   const [bg, fg] = map[kind] || map.error;

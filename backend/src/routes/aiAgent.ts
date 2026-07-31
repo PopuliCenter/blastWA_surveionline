@@ -126,9 +126,20 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
         messages: [{ role: "user", content: parsed.data.message?.trim() || "Halo, ini tes koneksi." }],
         maxTokens: cfg.maxTokens,
       });
-      return reply.send({ ok: true, reply: text, ms: Date.now() - started, model: cfg.model });
+      // `enabled` WAJIB ikut dikembalikan. Tes ini sengaja memanggil provider langsung —
+      // tanpa kuota, tanpa kontak — supaya kegagalan provider bisa dipisahkan dari sebab
+      // lain. Tapi findAutoResponse berhenti diam-diam saat Agen AI nonaktif, sehingga
+      // tes yang hanya melapor "ok" bisa berbunyi Berhasil pada agen yang sebenarnya mati
+      // dan tidak pernah melayani WhatsApp. Persis itu yang terjadi dan menyesatkan
+      // diagnosis ke arah provider.
+      return reply.send({ ok: true, enabled: cfg.enabled, reply: text, ms: Date.now() - started, model: cfg.model });
     } catch (err) {
-      return reply.send({ ok: false, error: err instanceof Error ? err.message : String(err), model: cfg.model });
+      return reply.send({
+        ok: false,
+        enabled: cfg.enabled,
+        error: err instanceof Error ? err.message : String(err),
+        model: cfg.model,
+      });
     }
   });
 }
