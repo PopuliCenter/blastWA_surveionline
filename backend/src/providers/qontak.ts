@@ -137,13 +137,21 @@ export class QontakAdapter implements MessagingProvider {
     for (const it of items) {
       if (!it || typeof it !== "object") continue;
 
+      // Per dokumentasi resmi Message Interaction Webhooks (docs.qontak.com →
+      // omnichannel-hub/message-interaction-webhooks), webhook yang sama juga menerima
+      // event `receive_message_from_agent` bila diaktifkan. Itu pesan keluar kami
+      // sendiri — memprosesnya sebagai pesan pelanggan membuat bot membalas dirinya
+      // sendiri (sender_id agen berupa UUID pun akan tersimpan sebagai "nomor").
+      if (it.data_event === "receive_message_from_agent") continue;
+
       // Update status (sent/delivered/read/failed)
       const statusRaw = it.status ?? it.message_status ?? it.delivery_status;
-      if (statusRaw && (it.id || it.message_id)) {
+      if (statusRaw && (it.id || it.message_id || it.whatsapp_message_id)) {
         out.push({
           vendor: this.name,
           kind: "status",
-          refMessageId: String(it.id ?? it.message_id),
+          // Event broadcast_log_status membawa wamid asli di whatsapp_message_id.
+          refMessageId: String(it.id ?? it.message_id ?? it.whatsapp_message_id),
           deliveryStatus: mapQontakStatus(statusRaw),
           timestamp: it.updated_at ?? it.timestamp ?? new Date().toISOString(),
           raw: it,
@@ -151,11 +159,15 @@ export class QontakAdapter implements MessagingProvider {
         continue;
       }
 
-      // Pesan masuk
-      const from = it.from ?? it.sender_id ?? it.phone ?? it.account_uniq_id ?? it.contact?.phone;
+      // Pesan masuk. Letak field per dokumentasi resmi (bukan lagi tebakan):
+      //   nomor pelanggan → room.account_uniq_id ; nama pengirim → sender.name
+      //   (cadangan: room.name = nama room yang biasanya dinamai si pelanggan, dan
+      //   contact_full_name pada payload broadcast_log). Kandidat lama dipertahankan
+      //   paling belakang untuk payload versi lain.
+      const from =
+        it.room?.account_uniq_id ?? it.from ?? it.phone ?? it.account_uniq_id ?? it.contact?.phone ?? it.sender_id;
       const text = it.text?.body ?? it.text ?? it.message ?? it.data_message?.text ?? it.body;
-      // Bentuk field nama belum dipastikan dari koleksi Postman — coba yang lazim.
-      const senderName = it.contact?.name ?? it.sender_name ?? it.profile?.name ?? it.push_name;
+      const senderName = it.sender?.name ?? it.room?.name ?? it.contact_full_name ?? it.contact?.name ?? it.sender_name;
       if (from || text) {
         out.push({
           vendor: this.name,
