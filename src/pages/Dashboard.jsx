@@ -122,7 +122,11 @@ export default function Dashboard() {
   const consent = useLoader(useCallback(() => api.getConsentSummary(), []));
   const policy = useLoader(useCallback(() => api.getSendingPolicy(), []));
   const convos = useLoader(useCallback(() => api.conversations(), []));
-  const quality = useLoader(useCallback(() => api.getWaQuality().catch(() => ({ error: "n/a" })), []));
+  // Galat jangan ditelan jadi "n/a" — pesan dari Meta/backend itulah diagnosisnya
+  // (token kedaluwarsa, field ditolak, dsb.) dan harus sampai ke layar.
+  const quality = useLoader(
+    useCallback(() => api.getWaQuality().catch((e) => ({ error: e?.message || "gagal menghubungi backend" })), []),
+  );
 
   if (stats.error)
     return (
@@ -165,8 +169,9 @@ export default function Dashboard() {
 
   // Meta quality
   const q = quality.data && !quality.data.error ? quality.data : null;
-  const qTone = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[0] : "default";
-  const qLabel = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[1] : "Belum tersambung";
+  const qErr = !q && !quality.loading && quality.data?.error ? String(quality.data.error) : "";
+  const qTone = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[0] : qErr ? "red" : "default";
+  const qLabel = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[1] : qErr ? "Gagal" : "Belum tersambung";
 
   // Grafik blast (delivered per blast, terbaru)
   const bl = (blasts.data || []).slice(0, 8);
@@ -313,12 +318,20 @@ export default function Dashboard() {
               padding: "10px 12px",
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 12, color: theme.textMuted }}>Kualitas nomor (Meta)</div>
               <div style={{ fontSize: 12.5, color: theme.text, marginTop: 2 }}>
-                {q?.display_phone_number || (quality.loading ? "memuat…" : "belum tersambung")}
+                {q?.display_phone_number ||
+                  (quality.loading ? "memuat…" : qErr ? "gagal membaca status" : "belum tersambung")}
                 {q?.messaging_limit_tier ? ` • tier ${String(q.messaging_limit_tier).replace("TIER_", "")}` : ""}
               </div>
+              {/* Pesan asli Meta/backend = diagnosisnya (token kedaluwarsa, field ditolak,
+                  izin kurang). Dulu dibuang dan widget cuma bilang "belum tersambung". */}
+              {qErr ? (
+                <div style={{ fontSize: 11.5, color: theme.red, marginTop: 3, wordBreak: "break-word" }} title={qErr}>
+                  {qErr.length > 160 ? `${qErr.slice(0, 160)}…` : qErr}
+                </div>
+              ) : null}
             </div>
             <Badge tone={qTone}>{qLabel}</Badge>
           </div>
