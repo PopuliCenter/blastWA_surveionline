@@ -94,6 +94,10 @@ export const api = {
 
   // Contacts
   listContacts: (search = "") => request(`/api/contacts${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  // Versi ber-halaman (amplop { items, total, page, pageSize }) — dipakai halaman Kontak.
+  // listContacts lama tetap array polos untuk pemanggil lain (segmen, impor, modal blast).
+  listContactsPage: ({ page = 1, pageSize = 100, search = "" } = {}) =>
+    request(`/api/contacts?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ""}`),
   createContact: (data) => request("/api/contacts", { method: "POST", body: data }),
   bulkContacts: (contacts) => request("/api/contacts/bulk", { method: "POST", body: { contacts } }),
   updateContact: (id, data) => request(`/api/contacts/${id}`, { method: "PUT", body: data }),
@@ -103,6 +107,9 @@ export const api = {
 
   // Chat
   conversations: () => request("/api/conversations"),
+  // Versi ber-halaman + pencarian server (amplop { items, total, counts, page, pageSize }).
+  conversationsPage: ({ page = 1, search = "" } = {}) =>
+    request(`/api/conversations?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ""}`),
   contactMessages: (id) => request(`/api/contacts/${id}/messages`),
   sendMessage: (id, text) => request(`/api/contacts/${id}/messages`, { method: "POST", body: { text } }),
   resolveConversation: (id, resolved) => request(`/api/contacts/${id}/resolve`, { method: "POST", body: { resolved } }),

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
 import {
@@ -21,17 +21,40 @@ import {
 } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
 
+const PAGE_SIZES = [100, 500, 1000, 1500];
+
 export default function Contacts() {
+  // `searchInput` = isi kotak apa adanya; `search` = yang sudah tenang (debounce) dan
+  // dikirim ke server. Pencarian kini SERVER-side: menjangkau seluruh kontak, bukan
+  // cuma halaman yang sedang termuat.
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const loader = useLoader(useCallback(() => api.listContacts(), []));
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+  const loader = useLoader(
+    useCallback(() => api.listContactsPage({ page, pageSize, search }), [page, pageSize, search]),
+  );
   const [modal, setModal] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [actionError, setActionError] = useState("");
   const sel = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
-  const contacts = (loader.data || []).filter((c) =>
-    `${c.phone} ${c.name || ""}`.toLowerCase().includes(search.toLowerCase()),
-  );
+
+  // Tenangkan ketikan 350 ms — tiap huruf tidak boleh jadi satu query ke server.
+  // Halaman kembali ke 1: hasil saringan baru bisa lebih pendek dari posisi lama.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const contacts = loader.data?.items || [];
+  const total = loader.data?.total ?? contacts.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const curPage = Math.min(page, pageCount); // total bisa menyusut setelah hapus/saring
+  const start = (curPage - 1) * pageSize;
   const allSelected = contacts.length > 0 && contacts.every((c) => sel.has(c.id));
 
   const run = async (fn) => {
@@ -102,9 +125,9 @@ export default function Contacts() {
             <Icon name="search" size={16} />
           </span>
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama atau nomor..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Cari nama atau nomor (seluruh kontak)..."
             style={{
               width: "100%",
               padding: "9px 12px 9px 36px",
@@ -199,8 +222,72 @@ export default function Contacts() {
             ))}
           </div>
         ) : (
-          <Empty icon="contacts" title="Belum ada kontak" note="Tambah kontak atau impor lewat segmen." />
+          <Empty
+            icon="contacts"
+            title={search ? "Tidak ada yang cocok" : "Belum ada kontak"}
+            note={
+              search
+                ? "Coba kata kunci lain — pencarian menjangkau seluruh kontak."
+                : "Tambah kontak atau impor lewat segmen."
+            }
+          />
         )}
+        {total > 0 ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+              padding: "12px 18px",
+              borderTop: `1px solid ${theme.border}`,
+            }}
+          >
+            <div style={{ fontSize: 12.5, color: theme.textMuted }}>
+              Menampilkan {start + 1}–{Math.min(start + pageSize, total)} dari {total} kontak
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                aria-label="Jumlah per halaman"
+                style={{
+                  padding: "6px 9px",
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 8,
+                  background: theme.surface,
+                  color: theme.text,
+                  fontSize: 12.5,
+                  cursor: "pointer",
+                }}
+              >
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n} / halaman
+                  </option>
+                ))}
+              </select>
+              <Button variant="secondary" size="sm" onClick={() => setPage(curPage - 1)} disabled={curPage <= 1}>
+                Sebelumnya
+              </Button>
+              <span style={{ fontSize: 12.5, color: theme.textMuted, minWidth: 78, textAlign: "center" }}>
+                Hal. {curPage} / {pageCount}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage(curPage + 1)}
+                disabled={curPage >= pageCount}
+              >
+                Berikutnya
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Card>
       {modal !== null ? (
         <ContactModal

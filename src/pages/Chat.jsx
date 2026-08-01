@@ -25,10 +25,15 @@ import { DetailsPanel } from "./chatbox/DetailsPanel";
 export default function Chat() {
   const isMobile = useIsMobile();
   const detailsInline = useMediaQuery("(min-width: 1100px)");
-  const convos = useLoader(useCallback(() => api.conversations(), []));
+  // `searchInput` = isi kotak; `search` = yang sudah tenang (debounce) dan dikirim ke
+  // server. Pencarian kini menjangkau SEMUA percakapan (nama/nomor/isi pesan), bukan
+  // cuma halaman yang termuat.
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const convos = useLoader(useCallback(() => api.conversationsPage({ page, search }), [page, search]));
   const [activeId, setActiveId] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
   const [sortNewest, setSortNewest] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [noteDraft, setNoteDraft] = useState(false); // ada catatan setengah jadi di panel detail
@@ -36,8 +41,22 @@ export default function Chat() {
   const sel = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const all = convos.data || [];
+  const all = convos.data?.items || [];
+  const total = convos.data?.total ?? all.length;
+  const pageSize = convos.data?.pageSize || 200;
+  const serverCounts = convos.data?.counts || null;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const curPage = Math.min(page, pageCount);
   const active = all.find((c) => c.id === activeId) || null;
+
+  // Tenangkan ketikan 350 ms sebelum jadi query server; hasil baru mulai dari halaman 1.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Auto-update senyap: segarkan daftar percakapan tiap 5 detik (pesan masuk & badge
   // ter-update otomatis tanpa klik Refresh). Pakai setData agar tidak memunculkan spinner.
@@ -45,12 +64,12 @@ export default function Chat() {
     const id = setInterval(() => {
       if (document.hidden) return; // jeda saat tab tak terlihat → hemat kuota/baterai
       api
-        .conversations()
+        .conversationsPage({ page, search })
         .then((d) => convos.setData(d))
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [convos.setData]);
+  }, [convos.setData, page, search]);
 
   const bulkDeleteConvos = async () => {
     if (!sel.size) return;
@@ -78,23 +97,32 @@ export default function Chat() {
     }
   };
 
+  // Angka tab dari server = seluruh percakapan. Dulu dihitung dari subset yang termuat,
+  // jadi angkanya bohong begitu percakapan melewati batas muat.
   const counts = useMemo(() => {
+    if (serverCounts)
+      return {
+        all: serverCounts.total,
+        unread: serverCounts.unread,
+        active: serverCounts.active,
+        resolved: serverCounts.resolved,
+      };
     const o = {};
     for (const f of FILTERS) o[f.key] = all.filter((c) => matchesFilter(c, f.key)).length;
     return o;
-  }, [all]);
+  }, [serverCounts, all]);
 
+  // Pencarian sudah dikerjakan server; di sini tinggal saringan tab + urutan tampilan
+  // atas halaman yang sedang termuat.
   const list = useMemo(() => {
-    const q = search.trim().toLowerCase();
     let arr = all.filter((c) => matchesFilter(c, filter));
-    if (q) arr = arr.filter((c) => `${c.phone} ${c.name || ""} ${c.lastMessage || ""}`.toLowerCase().includes(q));
     arr = [...arr].sort((a, b) => {
       const da = new Date(a.lastAt).getTime(),
         db = new Date(b.lastAt).getTime();
       return sortNewest ? db - da : da - db;
     });
     return arr;
-  }, [all, filter, search, sortNewest]);
+  }, [all, filter, sortNewest]);
 
   const resolve = async (id, resolved) => {
     setActionErr("");
@@ -124,9 +152,9 @@ export default function Chat() {
             <Icon name="search" size={15} />
           </span>
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama, nomor, pesan..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Cari nama, nomor, pesan (semua percakapan)..."
             style={{
               width: "100%",
               padding: "8px 10px 8px 32px",
@@ -332,6 +360,31 @@ export default function Chat() {
           <Empty icon="chat" title="Tidak ada percakapan" note={filter !== "all" ? "Coba filter lain." : undefined} />
         )}
       </div>
+
+      {/* Pager tampil hanya bila percakapan melebihi satu halaman (200) — kasus biasa
+          tetap sebersih dulu, kasus ramai tidak lagi memotong diam-diam. */}
+      {pageCount > 1 ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "8px 12px",
+            borderTop: `1px solid ${theme.border}`,
+          }}
+        >
+          <Button variant="secondary" size="sm" onClick={() => setPage(curPage - 1)} disabled={curPage <= 1}>
+            Sebelumnya
+          </Button>
+          <span style={{ fontSize: 12, color: theme.textMuted }}>
+            Hal. {curPage} / {pageCount} • {total} percakapan
+          </span>
+          <Button variant="secondary" size="sm" onClick={() => setPage(curPage + 1)} disabled={curPage >= pageCount}>
+            Berikutnya
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 

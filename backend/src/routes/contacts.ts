@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
+import { parsePage, parsePageSize, CONTACT_PAGE_SIZES, CONVO_PAGE_SIZES } from "../lib/pageParams.js";
 import { getProvider } from "../providers/registry.js";
 import { env } from "../env.js";
 
@@ -9,15 +10,26 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
 
-  // Daftar kontak (+ pencarian)
+  // Daftar kontak (+ pencarian server & pagination).
+  // Tanpa `page` → perilaku lama: array polos maksimal 500 — pemanggil lain (segmen,
+  // impor, modal blast) tidak ikut berubah bentuk. Dengan `page` → amplop
+  // { items, total, page, pageSize } untuk halaman Kontak.
   app.get("/api/contacts", async (req) => {
-    const q = (req.query as { search?: string }).search?.trim();
-    const contacts = await prisma.contact.findMany({
-      where: q ? { OR: [{ phone: { contains: q } }, { name: { contains: q, mode: "insensitive" } }] } : undefined,
-      orderBy: { createdAt: "desc" },
-      take: 500,
-    });
-    return contacts.map((c) => ({
+    const qs = req.query as { search?: string; page?: string; pageSize?: string };
+    const q = qs.search?.trim();
+    const where = q
+      ? { OR: [{ phone: { contains: q } }, { name: { contains: q, mode: "insensitive" as const } }] }
+      : undefined;
+    const shape = (c: {
+      id: string;
+      phone: string;
+      name: string | null;
+      attributes: unknown;
+      subscribed: boolean;
+      optOutAt: Date | null;
+      consentSource: string | null;
+      createdAt: Date;
+    }) => ({
       id: c.id,
       phone: c.phone,
       name: c.name,
@@ -26,7 +38,23 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       optOutAt: c.optOutAt,
       consentSource: c.consentSource,
       createdAt: c.createdAt,
-    }));
+    });
+    if (qs.page === undefined) {
+      const legacy = await prisma.contact.findMany({ where, orderBy: { createdAt: "desc" }, take: 500 });
+      return legacy.map(shape);
+    }
+    const page = parsePage(qs.page);
+    const pageSize = parsePageSize(qs.pageSize, CONTACT_PAGE_SIZES, 100);
+    const [total, contacts] = await Promise.all([
+      prisma.contact.count({ where }),
+      prisma.contact.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return { items: contacts.map(shape), total, page, pageSize };
   });
 
   app.post("/api/contacts", async (req, reply) => {
@@ -143,14 +171,57 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
   // === Chat / Inbox ===
 
-  // Daftar percakapan (kontak yang punya pesan) + status sesi 24 jam, belum-dibalas, selesai
+  // Daftar percakapan (kontak yang punya pesan) + status sesi 24 jam, belum-dibalas, selesai.
+  //
+  // Dulu: findMany take 200 TANPA orderBy — begitu percakapan melewati 200, subsetnya
+  // tak terdefinisi dan justru percakapan TERBARU yang hilang dari inbox (kejadian nyata
+  // saat survei organik ramai). Kini kandidat diambil lewat groupBy pesan yang diurutkan
+  // aktivitas terakhirnya DI DATABASE, plus pencarian & pagination di server.
+  //
+  // Tanpa `page` → array polos 200 teratas (kompatibel dengan Dashboard). Dengan `page`
+  // → amplop { items, total, counts, page, pageSize }; `counts` dihitung dari SELURUH
+  // percakapan — dulu frontend menghitungnya dari subset 200 sehingga angka tab bohong.
   const SESSION_MS = 24 * 60 * 60 * 1000;
-  app.get("/api/conversations", async () => {
-    const contacts = await prisma.contact.findMany({
-      where: { messages: { some: {} } },
+  app.get("/api/conversations", async (req) => {
+    const qs = req.query as { search?: string; page?: string; pageSize?: string };
+    const q = qs.search?.trim();
+    const page = parsePage(qs.page);
+    const pageSize = parsePageSize(qs.pageSize, CONVO_PAGE_SIZES, 200);
+
+    // Pesan tanpa kontak (contactId null) bukan percakapan. Pencarian menjangkau nama,
+    // nomor, dan ISI pesan mana pun — bukan cuma pesan terakhir.
+    const msgWhere = {
+      contactId: { not: null },
+      ...(q
+        ? {
+            OR: [
+              { text: { contains: q, mode: "insensitive" as const } },
+              { contact: { phone: { contains: q } } },
+              { contact: { name: { contains: q, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+    };
+    const [grouped, totalGroups] = await Promise.all([
+      prisma.message.groupBy({
+        by: ["contactId"],
+        where: msgWhere,
+        _max: { createdAt: true },
+        orderBy: { _max: { createdAt: "desc" } },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.message.groupBy({ by: ["contactId"], where: msgWhere }).then((g) => g.length),
+    ]);
+    const ids = grouped.map((g) => g.contactId).filter((x): x is string => Boolean(x));
+    const contactRows = await prisma.contact.findMany({
+      where: { id: { in: ids } },
       include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
-      take: 200,
     });
+    const byId = new Map(contactRows.map((c) => [c.id, c]));
+    // Pertahankan urutan groupBy (aktivitas terbaru dulu) — findMany tidak menjaga urutan `in`.
+    const contacts = ids.map((id) => byId.get(id)).filter((c): c is (typeof contactRows)[number] => Boolean(c));
+
     const results = await Promise.all(
       contacts.map(async (c) => {
         const [lastInbound, lastOutbound] = await Promise.all([
@@ -191,7 +262,34 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         };
       }),
     );
-    return results.sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+    // Urutan sudah benar dari database — jangan diacak ulang di sini.
+    if (qs.page === undefined) return results;
+
+    // Angka tab (Semua/Belum dibalas/Sesi aktif/Selesai) dari seluruh percakapan.
+    // Semantiknya cermin matchesFilter di src/pages/chatbox/constants.js:
+    //   belum dibalas = ada pesan masuk lebih baru dari balasan terakhir, belum selesai;
+    //   sesi aktif    = pesan masuk terakhir < 24 jam, belum selesai;
+    //   selesai       = attributes.chatResolved = true.
+    const countRows = await prisma.$queryRaw<{ total: number; unread: number; active: number; resolved: number }[]>`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE t.last_in > COALESCE(t.last_out, to_timestamp(0)) AND NOT t.resolved)::int AS unread,
+        COUNT(*) FILTER (WHERE t.last_in > NOW() - INTERVAL '24 hours' AND NOT t.resolved)::int AS active,
+        COUNT(*) FILTER (WHERE t.resolved)::int AS resolved
+      FROM (
+        SELECT
+          m."contactId",
+          MAX(CASE WHEN m.direction = 'in' THEN m."createdAt" END) AS last_in,
+          MAX(CASE WHEN m.direction = 'out' THEN m."createdAt" END) AS last_out,
+          COALESCE((c."attributes" ->> 'chatResolved')::boolean, false) AS resolved
+        FROM "Message" m
+        JOIN "Contact" c ON c.id = m."contactId"
+        WHERE m."contactId" IS NOT NULL
+        GROUP BY m."contactId", c."attributes"
+      ) t
+    `;
+    const counts = countRows[0] ?? { total: 0, unread: 0, active: 0, resolved: 0 };
+    return { items: results, total: totalGroups, counts, page, pageSize };
   });
 
   // Tandai percakapan selesai / buka kembali (disimpan di attributes — tanpa migrasi)
