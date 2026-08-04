@@ -22,7 +22,7 @@ import { FILTERS, sessionInfo, shortTime, matchesFilter } from "./chatbox/consta
 import { Conversation } from "./chatbox/Conversation";
 import { DetailsPanel } from "./chatbox/DetailsPanel";
 
-export default function Chat() {
+export default function Chat({ readOnly = false }) {
   const isMobile = useIsMobile();
   const detailsInline = useMediaQuery("(min-width: 1100px)");
   // `searchInput` = isi kotak; `search` = yang sudah tenang (debounce) dan dikirim ke
@@ -206,7 +206,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {sel.size ? (
+      {sel.size && !readOnly ? (
         <div style={{ padding: "8px 12px 0" }}>
           <BulkBar
             count={sel.size}
@@ -240,7 +240,7 @@ export default function Chat() {
                   background: sel.has(c.id) ? theme.primarySoft : activeId === c.id ? theme.primarySoft : "transparent",
                 }}
               >
-                <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />
+                {readOnly ? null : <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />}
                 <button
                   onClick={() => {
                     setActiveId(c.id);
@@ -388,7 +388,7 @@ export default function Chat() {
     </div>
   );
 
-  const detailsPanel = active ? <DetailsPanel convo={active} onResolve={resolve} /> : null;
+  const detailsPanel = active ? <DetailsPanel convo={active} onResolve={resolve} readOnly={readOnly} /> : null;
 
   // ── Mobile: master-detail ──
   if (isMobile) {
@@ -421,6 +421,7 @@ export default function Chat() {
               onResolve={resolve}
               onShowDetails={() => setShowDetails(true)}
               isMobile
+              readOnly={readOnly}
             />
           ) : (
             listPanel
@@ -428,7 +429,7 @@ export default function Chat() {
         </div>
         {showDetails && active ? (
           <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft} dismissible>
-            <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
+            <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} readOnly={readOnly} />
           </Modal>
         ) : null}
       </div>
@@ -474,6 +475,7 @@ export default function Chat() {
               onReload={convos.reload}
               onResolve={resolve}
               onShowDetails={detailsInline ? null : () => setShowDetails(true)}
+              readOnly={readOnly}
             />
           ) : (
             <div
@@ -513,7 +515,7 @@ export default function Chat() {
       </div>
       {!detailsInline && showDetails && active ? (
         <Modal title="Detail Kontak" onClose={() => setShowDetails(false)} width={420} dirty={noteDraft} dismissible>
-          <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} />
+          <DetailsPanel convo={active} onResolve={resolve} bare onDraft={setNoteDraft} readOnly={readOnly} />
         </Modal>
       ) : null}
     </div>

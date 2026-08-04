@@ -76,6 +76,14 @@ const NAV = [
   },
 ];
 
+// Halaman yang boleh dibuka peran "viewer" — DAFTAR-IZIN, bukan daftar-larangan:
+// menu baru otomatis tertutup untuk viewer sampai sengaja dimasukkan ke sini.
+// Backend sudah menolak semua metode pengubah data untuk viewer (requireWriter),
+// jadi ini lapis kedua: menghilangkan menu & tombol yang memang tak akan berhasil,
+// supaya tak ada yang mengklik lalu kebingungan dapat galat.
+export const VIEWER_PAGES = new Set(["dashboard", "contacts", "chat", "reports"]);
+export const canSeePage = (role, id) => role !== "viewer" || VIEWER_PAGES.has(id);
+
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -250,7 +258,9 @@ function Sidebar({
       </div>
       <nav style={{ flex: 1 }}>
         {NAV.map((sec) => {
-          const items = sec.items.filter((it) => !it.superadmin || currentUser.role === "superadmin");
+          const items = sec.items.filter(
+            (it) => (!it.superadmin || currentUser.role === "superadmin") && canSeePage(currentUser.role, it.id),
+          );
           if (!items.length) return null;
           return (
             <div key={sec.group} style={{ marginBottom: mini ? 8 : 14 }}>
@@ -531,8 +541,10 @@ export default function PopuliApp() {
           features={["Balas DM Instagram", "Auto reply komentar", "Inbox terpadu"]}
         />
       ),
-      contacts: <Contacts />,
-      chat: <Chat />,
+      // readOnly diteruskan eksplisit lewat props (bukan global tersembunyi) — hanya dua
+      // halaman ini yang boleh dilihat viewer sekaligus punya tombol pengubah data.
+      contacts: <Contacts readOnly={currentUser?.role === "viewer"} />,
+      chat: <Chat readOnly={currentUser?.role === "viewer"} />,
       broadcast: <Broadcast />,
       templates: <Templates />,
       story: (
@@ -569,6 +581,11 @@ export default function PopuliApp() {
     }),
     [currentUser],
   );
+
+  // Halaman aktif dipulihkan dari localStorage, jadi viewer bisa MENDARAT di halaman
+  // terlarang tanpa mengklik apa pun — mis. tersimpan "sheets" dari sesi admin di
+  // browser yang sama. Alihkan ke Dashboard.
+  const activePage = canSeePage(currentUser?.role, active) ? active : "dashboard";
 
   if (!authReady)
     return (
@@ -655,7 +672,7 @@ export default function PopuliApp() {
         ) : null}
 
         <main style={{ padding: "16px 14px", minWidth: 0 }}>
-          <Suspense fallback={<Loading />}>{pages[active] || pages.dashboard}</Suspense>
+          <Suspense fallback={<Loading />}>{pages[activePage] || pages.dashboard}</Suspense>
         </main>
         {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
       </div>
@@ -677,7 +694,7 @@ export default function PopuliApp() {
         unread={unreadTotal}
       />
       <main style={{ flex: 1, padding: "26px 30px", maxWidth: 1200, minWidth: 0, width: "100%" }}>
-        <Suspense fallback={<Loading />}>{pages[active] || pages.dashboard}</Suspense>
+        <Suspense fallback={<Loading />}>{pages[activePage] || pages.dashboard}</Suspense>
       </main>
       {showChangePw ? <ChangePasswordModal onClose={() => setShowChangePw(false)} /> : null}
     </div>

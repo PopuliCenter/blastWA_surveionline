@@ -49,3 +49,42 @@ describe("requireWriter (guard otorisasi)", () => {
     expect((await app.inject({ method: "POST", url: "/x" })).statusCode).toBe(401);
   });
 });
+
+// requireOperator dipakai rute konfigurasi operasional (kredensial vendor, Agen AI,
+// Google Sheets). Halamannya disembunyikan dari viewer di UI; tanpa penjaga ini isinya
+// masih bisa diambil langsung lewat API memakai token viewer.
+async function buildOperator(): Promise<FastifyInstance> {
+  const app = Fastify();
+  await registerAuth(app);
+  app.addHook("onRequest", app.authenticate);
+  app.addHook("onRequest", app.requireOperator);
+  app.get("/cfg", async () => ({ ok: true }));
+  app.put("/cfg", async () => ({ ok: true }));
+  await app.ready();
+  return app;
+}
+
+describe("requireOperator (konfigurasi operasional)", () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildOperator();
+  });
+
+  it("viewer: MEMBACA pun ditolak 403 — bukan cuma menulis", async () => {
+    const headers = bearer(app, "viewer");
+    expect((await app.inject({ method: "GET", url: "/cfg", headers })).statusCode).toBe(403);
+    expect((await app.inject({ method: "PUT", url: "/cfg", headers })).statusCode).toBe(403);
+  });
+
+  it("admin & superadmin: baca dan tulis boleh", async () => {
+    for (const role of ["admin", "superadmin"]) {
+      const headers = bearer(app, role);
+      expect((await app.inject({ method: "GET", url: "/cfg", headers })).statusCode).toBe(200);
+      expect((await app.inject({ method: "PUT", url: "/cfg", headers })).statusCode).toBe(200);
+    }
+  });
+
+  it("tanpa token: 401, bukan 403", async () => {
+    expect((await app.inject({ method: "GET", url: "/cfg" })).statusCode).toBe(401);
+  });
+});

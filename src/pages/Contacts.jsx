@@ -23,7 +23,9 @@ import { ContactImporter } from "../lib/contactImport";
 
 const PAGE_SIZES = [100, 500, 1000, 1500];
 
-export default function Contacts() {
+// readOnly = peran "viewer". Backend sudah menolak tulisannya (403), jadi tombol yang
+// tetap ditampilkan hanya akan gagal — sembunyikan supaya tak ada yang mengkliknya.
+export default function Contacts({ readOnly = false }) {
   // `searchInput` = isi kotak apa adanya; `search` = yang sudah tenang (debounce) dan
   // dikirim ke server. Pencarian kini SERVER-side: menjangkau seluruh kontak, bukan
   // cuma halaman yang sedang termuat.
@@ -100,25 +102,31 @@ export default function Contacts() {
           <Button key="r" variant="ghost" icon="refresh" onClick={loader.reload}>
             Refresh
           </Button>,
-          <Button key="b" variant="secondary" icon="upload" onClick={() => setBulkOpen(true)}>
-            Impor Massal
-          </Button>,
-          <Button key="n" icon="plus" onClick={() => setModal({})}>
-            Tambah Kontak
-          </Button>,
+          ...(readOnly
+            ? []
+            : [
+                <Button key="b" variant="secondary" icon="upload" onClick={() => setBulkOpen(true)}>
+                  Impor Massal
+                </Button>,
+                <Button key="n" icon="plus" onClick={() => setModal({})}>
+                  Tambah Kontak
+                </Button>,
+              ]),
         ]}
       />
       <Notice>{loader.error || actionError}</Notice>
-      <BulkBar
-        count={sel.size}
-        total={contacts.length}
-        allSelected={allSelected}
-        noun="kontak"
-        busy={bulkBusy}
-        onToggleAll={() => (allSelected ? sel.clear() : sel.setAll(contacts.map((c) => c.id)))}
-        onClear={sel.clear}
-        onDelete={bulkDelete}
-      />
+      {readOnly ? null : (
+        <BulkBar
+          count={sel.size}
+          total={contacts.length}
+          allSelected={allSelected}
+          noun="kontak"
+          busy={bulkBusy}
+          onToggleAll={() => (allSelected ? sel.clear() : sel.setAll(contacts.map((c) => c.id)))}
+          onClear={sel.clear}
+          onDelete={bulkDelete}
+        />
+      )}
       <Card pad={0}>
         <div style={{ padding: 14, borderBottom: `1px solid ${theme.border}`, position: "relative" }}>
           <span style={{ position: "absolute", left: 26, top: 24, color: theme.textMuted }}>
@@ -158,7 +166,7 @@ export default function Contacts() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flex: "1 1 190px" }}>
-                  <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />
+                  {readOnly ? null : <Checkbox checked={sel.has(c.id)} onChange={() => sel.toggle(c.id)} />}
                   <div
                     style={{
                       width: 36,
@@ -204,20 +212,27 @@ export default function Contacts() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => run(() => api.updateContact(c.id, { subscribed: c.subscribed === false }))}
-                    title={c.subscribed === false ? "Langganan ulang" : "Tandai berhenti"}
-                  >
-                    {c.subscribed === false ? "Langgan" : "Berhenti"}
-                  </Button>
-                  <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(c)}>
-                    Edit
-                  </Button>
-                  <Button variant="danger" size="sm" icon="trash" onClick={() => run(() => api.deleteContact(c.id))} />
-                </div>
+                {readOnly ? null : (
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => run(() => api.updateContact(c.id, { subscribed: c.subscribed === false }))}
+                      title={c.subscribed === false ? "Langganan ulang" : "Tandai berhenti"}
+                    >
+                      {c.subscribed === false ? "Langgan" : "Berhenti"}
+                    </Button>
+                    <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(c)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon="trash"
+                      onClick={() => run(() => api.deleteContact(c.id))}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

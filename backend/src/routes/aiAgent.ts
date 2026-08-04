@@ -34,7 +34,9 @@ function isSafeBaseUrl(raw: string): boolean {
 
 export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
-  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
+  // Konfigurasi operasional — viewer tidak boleh baca maupun tulis (halamannya juga
+  // disembunyikan di UI; ini penjaga sisi server-nya).
+  app.addHook("onRequest", app.requireOperator);
 
   // Ambil konfigurasi (TANPA membocorkan API key)
   app.get("/api/ai-agent", async () => {

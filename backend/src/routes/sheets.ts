@@ -13,7 +13,9 @@ import { enqueueSheetSync } from "../queue/sheetQueue.js";
 
 export async function sheetRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
-  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
+  // Konfigurasi operasional — viewer tidak boleh baca maupun tulis (halamannya juga
+  // disembunyikan di UI; ini penjaga sisi server-nya).
+  app.addHook("onRequest", app.requireOperator);
 
   // Status ringkas. Kunci tidak pernah dibocorkan; email service account justru
   // DITAMPILKAN karena user membutuhkannya — spreadsheet harus di-share ke email itu.

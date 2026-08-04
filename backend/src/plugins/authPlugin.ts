@@ -6,6 +6,7 @@ declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireWriter: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireOperator: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -39,5 +40,13 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
     if (req.method !== "GET" && req.method !== "HEAD" && req.user?.role === "viewer") {
       reply.code(403).send({ error: "forbidden" });
     }
+  });
+
+  // Guard penuh: viewer tidak boleh MEMBACA pun. Dipakai pada rute konfigurasi
+  // operasional (kredensial vendor, Agen AI, Google Sheets) — halamannya memang
+  // disembunyikan dari viewer di UI, dan tanpa penjaga ini isinya masih bisa diambil
+  // langsung lewat API memakai token viewer.
+  app.decorate("requireOperator", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (req.user?.role === "viewer") reply.code(403).send({ error: "forbidden" });
   });
 }

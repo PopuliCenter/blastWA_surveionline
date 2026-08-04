@@ -15,7 +15,8 @@ function DetailRow({ label, value }) {
 
 // onDraft: dipanggil saat draf catatan berubah. Dipakai pemanggil yang membungkus panel ini
 // dalam Modal (tampilan ponsel) agar catatan setengah jadi tidak hilang saat klik di luar.
-export function DetailsPanel({ convo, onResolve, bare, onDraft }) {
+// readOnly = peran "viewer": detail boleh dibaca, status & catatan tidak boleh diubah.
+export function DetailsPanel({ convo, onResolve, bare, onDraft, readOnly = false }) {
   const notes = useLoader(useCallback(() => api.listNotes(convo.id), [convo.id]));
   const [noteText, setNoteText] = useState("");
   const [adding, setAdding] = useState(false);
@@ -91,15 +92,17 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft }) {
           }
         />
         <DetailRow label="Status" value={convo.resolved ? "Selesai" : "Terbuka"} />
-        <Button
-          variant={convo.resolved ? "secondary" : "success"}
-          size="sm"
-          icon={convo.resolved ? "refresh" : "check"}
-          onClick={() => onResolve(convo.id, !convo.resolved)}
-          style={{ width: "100%", marginTop: 4 }}
-        >
-          {convo.resolved ? "Buka kembali" : "Tandai selesai"}
-        </Button>
+        {readOnly ? null : (
+          <Button
+            variant={convo.resolved ? "secondary" : "success"}
+            size="sm"
+            icon={convo.resolved ? "refresh" : "check"}
+            onClick={() => onResolve(convo.id, !convo.resolved)}
+            style={{ width: "100%", marginTop: 4 }}
+          >
+            {convo.resolved ? "Buka kembali" : "Tandai selesai"}
+          </Button>
+        )}
       </div>
 
       <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
@@ -115,24 +118,26 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft }) {
         >
           Catatan
         </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          <input
-            value={noteText}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !adding && addNote()}
-            placeholder="Tambah catatan..."
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              border: `1px solid ${theme.border}`,
-              borderRadius: 9,
-              fontSize: 12.5,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          <Button size="sm" icon="plus" onClick={addNote} disabled={adding || !noteText.trim()} />
-        </div>
+        {readOnly ? null : (
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <input
+              value={noteText}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !adding && addNote()}
+              placeholder="Tambah catatan..."
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                border: `1px solid ${theme.border}`,
+                borderRadius: 9,
+                fontSize: 12.5,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+            <Button size="sm" icon="plus" onClick={addNote} disabled={adding || !noteText.trim()} />
+          </div>
+        )}
         {notes.loading ? (
           <Loading />
         ) : (notes.data || []).length ? (

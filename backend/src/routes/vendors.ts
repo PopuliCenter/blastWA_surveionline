@@ -6,7 +6,9 @@ import { listProviders, loadProviders, vendorsWithDecryptError } from "../provid
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
-  app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
+  // Konfigurasi operasional — viewer tidak boleh baca maupun tulis (halamannya juga
+  // disembunyikan di UI; ini penjaga sisi server-nya).
+  app.addHook("onRequest", app.requireOperator);
 
   // Status semua vendor (terkonfigurasi atau belum) — TANPA membocorkan kredensial
   app.get("/api/vendors", async () => {

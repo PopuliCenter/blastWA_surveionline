@@ -4,7 +4,9 @@ import { Button, Notice, Loading, Empty, theme, Icon, useLoader } from "../../li
 import { sessionInfo, shortTime } from "./constants";
 
 // ── Percakapan (tengah) ─────────────────────────────────────────────────────
-export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMobile }) {
+// readOnly = peran "viewer": boleh membaca percakapan, tidak boleh membalas atau
+// mengubah status. Backend menolaknya (403); ini menghilangkan tombolnya.
+export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMobile, readOnly = false }) {
   const { data, loading, error, reload, setData } = useLoader(
     useCallback(() => api.contactMessages(convo.id), [convo.id]),
   );
@@ -143,14 +145,16 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
           </div>
         </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-          <Button
-            variant={convo.resolved ? "secondary" : "success"}
-            size="sm"
-            icon={convo.resolved ? "refresh" : "check"}
-            onClick={() => onResolve(convo.id, !convo.resolved)}
-          >
-            {convo.resolved ? "Buka" : "Selesai"}
-          </Button>
+          {readOnly ? null : (
+            <Button
+              variant={convo.resolved ? "secondary" : "success"}
+              size="sm"
+              icon={convo.resolved ? "refresh" : "check"}
+              onClick={() => onResolve(convo.id, !convo.resolved)}
+            >
+              {convo.resolved ? "Buka" : "Selesai"}
+            </Button>
+          )}
           {onShowDetails ? <Button variant="secondary" size="sm" icon="contacts" onClick={onShowDetails} /> : null}
         </div>
       </div>
@@ -220,7 +224,19 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
           <Notice>{sendErr}</Notice>
         </div>
       ) : null}
-      {sess.active ? (
+      {readOnly ? (
+        <div
+          style={{
+            padding: 12,
+            borderTop: `1px solid ${theme.border}`,
+            fontSize: 12.5,
+            color: theme.textMuted,
+            textAlign: "center",
+          }}
+        >
+          Akun Anda hanya dapat membaca percakapan.
+        </div>
+      ) : sess.active ? (
         <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${theme.border}` }}>
           <input
             value={text}
