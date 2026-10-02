@@ -23,7 +23,14 @@ services:
   backend:
     build: ../backend
     container_name: wa_backend
-    command: sh -c "npx -y prisma migrate deploy && node dist/server.js"
+    # `exec` WAJIB: tanpa itu `sh` tetap jadi PID 1 dan tidak meneruskan SIGTERM, sehingga
+    # graceful shutdown di server.ts tak pernah jalan — tiap deploy memutus permintaan yang
+    # sedang diproses. Dengan `exec`, node menggantikan sh dan menerima sinyalnya langsung.
+    command: sh -c "npx -y prisma migrate deploy && exec node dist/server.js"
+    # Reaper PID 1 (tini). Langkah migrasi di atas memunculkan proses anak npx/prisma yang
+    # yatim setelah selesai; tanpa reaper, sisanya menumpuk sebagai proses zombie.
+    init: true
+    stop_grace_period: 30s
     env_file: [../backend/.env]
     environment:
       DATABASE_URL: postgresql://populi:${POSTGRES_PASSWORD:?isi POSTGRES_PASSWORD di deploy/.env}@postgres:5432/populi?schema=public
@@ -57,6 +64,11 @@ services:
     build: ../backend
     container_name: wa_worker
     command: node dist/queue/worker.js
+    init: true
+    # Worker menunggu job yang sedang berjalan selesai saat SIGTERM. Batas bawaan Docker
+    # 10 detik bisa memotong pengiriman blast di tengah jalan; 30 detik memberi ruang
+    # agar job aktif tuntas sebelum container dihentikan.
+    stop_grace_period: 30s
     env_file: [../backend/.env]
     environment:
       DATABASE_URL: postgresql://populi:${POSTGRES_PASSWORD:?isi POSTGRES_PASSWORD di deploy/.env}@postgres:5432/populi?schema=public
