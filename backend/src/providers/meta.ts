@@ -351,6 +351,11 @@ export class MetaCloudAdapter implements MessagingProvider {
         const nameOf = (from: unknown) => (from ? names.get(String(from)) : undefined);
 
         for (const msg of value?.messages ?? []) {
+          // Reaksi emoji (👍 dan sejenisnya) bukan jawaban dan bukan percakapan. Meta
+          // mengirimnya sebagai pesan tanpa teks dan tanpa media, sehingga bila diteruskan
+          // ia masuk ke mesin survei sebagai balasan kosong dan membuat pertanyaan diulang.
+          if (msg?.type === "reaction" || msg?.reaction) continue;
+
           // Balasan WhatsApp Flow (form terkirim) → parse response_json
           const nfm = msg?.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : null;
           let flowResponse: Record<string, unknown> | undefined;

@@ -40,6 +40,37 @@ describe("validateAnswer", () => {
     expect(validateAnswer(c, ev("9")).ok).toBe(false); // di luar rentang pilihan
   });
 
+  it("choice: pesan tanpa teks ditolak, termasuk saat pilihannya hanya satu", () => {
+    // Stiker/suara/lokasi tiba tanpa `text`. Dulu saringan toleransi memakai includes(""),
+    // yang selalu benar, sehingga pada pilihan tunggal pesan kosong tercatat sebagai jawaban.
+    const satu = q("choice", { choices: ["Setuju"] });
+    expect(validateAnswer(satu, ev(undefined)).ok).toBe(false);
+    expect(validateAnswer(satu, ev("")).ok).toBe(false);
+    expect(validateAnswer(satu, ev("   ")).ok).toBe(false);
+    expect(validateAnswer(satu, ev(undefined, { mediaType: "sticker", mediaId: "m1" })).ok).toBe(false);
+    // Pilihan tunggal tetap bisa dijawab seperti biasa.
+    expect(validateAnswer(satu, ev("1"))).toEqual({ ok: true, value: "Setuju" });
+    expect(validateAnswer(satu, ev("setuju"))).toEqual({ ok: true, value: "Setuju" });
+
+    const banyak = q("choice", { choices: ["Ya", "Tidak"] });
+    expect(validateAnswer(banyak, ev("")).ok).toBe(false);
+
+    // Pertanyaan pilihan tanpa daftar opsi: teks bebas boleh, kosong tetap ditolak.
+    const bebas = q("choice", { choices: [] });
+    expect(validateAnswer(bebas, ev("apa saja"))).toEqual({ ok: true, value: "apa saja" });
+    expect(validateAnswer(bebas, ev("")).ok).toBe(false);
+  });
+
+  it("rating: pesan kosong ditolak walau rentangnya memuat 0", () => {
+    // Number("") bernilai 0, jadi tanpa penjaga teks-kosong rentang 0..10 akan
+    // mencatat stiker sebagai nilai 0.
+    const nol = q("rating", { min: 0, max: 10 });
+    expect(validateAnswer(nol, ev("")).ok).toBe(false);
+    expect(validateAnswer(nol, ev(undefined)).ok).toBe(false);
+    expect(validateAnswer(nol, ev("0"))).toEqual({ ok: true, value: "0" });
+    expect(validateAnswer(nol, ev("10"))).toEqual({ ok: true, value: "10" });
+  });
+
   it("multichoice: terima beberapa nomor (1,3), spasi, dedupe; tolak yang tak dikenal", () => {
     const m = q("multichoice", { choices: ["Ekonomi", "Pendidikan", "Kesehatan"] });
     expect(validateAnswer(m, ev("1,3"))).toEqual({ ok: true, value: "Ekonomi, Kesehatan" });

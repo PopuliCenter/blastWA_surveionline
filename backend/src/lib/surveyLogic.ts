@@ -180,6 +180,9 @@ export function validateAnswer(
       return { ok: false, error: "Mohon kirim berupa foto/gambar." };
     case "rating": {
       const { min, max } = ratingRange(q);
+      // Pesan tanpa teks (stiker, suara, lokasi) WAJIB ditolak di sini. Number("") bernilai 0,
+      // sehingga pada rentang yang memuat 0 pesan kosong akan lolos sebagai nilai 0.
+      if (!text) return { ok: false, error: `Mohon balas dengan angka ${min} sampai ${max}.` };
       const n = Number(text);
       if (Number.isInteger(n) && n >= min && n <= max) return { ok: true, value: String(n) };
       return { ok: false, error: `Mohon balas dengan angka ${min} sampai ${max}.` };
@@ -191,13 +194,17 @@ export function validateAnswer(
     }
     case "choice": {
       const opts = choices(q);
-      if (!opts.length) return text ? { ok: true, value: text } : { ok: false, error: "Mohon pilih jawaban." };
+      if (!text) return { ok: false, error: "Mohon pilih jawaban." };
+      if (!opts.length) return { ok: true, value: text };
       const asNum = Number(text);
       if (Number.isInteger(asNum) && asNum >= 1 && asNum <= opts.length) return { ok: true, value: opts[asNum - 1]! };
       const lc = text.toLowerCase();
       const exact = opts.find((o) => o.toLowerCase() === lc);
       if (exact) return { ok: true, value: exact };
-      // Toleransi: cocok sebagian bila TIDAK ambigu (hanya satu pilihan yang cocok)
+      // Toleransi: cocok sebagian bila TIDAK ambigu (hanya satu pilihan yang cocok).
+      // `lc` dijamin tidak kosong oleh penjaga di atas: String.includes("") selalu true,
+      // sehingga teks kosong akan mencocoki SEMUA pilihan — dan pada pertanyaan berpilihan
+      // tunggal hasilnya tepat satu, lalu tercatat diam-diam sebagai jawaban.
       const partial = opts.filter((o) => o.toLowerCase().includes(lc) || lc.includes(o.toLowerCase()));
       if (partial.length === 1) return { ok: true, value: partial[0]! };
       return { ok: false, error: "Maaf, pilihan belum dikenali. Balas dengan *nomor* pilihan, ya." };
