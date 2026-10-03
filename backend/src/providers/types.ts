@@ -23,6 +23,10 @@ export type NormalizedInbound = {
   messageId?: string;
   refMessageId?: string; // id pesan outbound yang statusnya diupdate
   deliveryStatus?: DeliveryStatus;
+  // Alasan gagal antar dari vendor, sudah diringkas satu baris. Hanya terisi saat
+  // deliveryStatus = "failed". Inilah satu-satunya tempat vendor menjelaskan kenapa
+  // pesan yang diterima API-nya ternyata tidak sampai ke penerima.
+  deliveryError?: string;
   interactiveType?: string; // mis. "nfm_reply" (balasan WhatsApp Flow)
   flowResponse?: Record<string, unknown>; // isi response_json flow (sudah diparse)
   timestamp: string; // ISO 8601

@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
 import { parsePage, parsePageSize, CONTACT_PAGE_SIZES, CONVO_PAGE_SIZES } from "../lib/pageParams.js";
 import { getProvider } from "../providers/registry.js";
+import { logError } from "../lib/errorLog.js";
 import { env } from "../env.js";
 
 export async function contactRoutes(app: FastifyInstance): Promise<void> {
@@ -344,6 +345,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       text: m.text,
       vendor: m.vendor,
       isBot: m.isBot,
+      // Status antar ikut dikirim agar operator melihat pesan yang TIDAK sampai.
+      // Tanpa ini, pesan gagal tampak sama persis dengan pesan berhasil di layar chat.
+      deliveryStatus: m.deliveryStatus,
+      failedReason: m.failedReason,
       createdAt: m.createdAt,
     }));
   });
@@ -372,8 +377,17 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         payload: result.raw as object,
       },
     });
-    if (result.status === "failed")
+    if (result.status === "failed") {
+      // Dicatat, bukan hanya dikembalikan ke layar: rinciannya dulu lenyap begitu
+      // operator menutup halaman, padahal kegagalan kirim manual adalah sinyal paling
+      // awal bahwa pengiriman ke vendor sedang bermasalah untuk SEMUA pesan.
+      logError("backend", new Error("Kirim pesan manual gagal"), {
+        contactId: id,
+        vendor,
+        vendorResponse: result.raw,
+      });
       return reply.code(502).send({ error: "gagal kirim", detail: result.raw, message: msg });
+    }
     return reply.code(201).send(msg);
   });
 }

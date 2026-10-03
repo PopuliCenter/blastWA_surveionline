@@ -418,6 +418,7 @@ export class MetaCloudAdapter implements MessagingProvider {
             kind: "status",
             refMessageId: st?.id,
             deliveryStatus: mapStatus(st?.status),
+            deliveryError: deliveryErrorText(st?.errors),
             timestamp: tsFromUnix(st?.timestamp),
             raw: st,
           });
@@ -499,6 +500,23 @@ function tsFromUnix(ts: unknown): string {
   const n = Number(ts);
   if (Number.isFinite(n) && n > 0) return new Date(n * 1000).toISOString();
   return new Date().toISOString();
+}
+
+// Alasan gagal antar ada di statuses[].errors[] — TERPISAH dari respons API pengiriman,
+// yang untuk pesan yang sama bisa saja sukses. Diringkas jadi satu baris "(#kode) pesan"
+// supaya bisa ditampilkan apa adanya ke operator tanpa menggali JSON.
+// `error_data.details` didahulukan karena di situlah Meta menulis sebab yang spesifik,
+// sedangkan `message` sering hanya judul umum seperti "Message failed to send".
+export function deliveryErrorText(errors: unknown): string | undefined {
+  const e = (Array.isArray(errors) ? errors[0] : undefined) as
+    | { code?: unknown; title?: unknown; message?: unknown; error_data?: { details?: unknown } }
+    | undefined;
+  if (!e) return undefined;
+  const detail = e.error_data?.details ?? e.message ?? e.title;
+  const text = typeof detail === "string" ? detail.trim() : detail != null ? String(detail) : "";
+  if (!text) return undefined;
+  const code = e.code != null && String(e.code).trim() ? `(#${String(e.code).trim()}) ` : "";
+  return `${code}${text}`.slice(0, 500);
 }
 
 function mapStatus(s: unknown): NormalizedInbound["deliveryStatus"] {

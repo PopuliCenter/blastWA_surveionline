@@ -25,6 +25,19 @@ export function canTransition(from: string, to: DeliveryStatus): boolean {
   return ALLOWED_FROM[to]?.includes(from as RecipientStatus) ?? false;
 }
 
+// ===== Transisi status pengiriman pada Message =====
+//
+// Sama idenya dengan ALLOWED_FROM di atas, tapi titik awalnya BUKAN "queued" melainkan
+// null: baris Message dibuat saat vendor menerima pesannya, sebelum ada kabar antar sama
+// sekali. Nilai null itu ditangani terpisah di kueri (SQL NULL tidak pernah cocok dengan
+// IN), jadi daftar ini hanya memuat status yang sudah pernah tercatat.
+export const MESSAGE_ALLOWED_FROM: Record<DeliveryStatus, readonly string[]> = {
+  sent: [],
+  delivered: ["sent"],
+  read: ["sent", "delivered"],
+  failed: ["sent"],
+};
+
 // Kolom penghitung di tabel Blast yang dinaikkan saat status mencapai `to`.
 // null berarti tidak ada yang dinaikkan (sentCount sudah diisi saat pengiriman).
 export function counterField(to: DeliveryStatus): "deliveredCount" | "readCount" | "failedCount" | null {

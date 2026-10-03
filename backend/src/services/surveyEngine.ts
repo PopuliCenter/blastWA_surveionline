@@ -2,7 +2,7 @@ import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
-import { ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
+import { ALLOWED_FROM, MESSAGE_ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
 import {
   isOptOutExact,
   isOptInExact,
@@ -71,9 +71,30 @@ export async function handleInboundEvents(events: NormalizedInbound[]): Promise<
 
 async function handleStatus(ev: NormalizedInbound): Promise<void> {
   if (!ev.refMessageId || !ev.deliveryStatus) return;
+  const next = ev.deliveryStatus;
+
+  // Status antar dicatat pada pesannya sendiri LEBIH DULU, terlepas dari blast.
+  // Dulu fungsi ini langsung berhenti saat pesannya bukan bagian blast, sehingga
+  // formulir survei dan balasan bot yang gagal diantar tidak meninggalkan jejak di mana
+  // pun — vendor sudah menerima panggilan API-nya, jadi aplikasi terlanjur mencatat
+  // "terkirim" dan kegagalannya tak pernah terlihat sampai responden mengeluh.
+  //
+  // Penjagaan transisi memakai satu UPDATE bersyarat, sama seperti blast di bawah:
+  // callback datang "at least once" dan bisa kembar, jadi status yang sudah lebih maju
+  // tidak boleh dimundurkan oleh callback yang telat.
+  await prisma.message.updateMany({
+    where: {
+      vendorMessageId: ev.refMessageId,
+      OR: [{ deliveryStatus: null }, { deliveryStatus: { in: [...MESSAGE_ALLOWED_FROM[next]] } }],
+    },
+    data: {
+      deliveryStatus: next,
+      failedReason: next === "failed" ? (ev.deliveryError ?? "Vendor tidak menyebutkan alasan.") : null,
+    },
+  });
+
   const recipient = await prisma.blastRecipient.findUnique({ where: { vendorMessageId: ev.refMessageId } });
   if (!recipient) return;
-  const next = ev.deliveryStatus;
 
   // Perubahan status dilakukan BERSYARAT di database: updateMany hanya mengenai baris
   // yang statusnya masih boleh berpindah ke `next`. Ini satu perintah UPDATE, jadi bila

@@ -24,10 +24,30 @@ function serialize(source: string, err: unknown, context?: Record<string, unknow
   return JSON.stringify({ ts: new Date().toISOString(), source, ...base, ...(context ? { context } : {}) }) + "\n";
 }
 
+// Pencatatan yang mati HARUS berisik sekali, lalu diam.
+//
+// Dulu kegagalan menulis ditelan callback kosong. Akibatnya pencatatan galat bisa
+// berhenti total tanpa gejala apa pun — dan berkas log yang kosong lalu terbaca keliru
+// sebagai "tidak ada error", justru saat sedang menelusuri gangguan. Diberitahukan
+// sekali ke stderr supaya muncul di `docker logs`, tanpa membanjiri bila berkasnya
+// memang tak bisa ditulis sama sekali.
+let writeFailureReported = false;
+function reportWriteFailure(e: unknown): void {
+  if (writeFailureReported) return;
+  writeFailureReported = true;
+  console.error(
+    `[errorLog] GAGAL menulis ke ${env.ERROR_LOG_FILE} — pencatatan galat TIDAK AKTIF. ` +
+      `Berkas log tidak bisa dipakai untuk menyimpulkan ada/tidaknya error. Sebab:`,
+    e,
+  );
+}
+
 // Async, best-effort — untuk jalur normal (hook error request).
 export function logError(source: string, err: unknown, context?: Record<string, unknown>): void {
   ensureDir();
-  appendFile(env.ERROR_LOG_FILE, serialize(source, err, context), () => {});
+  appendFile(env.ERROR_LOG_FILE, serialize(source, err, context), (e) => {
+    if (e) reportWriteFailure(e);
+  });
 }
 
 // Sinkron — dipakai sebelum proses keluar (uncaughtException) agar dijamin tertulis.
@@ -35,8 +55,8 @@ export function logErrorSync(source: string, err: unknown, context?: Record<stri
   ensureDir();
   try {
     appendFileSync(env.ERROR_LOG_FILE, serialize(source, err, context));
-  } catch {
-    /* abaikan */
+  } catch (e) {
+    reportWriteFailure(e);
   }
 }
 

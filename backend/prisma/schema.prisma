@@ -171,11 +171,17 @@ model Message {
   payload         Json?
   isBot           Boolean   @default(false) // true = balasan otomatis (survei/auto-reply/AI), bukan kiriman agen
   source          String? // asal balasan otomatis: survey | autoreply | ai | optout. null = kiriman agen
+  // Status antar dari vendor (pesan KELUAR): sent | delivered | read | failed. null = belum ada kabar.
+  // Vendor menerima pesan lalu melaporkan kegagalan antar BELAKANGAN lewat webhook status,
+  // jadi respons API yang sukses sama sekali tidak menjamin pesannya sampai.
+  deliveryStatus  String?
+  failedReason    String? // alasan gagal apa adanya dari vendor; diisi hanya saat deliveryStatus = failed
   createdAt       DateTime  @default(now())
 
   @@index([contactId])
   @@index([vendorMessageId])
   @@index([contactId, source, createdAt]) // untuk menghitung kuota balasan AI per kontak
+  @@index([deliveryStatus, createdAt]) // untuk panel "gagal diantar" di Dashboard
 }
 
 model SurveyResponse {

@@ -147,6 +147,11 @@ export default function Dashboard() {
   // Rasio pengiriman
   const attempted = (s.sent || 0) + (s.failed || 0);
 
+  // Kesehatan antar 24 jam terakhir. Mencakup SEMUA pesan keluar — formulir survei,
+  // balasan bot, kiriman operator — bukan hanya blast seperti s.failed di atas.
+  const gagalAntar = s.gagalAntar24j || 0;
+  const gagalPct = pctOf(gagalAntar, s.keluar24j);
+
   // Inbox
   const cs = convos.data || [];
   // eslint-disable-next-line react-hooks/purity -- sengaja baca waktu sekarang untuk hitung sesi 24 jam aktif
@@ -221,6 +226,29 @@ export default function Dashboard() {
         ]}
       />
 
+      {/* Pesan yang tidak sampai — paling atas, mendahului angka apa pun.
+          Vendor MENERIMA pesannya lalu gagal mengantar belakangan lewat webhook status,
+          jadi "Pesan Terkirim" di bawah tetap naik walau tak satu pun responden menerimanya.
+          Tanpa panel ini, gangguan pengiriman hanya ketahuan setelah responden mengeluh. */}
+      {gagalAntar > 0 ? (
+        <Notice kind={gagalPct >= 20 ? "error" : "warning"}>
+          <strong>
+            {gagalAntar.toLocaleString("id-ID")} pesan gagal diantar dalam 24 jam terakhir
+            {s.keluar24j ? ` (${gagalPct}% dari ${s.keluar24j.toLocaleString("id-ID")} pesan keluar)` : ""}.
+          </strong>
+          {s.gagalAntarAlasan ? (
+            <div style={{ marginTop: 6 }}>
+              Alasan terakhir dari vendor: {s.gagalAntarAlasan}
+              {s.gagalAntarTerakhir ? ` — ${fmtDate(s.gagalAntarTerakhir)}` : ""}
+            </div>
+          ) : null}
+          <div style={{ marginTop: 6 }}>
+            Pesan dicatat terkirim karena vendor menerimanya, tetapi tidak sampai ke penerima. Periksa status
+            pembayaran dan kesehatan nomor di dashboard Meta.
+          </div>
+        </Notice>
+      ) : null}
+
       {/* Kartu ringkas */}
       <div
         style={{
@@ -252,9 +280,12 @@ export default function Dashboard() {
           icon="survey"
         />
         <StatCard
-          label="Gagal Kirim"
+          label="Gagal Kirim Blast"
           value={s.failed}
-          note={attempted ? `${pctOf(s.failed, attempted)}% dari percobaan` : "belum ada kirim"}
+          // Ruang lingkupnya disebut eksplisit: angka ini HANYA dari blast dan bersifat
+          // seumur hidup, sementara panel merah di atas menghitung semua pesan keluar
+          // dalam 24 jam. Dua angka yang berdekatan dan mirip bunyinya mudah tertukar.
+          note={attempted ? `${pctOf(s.failed, attempted)}% dari percobaan blast` : "belum ada blast"}
           tone={s.failed > 0 ? "yellow" : "default"}
           icon="autoreply"
         />

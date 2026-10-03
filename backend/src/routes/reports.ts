@@ -23,7 +23,21 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/stats", async () => {
-    const [surveys, activeSurveys, responses, responsesCompleted, contacts, segments, blastAgg] = await Promise.all([
+    // Jendela 24 jam untuk kegagalan antar. Angka seumur hidup tak berguna di sini:
+    // yang perlu diketahui operator adalah "apakah SEKARANG pesan tidak sampai".
+    const sejak = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [
+      surveys,
+      activeSurveys,
+      responses,
+      responsesCompleted,
+      contacts,
+      segments,
+      blastAgg,
+      gagalAntar,
+      keluar24j,
+      contohGagal,
+    ] = await Promise.all([
       prisma.survey.count(),
       prisma.survey.count({ where: { status: "active" } }),
       prisma.surveyResponse.count(),
@@ -32,6 +46,15 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       prisma.segment.count(),
       prisma.blast.aggregate({
         _sum: { sentCount: true, deliveredCount: true, readCount: true, failedCount: true },
+      }),
+      prisma.message.count({ where: { direction: "out", deliveryStatus: "failed", createdAt: { gte: sejak } } }),
+      prisma.message.count({ where: { direction: "out", createdAt: { gte: sejak } } }),
+      // Alasan gagal terbaru ditampilkan apa adanya. Saat pengiriman diblokir vendor,
+      // kalimat inilah yang langsung menyebut sebabnya — tanpa perlu membuka SSH.
+      prisma.message.findFirst({
+        where: { direction: "out", deliveryStatus: "failed", createdAt: { gte: sejak } },
+        orderBy: { createdAt: "desc" },
+        select: { failedReason: true, createdAt: true },
       }),
     ]);
     return {
@@ -45,6 +68,12 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       delivered: blastAgg._sum.deliveredCount ?? 0,
       opened: blastAgg._sum.readCount ?? 0,
       failed: blastAgg._sum.failedCount ?? 0,
+      // Kesehatan pengiriman 24 jam terakhir — mencakup SEMUA pesan keluar (formulir
+      // survei, balasan bot, kiriman operator), bukan hanya blast seperti `failed` di atas.
+      gagalAntar24j: gagalAntar,
+      keluar24j,
+      gagalAntarAlasan: contohGagal?.failedReason ?? null,
+      gagalAntarTerakhir: contohGagal?.createdAt ?? null,
     };
   });
 }

@@ -184,9 +184,24 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
                   padding: "8px 12px",
                   borderRadius: m.direction === "out" ? "12px 4px 12px 12px" : "4px 12px 12px 12px",
                   fontSize: 13.5,
-                  background: m.direction === "out" ? (m.isBot ? "#e2f0ff" : "#dcf8c6") : theme.surface,
+                  // Pesan yang TIDAK sampai harus terlihat berbeda sejak pandangan pertama.
+                  // Sebelumnya gelembungnya identik dengan yang berhasil, sehingga saat
+                  // pengiriman diblokir Meta layar ini tetap tampak normal selama berjam-jam.
+                  background:
+                    m.deliveryStatus === "failed"
+                      ? theme.redSoft
+                      : m.direction === "out"
+                        ? m.isBot
+                          ? "#e2f0ff"
+                          : "#dcf8c6"
+                        : theme.surface,
                   color: theme.text,
-                  border: m.direction === "out" ? "none" : `1px solid ${theme.border}`,
+                  border:
+                    m.deliveryStatus === "failed"
+                      ? `1px solid ${theme.red}`
+                      : m.direction === "out"
+                        ? "none"
+                        : `1px solid ${theme.border}`,
                   boxShadow: "0 1px 1px rgba(0,0,0,.06)",
                 }}
               >
@@ -207,6 +222,26 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
                   </div>
                 ) : null}
                 <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
+                {m.deliveryStatus === "failed" ? (
+                  <div
+                    title={m.failedReason || undefined}
+                    style={{
+                      marginTop: 6,
+                      paddingTop: 6,
+                      borderTop: `1px solid ${theme.red}`,
+                      fontSize: 11.5,
+                      color: theme.red,
+                      fontWeight: 600,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    Tidak sampai ke penerima{m.failedReason ? ` — ${m.failedReason}` : ""}
+                  </div>
+                ) : null}
                 <div style={{ fontSize: 10.5, color: theme.textMuted, marginTop: 3, textAlign: "right" }}>
                   {shortTime(m.createdAt)}
                 </div>
