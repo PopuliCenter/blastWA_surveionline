@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
 import { parsePage, parsePageSize, CONTACT_PAGE_SIZES, CONVO_PAGE_SIZES } from "../lib/pageParams.js";
 import { getProvider } from "../providers/registry.js";
+import { suppressNumber, unsuppressNumber, suppressedSince, suppressedAmong } from "../lib/optOutList.js";
 import { logError } from "../lib/errorLog.js";
 import { env } from "../env.js";
 
@@ -64,8 +65,18 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const phone = normalizePhone(parsed.data.phone);
     const existing = await prisma.contact.findUnique({ where: { phone } });
     if (existing) return reply.code(409).send({ error: "nomor sudah ada" });
+    // Nomor yang pernah menolak tetap boleh ditambahkan, tapi masuk dalam keadaan
+    // berhenti — bukan berlangganan. Menambahkan ulang sebuah nomor tidak boleh
+    // menghidupkan kembali izin menghubunginya.
+    const menolakSejak = await suppressedSince(phone);
     const c = await prisma.contact.create({
-      data: { phone, name: parsed.data.name, consentSource: "manual", consentAt: new Date() },
+      data: {
+        phone,
+        name: parsed.data.name,
+        consentSource: "manual",
+        consentAt: new Date(),
+        ...(menolakSejak ? { subscribed: false, optOutAt: menolakSejak } : {}),
+      },
     });
     return reply.code(201).send(c);
   });
@@ -92,7 +103,11 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
     let created = 0,
       updated = 0,
-      skipped = 0;
+      skipped = 0,
+      ditekan = 0;
+    // Satu kueri untuk seluruh berkas. Memeriksa per baris berarti 5.000 perjalanan ke
+    // database untuk impor 5.000 nomor.
+    const menolak = await suppressedAmong(parsed.data.contacts.map((c) => normalizePhone(c.phone)));
     const seen = new Set<string>();
     for (const item of parsed.data.contacts) {
       const phone = normalizePhone(item.phone);
@@ -116,6 +131,11 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
           updated++;
         } else skipped++;
       } else {
+        // Nomor yang pernah menolak tetap dibuat, tapi dalam keadaan BERHENTI. Inilah
+        // kasus yang dulu bocor: berkas impor lama memuat nomor yang sejak itu sudah
+        // mengirim BERHENTI dan kontaknya dihapus, lalu impor membuatnya kembali sebagai
+        // berlangganan — dan blast berikutnya menghubunginya lagi.
+        const ditolakSejak = menolak.get(phone);
         await prisma.contact.create({
           data: {
             phone,
@@ -123,12 +143,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
             attributes: hasAttrs ? (item.attributes as object) : undefined,
             consentSource: "import",
             consentAt: new Date(),
+            ...(ditolakSejak ? { subscribed: false, optOutAt: ditolakSejak } : {}),
           },
         });
         created++;
+        if (ditolakSejak) ditekan++;
       }
     }
-    return reply.code(201).send({ created, updated, skipped, total: parsed.data.contacts.length });
+    // `ditekan` dilaporkan terpisah supaya pengimpor tahu sebagian nomornya sengaja
+    // masuk dalam keadaan berhenti, bukan diam-diam.
+    return reply.code(201).send({ created, updated, skipped, ditekan, total: parsed.data.contacts.length });
   });
 
   app.put("/api/contacts/:id", async (req, reply) => {
@@ -145,6 +169,11 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       data.optOutAt = parsed.data.subscribed ? null : new Date();
     }
     const c = await prisma.contact.update({ where: { id }, data });
+    // Daftar penekan dijaga sinkron dengan tombol berhenti/berlangganan di halaman Kontak.
+    // Tanpa ini, operator yang menandai sebuah nomor berhenti hanya mengubah kontaknya —
+    // dan penolakan itu hilang begitu kontaknya dihapus.
+    if (parsed.data.subscribed === false) await suppressNumber(c.phone, "manual");
+    if (parsed.data.subscribed === true) await unsuppressNumber(c.phone);
     return c;
   });
 

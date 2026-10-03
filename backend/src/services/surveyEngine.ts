@@ -11,6 +11,7 @@ import {
   OPT_OUT_REPLY,
   OPT_IN_REPLY,
 } from "../lib/optOut.js";
+import { suppressNumber, unsuppressNumber } from "../lib/optOutList.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
@@ -38,6 +39,10 @@ const SKIP_WORDS = ["lewati", "skip", "lewat", "-"];
 // ketat di awal, dan pencocokan longgar untuk kontak yang tidak sedang mengisi survei.
 async function doOptOut(contactId: string, vendor: string, phone: string): Promise<void> {
   await prisma.contact.update({ where: { id: contactId }, data: { subscribed: false, optOutAt: new Date() } });
+  // Dicatat juga di daftar penekan yang berdiri sendiri. Penanda pada Contact ikut hilang
+  // bila kontaknya dihapus, dan tanpa daftar ini nomor yang sama bisa diimpor ulang lalu
+  // dihubungi lagi seolah tak pernah menolak.
+  await suppressNumber(phone, "pesan berhenti");
   await reply(vendor, phone, OPT_OUT_REPLY, contactId, "optout");
 }
 
@@ -55,6 +60,9 @@ async function doOptIn(
       consentAt: contact.consentAt ?? new Date(),
     },
   });
+  // Orangnya sendiri yang menyatakan berlangganan lagi — satu-satunya alasan sah untuk
+  // mengangkat nomor dari daftar penekan.
+  await unsuppressNumber(phone);
   await reply(vendor, phone, OPT_IN_REPLY, contact.id, "optout");
 }
 

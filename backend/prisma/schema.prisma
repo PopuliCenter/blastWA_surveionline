@@ -163,7 +163,11 @@ model BlastRecipient {
 model Message {
   id              String    @id @default(cuid())
   contactId       String?
-  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  // Cascade, BUKAN SetNull. Dulu menghapus kontak hanya mengosongkan contactId: baris
+  // pesannya tetap tinggal lengkap dengan `payload` berisi muatan webhook mentah — di
+  // dalamnya ada nomor telepon dan isi percakapan. Jadi "hapus kontak" tidak pernah
+  // benar-benar menghapus data orangnya, hanya memutus tautannya dari daftar kontak.
+  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   direction       Direction
   vendor          String
   vendorMessageId String?
@@ -320,4 +324,21 @@ model SendingPolicy {
   jitterMinMs Int      @default(800) // jeda acak min antar pesan
   jitterMaxMs Int      @default(2500) // jeda acak maks antar pesan
   updatedAt   DateTime @updatedAt
+}
+
+// Daftar penekan opt-out: nomor yang pernah menyatakan BERHENTI.
+//
+// Sengaja berdiri sendiri, TIDAK berelasi ke Contact dan karena itu tidak ikut terhapus
+// bersamanya. Dulu penolakan hanya tersimpan sebagai Contact.subscribed = false, sehingga
+// menghapus kontaknya menghapus pula jejak penolakannya: nomor yang sama bisa diimpor
+// ulang dari berkas lama lalu dihubungi lagi seolah tak pernah menolak. Menghapus kontak
+// tidak boleh memulihkan izin menghubungi.
+//
+// Nomor di sini bukan "data yang kami simpan untuk dipakai", melainkan catatan minimum
+// yang justru diperlukan untuk MENGHORMATI penolakan — tanpa menyimpan nomornya, tidak
+// ada cara mengenali bahwa ia pernah menolak.
+model OptOutNumber {
+  phone     String   @id // E.164 tanpa +, hasil normalizePhone
+  reason    String? // pesan berhenti | manual | impor
+  createdAt DateTime @default(now())
 }

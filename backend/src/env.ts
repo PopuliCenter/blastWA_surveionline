@@ -46,6 +46,12 @@ const schema = z.object({
   // Daftar versi: https://developers.facebook.com/docs/graph-api/changelog
   META_GRAPH_VERSION: z.string().default("v25.0"),
 
+  // Berapa hari baris WebhookLog disimpan. Tabel itu memuat SELURUH badan webhook apa
+  // adanya — nomor telepon, nama profil, isi pesan — dan gunanya hanya untuk menelusuri
+  // gangguan beberapa hari terakhir. Menyimpannya selamanya berarti menimbun data pribadi
+  // yang tak dipakai untuk apa pun.
+  WEBHOOK_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+
   // Qontak
   QONTAK_BASE_URL: z.string().default("https://service-chat.qontak.com/api/open/v1"),
   QONTAK_ACCESS_TOKEN: z.string().optional(),

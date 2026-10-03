@@ -74,7 +74,10 @@ export default function Contacts({ readOnly = false }) {
     if (
       !(await confirmDialog({
         title: "Hapus kontak",
-        message: `Hapus ${sel.size} kontak terpilih? Tindakan ini permanen.`,
+        // Menyebut apa yang ikut terbawa. Penghapusan kini merembet ke riwayat chat dan
+        // jawaban survei; kalimat "tindakan ini permanen" saja tidak memberi tahu APA yang
+        // permanen. Pernyataan BERHENTI sengaja disebut karena justru TIDAK ikut terhapus.
+        message: `Hapus ${sel.size} kontak terpilih? Riwayat chat dan jawaban survei mereka ikut terhapus permanen. Pernyataan BERHENTI tetap disimpan agar nomornya tidak terhubungi lagi.`,
         confirmText: "Hapus",
         tone: "danger",
       }))
@@ -229,7 +232,22 @@ export default function Contacts({ readOnly = false }) {
                       variant="danger"
                       size="sm"
                       icon="trash"
-                      onClick={() => run(() => api.deleteContact(c.id))}
+                      title="Hapus kontak"
+                      // Dulu menghapus SEKETIKA tanpa konfirmasi. Sejak penghapusan benar-benar
+                      // menghapus — riwayat chat dan jawaban survei ikut terbawa — satu salah
+                      // klik berarti data penelitian hilang permanen.
+                      onClick={async () => {
+                        if (
+                          !(await confirmDialog({
+                            title: "Hapus kontak",
+                            message: `Hapus ${c.name || c.phone}? Riwayat chat dan jawaban surveinya ikut terhapus permanen.`,
+                            confirmText: "Hapus",
+                            tone: "danger",
+                          }))
+                        )
+                          return;
+                        await run(() => api.deleteContact(c.id));
+                      }}
                     />
                   </div>
                 )}

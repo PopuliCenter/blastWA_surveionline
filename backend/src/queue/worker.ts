@@ -7,6 +7,7 @@ import { loadProviders, getProvider } from "../providers/registry.js";
 import { BLAST_QUEUE, type BlastJob } from "./blastQueue.js";
 import { SHEET_QUEUE, type SheetJob } from "./sheetQueue.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "../lib/errorLog.js";
+import { startRetentionSweeper } from "../lib/retention.js";
 import { decryptJson } from "../lib/crypto.js";
 import { parseServiceAccount } from "../lib/googleAuth.js";
 import { sheetTabName, sheetHeader, sheetRow } from "../lib/sheetRows.js";
@@ -181,6 +182,10 @@ async function main() {
   );
   sheetWorker.on("failed", (job, err) => logError("worker", err, { scope: "sheetWorker", jobId: job?.id }));
   sheetWorker.on("error", (err) => logError("worker", err, { scope: "sheetWorker" }));
+
+  // Pembersihan WebhookLog berkala. Ditaruh di worker, bukan backend, supaya hanya ada
+  // SATU proses yang menjalankannya walau backend kelak diperbanyak.
+  startRetentionSweeper();
 
   console.log("✅ Blast worker berjalan, menunggu job...");
 
