@@ -27,6 +27,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const AutoReply = lazy(() => import("./pages/AutoReply"));
 const AiAgent = lazy(() => import("./pages/AiAgent"));
 const Sheets = lazy(() => import("./pages/Sheets"));
+const Biaya = lazy(() => import("./pages/Biaya"));
 const WhatsAppAccount = lazy(() => import("./pages/WhatsAppAccount"));
 const Webhook = lazy(() => import("./pages/Webhook"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -64,7 +65,7 @@ const NAV = [
       { id: "ai", label: "Agen AI", icon: "ai" },
       { id: "sheets", label: "Google Sheets", icon: "sheet" },
       { id: "leads", label: "Daily Leads", icon: "leads", soon: true },
-      { id: "invoice", label: "Invoice", icon: "invoice", soon: true },
+      { id: "invoice", label: "Biaya & Invoice", icon: "invoice" },
     ],
   },
   {
@@ -560,20 +561,13 @@ export default function PopuliApp() {
       autoreply: <AutoReply />,
       ai: <AiAgent />,
       sheets: <Sheets />,
+      invoice: <Biaya />,
       leads: (
         <ComingSoon
           title="Daily Leads"
           icon="leads"
           desc="Kumpulkan & kelola leads harian dari percakapan WhatsApp secara otomatis."
           features={["Tangkap leads dari chat", "Pipeline & status", "Ekspor ke CRM"]}
-        />
-      ),
-      invoice: (
-        <ComingSoon
-          title="Invoice"
-          icon="invoice"
-          desc="Buat & kirim invoice ke pelanggan lewat WhatsApp."
-          features={["Buat invoice", "Kirim & reminder otomatis", "Status pembayaran"]}
         />
       ),
       webhook: <Webhook />,

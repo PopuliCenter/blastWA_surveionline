@@ -345,3 +345,30 @@ model OptOutNumber {
   reason    String? // pesan berhenti | manual | impor
   createdAt DateTime @default(now())
 }
+
+// Kartu tarif WhatsApp — DIISI MANUAL, dan BERVERSI.
+//
+// Berversi, bukan satu baris yang ditimpa: kalau tarif cuma satu angka lalu diubah bulan
+// depan, seluruh invoice lama ikut berubah nilainya — dan invoice yang sudah diajukan ke
+// klien jadi tidak bisa dipertanggungjawabkan. Tiap set punya tanggal berlaku, dan
+// perhitungan selalu memakai set yang berlaku pada tanggal pesannya dikirim.
+//
+// Diisi manual (bukan diambil dari API Meta) karena Meta mengubah tarif beberapa kali
+// setahun dan formatnya tidak stabil; mengetik ulang empat angka jauh lebih murah daripada
+// menebak-nebak dari sumber yang berubah.
+model TarifWa {
+  id             String   @id @default(cuid())
+  berlakuSejak   DateTime // tarif ini dipakai untuk pesan yang dikirim pada/sesudah tanggal ini
+  mataUang       String   @default("IDR")
+  marketing      Float
+  utility        Float
+  authentication Float
+  service        Float
+  // Jatah pesan service gratis per NOMOR per BULAN kalender, tidak diakumulasi.
+  gratisServicePerBulan Int   @default(1000)
+  pajakPersen           Float @default(0) // mis. 11 untuk PPN 11%
+  catatan               String?
+  createdAt             DateTime @default(now())
+
+  @@index([berlakuSejak])
+}

@@ -86,6 +86,15 @@ export const api = {
   stats: () => request("/api/stats"),
   webhookLogs: (limit = 100) => request(`/api/webhook-logs?limit=${limit}`),
 
+  // Biaya & invoice
+  listTarif: () => request("/api/tarif"),
+  createTarif: (data) => request("/api/tarif", { method: "POST", body: data }),
+  updateTarif: (id, data) => request(`/api/tarif/${id}`, { method: "PUT", body: data }),
+  deleteTarif: (id) => request(`/api/tarif/${id}`, { method: "DELETE" }),
+  biayaSurvei: () => request("/api/biaya/survei"),
+  hitungBiaya: ({ dari, sampai, marginPersen = 0 }) =>
+    request(`/api/biaya?dari=${dari}&sampai=${sampai}&marginPersen=${marginPersen}`),
+
   // Users (superadmin)
   listUsers: () => request("/api/users"),
   createUser: (data) => request("/api/users", { method: "POST", body: data }),

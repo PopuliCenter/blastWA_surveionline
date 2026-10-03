@@ -20,6 +20,7 @@ import { sendingRoutes } from "./routes/sending.js";
 import { templateRoutes } from "./routes/templates.js";
 import { baileysRoutes } from "./routes/baileys.js";
 import { uploadRoutes } from "./routes/uploads.js";
+import { biayaRoutes } from "./routes/biaya.js";
 import { sheetRoutes } from "./routes/sheets.js";
 import fastifyStatic from "@fastify/static";
 import { mkdir } from "node:fs/promises";
@@ -91,6 +92,7 @@ async function main() {
   await app.register(templateRoutes);
   await app.register(baileysRoutes);
   await app.register(uploadRoutes);
+  await app.register(biayaRoutes);
   await app.register(sheetRoutes);
 
   // Baileys: proses backend = pemilik socket. Pasang handler pesan masuk (survei/auto-reply)
