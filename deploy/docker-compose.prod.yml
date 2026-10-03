@@ -86,6 +86,11 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # Diberi nama tetap seperti wa_backend/wa_worker. Tanpa ini Docker menamainya dari
+    # nama proyek (survei-wa-postgres-1 atau deploy-postgres-1, tergantung direktori tempat
+    # `docker compose` dijalankan), sehingga perintah pemeriksaan harus menebak — dan saat
+    # VPS menjalankan beberapa aplikasi, tebakan itu bisa mengenai postgres milik aplikasi lain.
+    container_name: wa_postgres
     environment:
       POSTGRES_USER: populi
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?isi POSTGRES_PASSWORD di deploy/.env}
@@ -101,6 +106,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: wa_redis # alasan sama dengan wa_postgres di atas
     command: ["redis-server", "--appendonly", "yes"] # persistence AOF → job antrian selamat saat restart
     volumes: [redisdata:/data]
     networks: [internal]
