@@ -30,6 +30,8 @@ const inv = {
   produk: "WhatsApp Business Account",
   status: "Paid",
   catatan: "",
+  penerbit: ["Populi Center", "Jalan Contoh 1", "Jakarta Selatan 12790", "Indonesia", "Tax ID (NPWP): 01.234.567.8-901.000"].join("\n"),
+  alamatKlien: ["38 Jalan Mampang Prapatan VIII", "Jakarta Selatan 12790", "DKI Jakarta", "Indonesia"].join("\n"),
 };
 
 const html = () => invoiceHtml({ hasil, inv, dari: "2026-10-01", sampai: "2026-10-03" });
@@ -54,10 +56,24 @@ describe("invoiceHtml", () => {
     expect(h).toContain("Tax (12%): IDR33,190");
   });
 
-  it("memberi tanda bintang dan penjelasan saat pajak tertulis berbeda dari yang dikenakan", () => {
+  it("memberi tanda bintang dan catatan VAT persis seperti invoice Meta", () => {
     const h = html();
     expect(h).toContain("IDR33,190*");
-    expect(h).toContain("tertulis 12% namun dikenakan 11%");
+    expect(h).toContain("* VAT amount will be computed at 11/12 of the sale price as the tax base.");
+  });
+
+  it("mencetak blok alamat penerbit dan penagihan di kaki dokumen", () => {
+    const h = html();
+    expect(h).toContain("Populi Center");
+    expect(h).toContain("Tax ID (NPWP): 01.234.567.8-901.000");
+    expect(h).toContain("38 Jalan Mampang Prapatan VIII");
+    expect(h).toContain("DKI Jakarta");
+  });
+
+  it("tidak lagi mencetak catatan internal tentang asal angka", () => {
+    const h = html();
+    expect(h).not.toContain("catatan pengiriman sistem");
+    expect(h).not.toContain("invoice resmi Meta");
   });
 
   it("tanpa tanda bintang bila kedua angka pajaknya sama", () => {
@@ -69,7 +85,7 @@ describe("invoiceHtml", () => {
     });
     expect(h).toContain("Tax (11%): IDR33,190");
     expect(h).not.toContain("IDR33,190*");
-    expect(h).not.toContain("namun dikenakan");
+    expect(h).not.toContain("VAT amount will be computed");
   });
 
   it("TIDAK memasang logo atau merek Meta — penerbitnya bukan Meta", () => {

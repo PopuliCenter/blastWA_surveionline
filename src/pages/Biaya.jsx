@@ -8,6 +8,7 @@ import {
   Button,
   Badge,
   Input,
+  Textarea,
   Select,
   Modal,
   Notice,
@@ -88,6 +89,8 @@ export default function Biaya() {
     produk: "WhatsApp Business Account",
     status: "Paid",
     catatan: "",
+    penerbit: "",
+    alamatKlien: "",
   });
 
   const hitung = async () => {
@@ -556,6 +559,24 @@ export default function Biaya() {
             onChange={(e) => setInv({ ...inv, catatan: e.target.value })}
             hint="Mis. nama survei atau nomor kontrak."
           />
+          <div style={grid2}>
+            <Textarea
+              label="Penerbit (kiri bawah)"
+              value={inv.penerbit}
+              onChange={(e) => setInv({ ...inv, penerbit: e.target.value })}
+              hint="Satu baris per baris alamat, diakhiri NPWP. Ini lembaga ANDA, bukan Meta."
+              placeholder={["Populi Center", "Jalan ...", "Jakarta ...", "Indonesia", "Tax ID (NPWP): ..."].join("\n")}
+            />
+            <Textarea
+              label="Alamat penagihan (kanan bawah)"
+              value={inv.alamatKlien}
+              onChange={(e) => setInv({ ...inv, alamatKlien: e.target.value })}
+              hint="Alamat klien yang ditagih, satu baris per baris."
+              placeholder={["38 Jalan Mampang Prapatan VIII", "Jakarta Selatan 12790", "DKI Jakarta", "Indonesia"].join(
+                "\n",
+              )}
+            />
+          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
             <Button onClick={cetakInvoice} disabled={!inv.nama.trim()}>
               Cetak / Simpan PDF

@@ -27,6 +27,16 @@ export function invoiceHtml({ hasil, inv, dari, sampai }) {
       : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   })();
 
+  // Alamat ditulis bebas baris per baris oleh pemakai, jadi tiap barisnya di-escape
+  // sendiri lalu digabung — bukan diserahkan mentah ke HTML.
+  const barisAlamat = (teks) =>
+    String(teks ?? "")
+      .split(/\r?\n/)
+      .map((b) => b.trim())
+      .filter(Boolean)
+      .map((b) => `<div>${esc(b)}</div>`)
+      .join("");
+
   const blok = (label, isi) =>
     isi ? `<div class="blk"><div class="lbl">${esc(label)}</div><div class="val">${esc(isi)}</div></div>` : "";
 
@@ -66,7 +76,9 @@ export function invoiceHtml({ hasil, inv, dari, sampai }) {
   .r{text-align:right;white-space:nowrap}
   tr.tot td{font-weight:700;border-top:2px solid #1c1e21;border-bottom:none}
   h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#65676b;margin:0 0 4px}
-  .kaki{font-size:11.5px;color:#65676b;margin-top:26px;border-top:1px solid #dadde1;padding-top:12px}
+  .alamat{display:flex;justify-content:space-between;gap:48px;margin-top:64px;padding-bottom:6px;border-bottom:1px solid #dadde1;color:#8d949e;font-size:13.5px;line-height:1.72}
+  .alamat .kanan{text-align:right}
+  .vat{color:#8d949e;font-size:13.5px;margin-top:18px}
   @media print{body{padding:0}}
 </style></head><body>
 
@@ -113,16 +125,11 @@ ${inv.accountId ? `<div class="sub">Account ID: ${esc(inv.accountId)}</div>` : "
   </tbody>
 </table>
 
-<div class="kaki">
-  ${
-    pajakBeda
-      ? `*Pajak tertulis ${hasil.pajakPersen}% namun dikenakan ${hasil.pajakEfektifPersen}% dari nilai, mengikuti dasar pengenaan pajak yang berlaku dan sesuai invoice Meta.<br>`
-      : ""
-  }
-  Jumlah pesan dihitung dari catatan pengiriman sistem pada periode di atas; pesan yang gagal diantar tidak dihitung.
-  Tarif mengikuti kartu tarif yang berlaku sejak ${esc(new Date(hasil.tarif.berlakuSejak).toLocaleDateString("id-ID", { timeZone: "UTC" }))}.
-  Dokumen yang mengikat untuk biaya pihak ketiga adalah invoice resmi Meta.
+<div class="alamat">
+  <div class="kiri">${barisAlamat(inv.penerbit)}</div>
+  <div class="kanan">${barisAlamat(inv.alamatKlien)}</div>
 </div>
+${pajakBeda ? `<div class="vat">* VAT amount will be computed at ${hasil.pajakEfektifPersen}/${hasil.pajakPersen} of the sale price as the tax base.</div>` : ""}
 <script>window.onload=function(){window.print()}</script>
 </body></html>`;
 }
