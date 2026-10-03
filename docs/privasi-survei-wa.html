@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kebijakan Privasi Survei WhatsApp — Populi Center</title>
+<meta name="description" content="Bagaimana Populi Center menangani data Anda saat mengikuti survei melalui WhatsApp: data yang diterima, tujuan penggunaan, pihak yang memproses, dan hak Anda.">
+</head>
+<body style="margin:0;background:#fbfcfe">
+
+<!-- =====================================================================
+     SALIN MULAI DARI BARIS DI BAWAH INI ...
+     Seluruh gaya terkunci di dalam .pc-privasi, jadi tidak bentrok dengan
+     CSS situs. Font mengikuti variabel situs (--font-serif / --font-sans)
+     bila tersedia, dengan cadangan bila dibuka mandiri.
+     ===================================================================== -->
+<section class="pc-privasi" lang="id">
+<style>
+.pc-privasi{
+  --pc-navy:#12263f;
+  --pc-blue:#1f4b85;
+  --pc-blue-50:#edf3fb;
+  --pc-blue-100:#dfeaf8;
+  --pc-amber:#d89a4a;
+  --pc-text:#1d2a36;
+  --pc-muted:#586674;
+  --pc-line:#e3e8ee;
+  --pc-surface:#ffffff;
+  --pc-bg:#f5f7fa;
+  font-family:var(--font-sans,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif);
+  color:var(--pc-text);
+  font-size:1rem;
+  line-height:1.7;
+  max-width:50rem;
+  margin:0 auto;
+  padding:clamp(1.6rem,3vw,3rem) clamp(1rem,2vw,2rem) 3.5rem;
+  box-sizing:border-box;
+  text-align:left;
+  background:#f8fafc;
+  border:1px solid var(--pc-line);
+  border-radius:18px;
+  box-shadow:0 10px 32px rgba(17,31,49,.04);
+}
+
+.pc-privasi *,.pc-privasi *::before,.pc-privasi *::after{box-sizing:border-box}
+.pc-privasi h1,.pc-privasi h2,.pc-privasi h3{color:var(--pc-navy);line-height:1.2;margin:0;font-weight:700;letter-spacing:-.02em}
+.pc-privasi h1,.pc-privasi h2,.pc-privasi h3{font-family:var(--font-sans,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif)}
+.pc-privasi p{margin:0 0 .9rem}
+.pc-privasi strong{color:var(--pc-navy);font-weight:700}
+.pc-privasi a{color:var(--pc-blue);text-decoration:underline;text-underline-offset:.18em;text-decoration-thickness:1.2px}
+.pc-privasi a:hover{color:var(--pc-navy)}
+.pc-privasi a:focus-visible{outline:2px solid var(--pc-amber);outline-offset:2px;border-radius:2px}
+
+.pc-privasi ul{margin:0 0 1rem;padding-left:1.25rem;list-style:disc outside}
+.pc-privasi li{margin:0 0 .45rem}
+.pc-privasi li::marker{color:var(--pc-blue)}
+
+.pc-privasi .pc-eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--pc-blue);margin:0 0 .7rem}
+.pc-privasi h1{font-size:clamp(2rem,4vw,2.8rem);max-width:16ch}
+.pc-privasi .pc-date{font-size:.85rem;font-weight:600;color:var(--pc-muted);margin:.7rem 0 1rem}
+.pc-privasi .pc-lede{font-size:1.02rem;color:var(--pc-text);margin:0 0 2rem;max-width:40rem}
+
+.pc-privasi .pc-promise{background:#12263f;color:#edf3fb;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1.35rem 1.2rem;margin:0 0 2rem}
+.pc-privasi .pc-promise h2{color:#fff;font-size:clamp(1.3rem,2vw,1.6rem);margin:0 0 .5rem}
+.pc-privasi .pc-promise p{color:#d8e3f4;margin:0 0 1rem}
+.pc-privasi .pc-promise strong{color:#fff}
+.pc-privasi .pc-nolist{list-style:none;margin:0;padding:0;display:grid;gap:.7rem}
+.pc-privasi .pc-nolist li{display:flex;gap:.72rem;align-items:flex-start;margin:0;color:#edf3fb;line-height:1.55;padding:0}
+.pc-privasi .pc-nolist svg{flex-shrink:0;width:1.2rem;height:1.2rem;margin-top:.12rem}
+.pc-privasi .pc-promise .pc-foot{margin:1rem 0 0;padding-top:1rem;border-top:1px solid rgba(255,255,255,.14);color:#d8e3f4;font-size:.94rem}
+
+.pc-privasi .pc-toc{border:1px solid var(--pc-line);border-left:3px solid var(--pc-blue);border-radius:12px;padding:1rem 1.05rem;margin:0 0 1rem;background:#fff}
+.pc-privasi .pc-toc-title{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--pc-muted);margin:0 0 .5rem}
+.pc-privasi .pc-toc ol{margin:0;padding-left:1.2rem;list-style:decimal outside;columns:1;column-gap:2rem}
+.pc-privasi .pc-toc li{margin:0 0 .28rem;break-inside:avoid}
+.pc-privasi .pc-toc a{text-decoration:none;color:var(--pc-text)}
+.pc-privasi .pc-toc a:hover{text-decoration:underline}
+
+.pc-privasi h2.pc-h{font-size:clamp(1.45rem,2.8vw,1.8rem);margin:2.4rem 0 .8rem;display:flex;align-items:center;gap:.7rem;scroll-margin-top:6.5rem}
+.pc-privasi .pc-no{font-family:var(--font-sans,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif);display:inline-flex;align-items:center;justify-content:center;min-width:1.8rem;height:1.8rem;padding:0 .45rem;border-radius:999px;background:var(--pc-blue-50);color:var(--pc-blue);font-size:.78rem;font-weight:800;flex-shrink:0;border:1px solid var(--pc-blue-100)}
+.pc-privasi .pc-muted{color:var(--pc-muted)}
+
+.pc-privasi .pc-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem;margin:0 0 1rem}
+.pc-privasi .pc-card{background:#fff;border:1px solid var(--pc-line);border-radius:12px;padding:.95rem 1rem}
+.pc-privasi .pc-card h3{font-size:1.02rem;margin:0 0 .25rem}
+.pc-privasi .pc-card p{margin:0;font-size:.95rem;color:var(--pc-muted);line-height:1.6}
+.pc-privasi .pc-card.pc-action{border-top:3px solid var(--pc-blue);background:#fbfdff}
+.pc-privasi .pc-card .pc-tag{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pc-muted);margin:0 0 .25rem}
+.pc-privasi .pc-card .pc-tag-fast{color:var(--pc-blue)}
+.pc-privasi .pc-card h3 a{font-family:var(--font-sans,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif);font-variant-numeric:tabular-nums;white-space:nowrap;text-decoration:none;font-size:1.04rem;font-weight:700}
+.pc-privasi .pc-card h3 a:hover{text-decoration:underline}
+.pc-privasi .pc-kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;font-weight:700;background:var(--pc-blue-50);color:var(--pc-navy);border:1px solid var(--pc-blue-100);border-radius:6px;padding:.05rem .38rem;white-space:nowrap}
+
+.pc-privasi .pc-note{background:#edf3fb;border:1px solid var(--pc-blue-100);border-radius:10px;padding:.8rem .9rem;font-size:.95rem;margin:0 0 1rem}
+.pc-privasi .pc-alert{background:#fffaf4;border:1px solid #f0dcc1;border-left:4px solid var(--pc-amber);border-radius:10px;padding:1rem 1.05rem}
+.pc-privasi .pc-alert p:last-child,.pc-privasi .pc-alert ul:last-child{margin-bottom:0}
+
+.pc-privasi .pc-contact{margin-top:2.5rem;padding-top:1.2rem;border-top:1px solid var(--pc-line)}
+.pc-privasi .pc-contact h2{font-size:1.3rem;margin:0 0 .4rem}
+.pc-privasi .pc-contact p{margin:0;color:var(--pc-muted)}
+
+@media (min-width:640px){
+  .pc-privasi{padding:2.6rem 2rem 3.5rem}
+  .pc-privasi .pc-promise{padding:1.5rem 1.5rem 1.3rem}
+  .pc-privasi .pc-toc ol{columns:2}
+  .pc-privasi .pc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media print{
+  .pc-privasi{background:#fff;border:2px solid #12263f;box-shadow:none;border-radius:0}
+  .pc-privasi .pc-promise{background:#fff;color:#000;border:2px solid #12263f}
+  .pc-privasi .pc-promise h2,.pc-privasi .pc-promise p,.pc-privasi .pc-nolist li,.pc-privasi .pc-promise strong{color:#000}
+}
+</style>
+
+  <h1>Kebijakan Privasi Survei WhatsApp</h1>
+  <p class="pc-date">Berlaku sejak 1 Juni 2026</p>
+  <p class="pc-lede">Halaman ini menjelaskan data apa yang kami terima saat Anda mengikuti survei Populi Center melalui WhatsApp, untuk apa data itu dipakai, siapa saja yang ikut memprosesnya, dan bagaimana Anda dapat mengatur data Anda sendiri.</p>
+
+  <div class="pc-promise" role="region" aria-labelledby="pc-janji">
+    <h2 id="pc-janji">Janji kami tentang data Anda</h2>
+    <p>Jawaban Anda hanya dipakai untuk penelitian. Kami <strong>tidak akan</strong>:</p>
+    <ul class="pc-nolist">
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(246,162,58,.16)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#f6a23a" stroke-width="2.2" stroke-linecap="round"/></svg><span>Menjual, menyewakan, atau memperdagangkan data Anda kepada siapa pun.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(246,162,58,.16)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#f6a23a" stroke-width="2.2" stroke-linecap="round"/></svg><span>Memakai nomor WhatsApp Anda untuk promosi, iklan, atau pemasaran.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(246,162,58,.16)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#f6a23a" stroke-width="2.2" stroke-linecap="round"/></svg><span>Mempublikasikan nama, nomor, atau jawaban Anda secara perorangan — hasil survei hanya dilaporkan dalam <strong>angka gabungan</strong>.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(246,162,58,.16)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#f6a23a" stroke-width="2.2" stroke-linecap="round"/></svg><span>Menyerahkan data yang dapat mengenali Anda kepada pihak lain untuk kampanye, pemasaran, atau penagihan.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="rgba(246,162,58,.16)"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="#f6a23a" stroke-width="2.2" stroke-linecap="round"/></svg><span>Meminta kode OTP, PIN, kata sandi, atau data rekening dan kartu Anda.</span></li>
+    </ul>
+    <p class="pc-foot">Keikutsertaan bersifat sukarela. Anda boleh berhenti kapan saja tanpa konsekuensi apa pun.</p>
+  </div>
+
+  <nav class="pc-toc" aria-label="Isi halaman">
+    <p class="pc-toc-title">Isi halaman</p>
+    <ol>
+      <li><a href="#pc-siapa">Siapa kami</a></li>
+      <li><a href="#pc-data">Data yang kami terima</a></li>
+      <li><a href="#pc-tujuan">Untuk apa data dipakai</a></li>
+      <li><a href="#pc-ai">Balasan otomatis dan AI</a></li>
+      <li><a href="#pc-penerima">Siapa yang ikut memproses data</a></li>
+      <li><a href="#pc-keamanan">Penyimpanan dan keamanan</a></li>
+      <li><a href="#pc-hak">Hak Anda dan cara menggunakannya</a></li>
+      <li><a href="#pc-penipuan">Waspadai penipuan</a></li>
+      <li><a href="#pc-perubahan">Perubahan kebijakan</a></li>
+    </ol>
+  </nav>
+
+  <h2 class="pc-h" id="pc-siapa"><span class="pc-no">1</span>Siapa kami</h2>
+  <p>Populi Center menyelenggarakan survei ini dan bertanggung jawab atas data yang dikumpulkan di dalamnya. Kami memakai dua nomor WhatsApp resmi dengan fungsi yang berbeda:</p>
+  <div class="pc-grid">
+    <div class="pc-card pc-action">
+      <p class="pc-tag pc-tag-fast">Admin · respons cepat</p>
+      <h3><a href="https://wa.me/6281292068362">+62 812-9206-8362</a></h3>
+      <p>Untuk pertanyaan, bantuan mengisi survei, dan permintaan terkait data Anda. Nomor ini tidak mengirim formulir survei.</p>
+    </div>
+    <div class="pc-card">
+      <p class="pc-tag">Nomor survei · otomatis</p>
+      <h3><a href="https://wa.me/6285174396505">+62 851-7439-6505</a></h3>
+      <p>Akun WhatsApp Business <strong>Populi Center</strong> yang menjalankan survei: mengirim formulir dan balasan otomatis. Pertanyaan yang perlu dijawab tim kami bisa lambat ditanggapi di nomor ini.</p>
+    </div>
+  </div>
+  <p>Survei ini ditujukan untuk warga yang telah memiliki hak pilih.</p>
+
+  <h2 class="pc-h" id="pc-data"><span class="pc-no">2</span>Data yang kami terima</h2>
+  <ul>
+    <li><strong>Nomor WhatsApp</strong> Anda.</li>
+    <li><strong>Nama profil WhatsApp</strong> — nama yang Anda pasang sendiri di aplikasi, yang terbaca otomatis ketika Anda mengirim pesan kepada kami.</li>
+    <li><strong>Jawaban survei</strong>, termasuk data diri yang Anda isi seperti usia, jenis kelamin, pendidikan, pekerjaan, agama, perkiraan pengeluaran, dan wilayah tempat tinggal, serta pandangan Anda tentang isu publik.</li>
+    <li><strong>Isi pesan</strong> yang Anda kirim ke nomor ini, termasuk pertanyaan di luar survei.</li>
+    <li><strong>Catatan waktu dan pengiriman</strong> — kapan survei dimulai dan diselesaikan, serta status pesan seperti terkirim atau dibaca.</li>
+  </ul>
+  <p class="pc-note">Kami <strong>tidak</strong> dapat mengakses daftar kontak, galeri, lokasi, maupun percakapan Anda dengan orang lain di WhatsApp.</p>
+
+  <h2 class="pc-h" id="pc-tujuan"><span class="pc-no">3</span>Untuk apa data dipakai</h2>
+  <ul>
+    <li>Menjalankan survei: mengirim formulir atau pertanyaan, serta ucapan terima kasih setelah Anda selesai.</li>
+    <li>Menjawab pertanyaan Anda tentang survei.</li>
+    <li>Menjaga mutu data, misalnya memastikan satu orang hanya mengisi satu kali.</li>
+    <li>Menganalisis hasil dan menyusun laporan penelitian dalam bentuk angka gabungan.</li>
+    <li>Mencatat dan menghormati permintaan Anda untuk berhenti menerima pesan.</li>
+  </ul>
+  <p>Kami memproses data atas dasar <strong>persetujuan Anda</strong>, yang Anda berikan dengan membalas pesan kami atau mengetik kata kunci survei. Persetujuan itu dapat Anda tarik kapan saja.</p>
+
+  <h2 class="pc-h" id="pc-ai"><span class="pc-no">4</span>Balasan otomatis dan AI</h2>
+  <p>Sebagian balasan dari nomor ini dikirim secara otomatis. Untuk pertanyaan di luar daftar jawaban baku, kami menggunakan layanan kecerdasan buatan (AI).</p>
+  <ul>
+    <li>Untuk menyusun balasan, beberapa pesan teks terakhir dalam percakapan diproses oleh penyedia layanan AI. <strong>Nomor telepon Anda tidak ikut dikirim.</strong></li>
+    <li>AI hanya dipakai untuk menjawab pertanyaan, tidak untuk menilai atau mengambil keputusan apa pun tentang Anda.</li>
+    <li>Jumlah balasan AI untuk setiap nomor dibatasi per hari. Setelah batas itu tercapai, pertanyaan Anda akan ditangani tim kami. Untuk jawaban lebih cepat, hubungi admin di <a href="https://wa.me/6281292068362">+62 812-9206-8362</a>.</li>
+  </ul>
+
+  <h2 class="pc-h" id="pc-penerima"><span class="pc-no">5</span>Siapa yang ikut memproses data</h2>
+  <div class="pc-grid">
+    <div class="pc-card"><h3>Meta Platforms (WhatsApp)</h3><p>Mengirim dan menerima pesan antara Anda dan kami. Juga tunduk pada Kebijakan Privasi WhatsApp.</p></div>
+    <div class="pc-card"><h3>Penyedia layanan AI</h3><p>Memproses teks pesan untuk balasan otomatis, tanpa nomor telepon Anda.</p></div>
+    <div class="pc-card"><h3>Google (Google Sheets)</h3><p>Menyimpan rekap jawaban yang hanya dapat dibuka tim peneliti yang berwenang.</p></div>
+    <div class="pc-card"><h3>Penyedia server dan jaringan</h3><p>Menjalankan sistem survei dan menyimpan basis datanya.</p></div>
+  </div>
+  <p>Pihak-pihak tersebut memproses data untuk menjalankan layanan bagi kami sesuai perjanjian layanannya. Sebagian di antaranya mengolah data di luar wilayah Indonesia.</p>
+  <p>Hasil survei dapat dipublikasikan atau disampaikan kepada mitra penelitian <strong>hanya dalam bentuk angka gabungan</strong> yang tidak dapat dipakai untuk mengenali perorangan. Data juga dapat diserahkan kepada aparat yang berwenang apabila diwajibkan oleh peraturan perundang-undangan.</p>
+
+  <h2 class="pc-h" id="pc-keamanan"><span class="pc-no">6</span>Penyimpanan dan keamanan</h2>
+  <ul>
+    <li>Akses ke data dibatasi untuk tim yang berwenang, dengan akun dan hak akses yang berbeda-beda.</li>
+    <li>Pengiriman data antarsistem memakai koneksi terenkripsi, dan kunci akses layanan disimpan dalam bentuk terenkripsi.</li>
+    <li><strong>Catatan teknis pengiriman</strong> &mdash; rekaman lalu lintas pesan yang kami pakai untuk menelusuri gangguan &mdash; disimpan paling lama <strong>30 hari</strong>, lalu dihapus otomatis oleh sistem.</li>
+    <li><strong>Jawaban survei</strong> disimpan selama diperlukan untuk menyelesaikan penelitian dan memenuhi kewajiban hukum. Setelah itu data dihapus atau dianonimkan sehingga tidak lagi dapat dikaitkan dengan Anda.</li>
+    <li>Apabila terjadi kegagalan pelindungan data yang berdampak pada Anda, kami akan memberi tahu Anda sesuai ketentuan Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi.</li>
+  </ul>
+
+  <h2 class="pc-h" id="pc-hak"><span class="pc-no">7</span>Hak Anda dan cara menggunakannya</h2>
+  <p>Sesuai Undang-Undang Pelindungan Data Pribadi, Anda berhak mengetahui bagaimana data Anda diproses, mengakses dan memperoleh salinannya, memperbaiki data yang keliru, meminta penghapusan, serta menarik persetujuan.</p>
+  <div class="pc-grid">
+    <div class="pc-card pc-action">
+      <h3>Berhenti menerima pesan</h3>
+      <p>Balas <span class="pc-kbd">BERHENTI</span> ke <strong>nomor survei +62 851-7439-6505</strong>. Nomor Anda langsung dikecualikan dari pengiriman berikutnya. Balas <span class="pc-kbd">MULAI</span> ke nomor yang sama bila ingin menerima pesan lagi.</p>
+    </div>
+    <div class="pc-card pc-action">
+      <h3>Akses, perbaiki, atau hapus data</h3>
+      <p>Hubungi admin di <a href="https://wa.me/6281292068362">+62 812-9206-8362</a>, atau kirim email ke <a href="mailto:info@populicenter.org?subject=Data%20Survei%20WhatsApp">info@populicenter.org</a> dengan subjek <em>Data Survei WhatsApp</em>. Sebutkan nomor WhatsApp yang Anda pakai untuk mengisi survei dan permintaan Anda. Kami dapat meminta Anda mengonfirmasinya dari nomor tersebut.</p>
+      <p>Permintaan penghapusan menghapus nomor Anda, riwayat percakapan WhatsApp, dan jawaban survei yang terkait dengannya dari sistem kami. Angka gabungan yang sudah terlanjur dipublikasikan tidak dapat ditarik kembali, tetapi angka itu memang tidak dapat dipakai untuk mengenali perorangan.</p>
+    </div>
+  </div>
+  <p class="pc-note">Membalas <strong>BERHENTI</strong> dicatat secara permanen, sehingga nomor Anda tetap dikecualikan meskipun daftar kontak kami disusun ulang di kemudian hari. Perintah ini hanya dikenali di nomor survei, dan hanya menghentikan pesan &mdash; jawaban yang sudah Anda kirim tidak ikut terhapus. Untuk penghapusan, hubungi admin atau kirim email.</p>
+
+  <h2 class="pc-h" id="pc-penipuan"><span class="pc-no">8</span>Waspadai penipuan</h2>
+  <div class="pc-alert">
+    <p>Survei resmi Populi Center:</p>
+    <ul>
+      <li>formulirnya <strong>hanya</strong> dikirim dari nomor survei <strong>+62 851-7439-6505</strong>, akun WhatsApp Business bernama <strong>Populi Center</strong>;</li>
+      <li>dilayani admin di <strong>+62 812-9206-8362</strong>, yang hanya menjawab pertanyaan dan <strong>tidak</strong> mengirim formulir survei;</li>
+      <li><strong>tidak pernah</strong> meminta kode OTP, PIN, kata sandi, atau data rekening, baik lewat nomor survei maupun nomor admin;</li>
+      <li><strong>tidak pernah</strong> meminta transfer atau pembayaran dalam bentuk apa pun.</li>
+    </ul>
+    <p>Jika menerima pesan mencurigakan dari nomor lain yang mengatasnamakan kami, jangan ditanggapi. Laporkan ke admin di <a href="https://wa.me/6281292068362">+62 812-9206-8362</a> atau ke <a href="mailto:info@populicenter.org?subject=Laporan%20Pesan%20Mencurigakan">info@populicenter.org</a>.</p>
+  </div>
+
+  <h2 class="pc-h" id="pc-perubahan"><span class="pc-no">9</span>Perubahan kebijakan</h2>
+  <p>Kebijakan ini dapat diperbarui mengikuti perubahan layanan atau peraturan. Tanggal berlaku di bagian atas halaman selalu menunjukkan versi terbaru, dan perubahan penting akan kami sampaikan melalui halaman ini.</p>
+
+  <div class="pc-contact">
+    <h2>Hubungi kami</h2>
+    <p><strong>Populi Center</strong><br>
+      Admin (respons cepat): <a href="https://wa.me/6281292068362">+62 812-9206-8362</a><br>
+      Nomor survei (otomatis): <a href="https://wa.me/6285174396505">+62 851-7439-6505</a><br>
+      <a href="mailto:info@populicenter.org">info@populicenter.org</a> · <a href="https://www.populicenter.org">www.populicenter.org</a></p>
+  </div>
+</section>
+<!-- =====================================================================
+     ... SAMPAI BARIS DI ATAS INI.
+     ===================================================================== -->
+
+</body>
+</html>
