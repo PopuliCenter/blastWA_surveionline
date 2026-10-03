@@ -34,7 +34,17 @@ const schema = z.object({
   // template ber-header media. Hanya untuk itu; pengiriman pesan tak memerlukannya.
   META_APP_ID: z.string().optional(),
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
-  META_GRAPH_VERSION: z.string().default("v21.0"),
+  // Versi Graph API — SATU-SATUNYA sumber default di seluruh aplikasi. Formulir Akun
+  // WhatsApp mengambil nilainya dari sini lewat /api/vendors, bukan menuliskannya sendiri;
+  // dulu keduanya berbeda (backend v21.0, formulir v23.0) sehingga perilaku bergantung
+  // pada apakah pemakai pernah menyimpan form itu atau tidak.
+  //
+  // Meta menerbitkan versi baru tiap beberapa bulan dan tiap versi punya tanggal kedaluwarsa.
+  // v25.0 terbit 18 Februari 2026 dan berlaku sampai 29 Juli 2028 — matang sekaligus
+  // berjangka panjang. Yang terbaru saat ini v26.0 (29 Juli 2026); naik ke sana boleh,
+  // tapi periksa dulu catatan perubahan WhatsApp Cloud API.
+  // Daftar versi: https://developers.facebook.com/docs/graph-api/changelog
+  META_GRAPH_VERSION: z.string().default("v25.0"),
 
   // Qontak
   QONTAK_BASE_URL: z.string().default("https://service-chat.qontak.com/api/open/v1"),

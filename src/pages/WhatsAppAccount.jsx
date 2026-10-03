@@ -32,7 +32,10 @@ export default function WhatsAppAccount() {
     appId: "",
     appSecret: "",
     verifyToken: "",
-    graphVersion: "v23.0",
+    // Dikosongkan di sini dan diisi dari server (defaultGraphVersion). Dulu angkanya
+    // ditulis sendiri di formulir dan BERBEDA dari default backend, sehingga versi yang
+    // benar-benar dipakai bergantung pada apakah formulir ini pernah disimpan.
+    graphVersion: "",
   });
   const [qontak, setQontak] = useState({
     accessToken: "",
@@ -49,6 +52,9 @@ export default function WhatsAppAccount() {
 
   const vendors = data || [];
   const vmeta = vendors.find((v) => v.name === "meta");
+  // Default versi Graph API datang dari server supaya hanya ada satu angka di seluruh
+  // aplikasi. Tanda hubung dipakai selama data belum termuat, bukan angka tebakan.
+  const defaultGraphVersion = vmeta?.defaultGraphVersion || "—";
   const vqontak = vendors.find((v) => v.name === "qontak");
   const vbaileys = vendors.find((v) => v.name === "baileys");
   const activeReady = vendors.find((v) => v.active && v.configured);
@@ -287,7 +293,8 @@ export default function WhatsAppAccount() {
             label="Graph API Version"
             value={meta.graphVersion}
             onChange={(e) => setMeta({ ...meta, graphVersion: e.target.value })}
-            hint="Default v23.0 — biarkan bila ragu."
+            placeholder={defaultGraphVersion}
+            hint={`Default ${defaultGraphVersion} — biarkan kosong bila ragu, server memakai default itu.`}
           />
           <CopyField label="Callback URL (untuk webhook Meta)" value={metaCallback} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>

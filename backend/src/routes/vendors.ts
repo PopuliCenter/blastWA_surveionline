@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { encryptJson, decryptJson } from "../lib/crypto.js";
 import { listProviders, loadProviders, vendorsWithDecryptError } from "../providers/registry.js";
+import { env } from "../env.js";
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
@@ -21,6 +22,10 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
       hasStoredCredentials: Boolean(byVendor.get(p.name)?.credentials),
       // true = kredensial tersimpan tapi tak bisa didekripsi (CREDENTIALS_ENC_KEY berubah) → minta input ulang.
       decryptError: decryptFailed.has(p.name),
+      // Default versi Graph API dari server, supaya formulir tidak perlu menuliskannya
+      // sendiri. Dulu formulir memakai angka berbeda dari backend, sehingga nilai yang
+      // dipakai bergantung pada apakah form itu pernah disimpan.
+      defaultGraphVersion: env.META_GRAPH_VERSION,
     }));
   });
 
