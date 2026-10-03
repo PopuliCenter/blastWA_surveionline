@@ -8,7 +8,12 @@ export type Tarif = {
   authentication: number;
   service: number;
   gratisServicePerBulan: number;
+  // Angka yang DITULIS di invoice.
   pajakPersen: number;
+  // Angka yang benar-benar DIKALIKAN. null/undefined = sama dengan pajakPersen.
+  // Di Indonesia keduanya berbeda: PPN 12% dikenakan atas dasar pengenaan pajak 11/12
+  // nilai, sehingga efektifnya 11% — persis seperti invoice Meta.
+  pajakEfektifPersen?: number | null;
 };
 
 export type TarifBerversi = Tarif & { id: string; berlakuSejak: Date };
@@ -35,6 +40,7 @@ export type RincianBiaya = {
   marginPersen: number;
   margin: number;
   pajakPersen: number;
+  pajakEfektifPersen: number;
   pajak: number;
   total: number;
 };
@@ -89,7 +95,9 @@ export function hitungBiaya(input: {
   tambah("Pesan template — Marketing", jumlah.marketing, tarif.marketing);
   tambah("Pesan template — Utility", jumlah.utility, tarif.utility);
   tambah("Pesan template — Authentication", jumlah.authentication, tarif.authentication);
-  tambah("Pesan service (di luar jatah gratis)", serviceDitagih, tarif.service);
+  // Label menyebut jatah gratis HANYA bila memang ada yang dipotong. Dengan jatah 0,
+  // "di luar jatah gratis" menyesatkan — seolah ada potongan yang tidak pernah terjadi.
+  tambah(serviceGratis > 0 ? "Pesan service (di luar jatah gratis)" : "Pesan service", serviceDitagih, tarif.service);
 
   const subtotal = bulat2(baris.reduce((a, b) => a + b.subtotal, 0));
   // Margin dihitung dari subtotal biaya Meta, dan ditampilkan sebagai baris TERPISAH —
@@ -97,8 +105,17 @@ export function hitungBiaya(input: {
   const margin = bulat2((subtotal * marginPersen) / 100);
   // Pajak dikenakan atas nilai yang ditagihkan ke klien (biaya + margin). Setel 0 bila
   // pajaknya diurus terpisah atau mengikuti invoice Meta apa adanya.
+  //
+  // Yang DITULIS dan yang DIKALIKAN sengaja dipisah. Invoice Meta untuk Indonesia menulis
+  // "Tax (12%)" lalu menagih 11% dari subtotal, karena PPN 12% dikenakan atas dasar
+  // pengenaan pajak 11/12 nilai. Memakai 12% penuh membuat angka pajaknya meleset sekitar
+  // 9% dan invoice ke klien tidak lagi cocok dengan invoice Meta yang direkonsiliasi.
   const pajakPersen = Math.max(0, tarif.pajakPersen || 0);
-  const pajak = bulat2(((subtotal + margin) * pajakPersen) / 100);
+  const pajakEfektifPersen =
+    Number.isFinite(tarif.pajakEfektifPersen) && (tarif.pajakEfektifPersen as number) >= 0
+      ? (tarif.pajakEfektifPersen as number)
+      : pajakPersen;
+  const pajak = bulat2(((subtotal + margin) * pajakEfektifPersen) / 100);
 
   return {
     mataUang: tarif.mataUang,
@@ -110,6 +127,7 @@ export function hitungBiaya(input: {
     marginPersen,
     margin,
     pajakPersen,
+    pajakEfektifPersen,
     pajak,
     total: bulat2(subtotal + margin + pajak),
   };

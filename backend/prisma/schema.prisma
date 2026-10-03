@@ -365,8 +365,17 @@ model TarifWa {
   authentication Float
   service        Float
   // Jatah pesan service gratis per NOMOR per BULAN kalender, tidak diakumulasi.
-  gratisServicePerBulan Int   @default(1000)
-  pajakPersen           Float @default(0) // mis. 11 untuk PPN 11%
+  // Bawaan 0 = SELURUH pesan service ditagih. Jatah ini milik bulan, bukan milik satu
+  // survei; kalau dalam sebulan ada dua-tiga survei, membebankannya ke salah satu survei
+  // bersifat sewenang-wenang. Isi angkanya hanya bila memang ingin dipotong.
+  gratisServicePerBulan Int   @default(0)
+  // pajakPersen = angka yang DITULIS di invoice. pajakEfektifPersen = angka yang benar-benar
+  // DIKALIKAN. Keduanya berbeda di Indonesia: PPN 12% dikenakan atas dasar pengenaan pajak
+  // 11/12 nilai, sehingga efektifnya 11% — persis seperti invoice Meta, yang menulis
+  // "Tax (12%)" lalu menagih 11% dan menandainya dengan tanda bintang. Menyamakan keduanya
+  // membuat invoice ke klien tidak cocok dengan invoice Meta yang direkonsiliasi.
+  pajakPersen           Float @default(0)
+  pajakEfektifPersen    Float? // null = sama dengan pajakPersen
   catatan               String?
   createdAt             DateTime @default(now())
 

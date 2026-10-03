@@ -23,8 +23,10 @@ const tarifInput = z.object({
   utility: z.coerce.number().min(0),
   authentication: z.coerce.number().min(0),
   service: z.coerce.number().min(0),
-  gratisServicePerBulan: z.coerce.number().int().min(0).default(1000),
+  gratisServicePerBulan: z.coerce.number().int().min(0).default(0),
   pajakPersen: z.coerce.number().min(0).max(100).default(0),
+  // Boleh berbeda dari pajakPersen — lihat catatan di lib/biaya.ts.
+  pajakEfektifPersen: z.coerce.number().min(0).max(100).nullable().optional(),
   catatan: z.string().max(1000).optional(),
 });
 
@@ -165,6 +167,10 @@ export async function biayaRoutes(app: FastifyInstance): Promise<void> {
         mataUang: tarif.mataUang,
         gratisServicePerBulan: tarif.gratisServicePerBulan,
         catatan: tarif.catatan,
+        marketing: tarif.marketing,
+        utility: tarif.utility,
+        authentication: tarif.authentication,
+        service: tarif.service,
       },
       servicePerBulan: jumlah.servicePerBulan,
       templateTakDikenal,

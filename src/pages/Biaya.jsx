@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
+import { invoiceHtml } from "../lib/invoiceHtml";
 import {
   PageHeader,
   Card,
@@ -52,8 +53,9 @@ const TARIF_BARU = {
   utility: "",
   authentication: "",
   service: "",
-  gratisServicePerBulan: 1000,
-  pajakPersen: 0,
+  gratisServicePerBulan: 0,
+  pajakPersen: 12,
+  pajakEfektifPersen: 11,
   catatan: "",
 };
 
@@ -73,7 +75,20 @@ export default function Biaya() {
   const [simpanErr, setSimpanErr] = useState("");
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [klien, setKlien] = useState({ nama: "", alamat: "", nomor: "", catatan: "" });
+  // Bidangnya mengikuti invoice Meta supaya dokumen ke klien bisa disandingkan langsung
+  // dengan invoice aslinya. Semuanya diisi manual — nilai seperti Reference Number dan
+  // Transaction ID hanya ada di invoice Meta, tidak di sistem ini.
+  const [inv, setInv] = useState({
+    nama: "",
+    accountId: "",
+    tanggal: hariIni(),
+    metode: "",
+    referensi: "",
+    transaksi: "",
+    produk: "WhatsApp Business Account",
+    status: "Paid",
+    catatan: "",
+  });
 
   const hitung = async () => {
     setErr("");
@@ -111,6 +126,10 @@ export default function Biaya() {
         service: Number(d.service),
         gratisServicePerBulan: Number(d.gratisServicePerBulan),
         pajakPersen: Number(d.pajakPersen),
+        pajakEfektifPersen:
+          d.pajakEfektifPersen === "" || d.pajakEfektifPersen === null || d.pajakEfektifPersen === undefined
+            ? null
+            : Number(d.pajakEfektifPersen),
         catatan: d.catatan || undefined,
       };
       if (d.id) await api.updateTarif(d.id, body);
@@ -144,7 +163,7 @@ export default function Biaya() {
       setErr("Jendela cetak diblokir browser. Izinkan popup untuk situs ini lalu coba lagi.");
       return;
     }
-    w.document.write(invoiceHtml({ hasil, klien, dari, sampai }));
+    w.document.write(invoiceHtml({ hasil, inv, dari, sampai }));
     w.document.close();
     w.focus();
   };
@@ -293,7 +312,14 @@ export default function Biaya() {
           <div style={{ marginTop: 14 }}>
             {barisTotal("Subtotal biaya Meta", uang(hasil.subtotal, mu))}
             {hasil.marginPersen > 0 ? barisTotal(`Margin ${hasil.marginPersen}%`, uang(hasil.margin, mu)) : null}
-            {hasil.pajakPersen > 0 ? barisTotal(`Pajak ${hasil.pajakPersen}%`, uang(hasil.pajak, mu)) : null}
+            {hasil.pajakPersen > 0
+              ? barisTotal(
+                  hasil.pajakEfektifPersen !== hasil.pajakPersen
+                    ? `Pajak ${hasil.pajakPersen}% (dikenakan ${hasil.pajakEfektifPersen}%)`
+                    : `Pajak ${hasil.pajakPersen}%`,
+                  uang(hasil.pajak, mu),
+                )
+              : null}
             {barisTotal("Total", uang(hasil.total, mu), true)}
           </div>
 
@@ -308,10 +334,11 @@ export default function Biaya() {
             }}
           >
             <div>
-              Pesan <strong>service</strong> terkirim {hasil.serviceTerkirim.toLocaleString("id-ID")} — {" "}
-              {hasil.serviceGratis.toLocaleString("id-ID")} gratis, {hasil.serviceDitagih.toLocaleString("id-ID")}{" "}
-              ditagih. Jatah gratis {hasil.tarif.gratisServicePerBulan.toLocaleString("id-ID")} per bulan kalender,
-              tidak diakumulasi.
+              Pesan <strong>service</strong> terkirim {hasil.serviceTerkirim.toLocaleString("id-ID")},{" "}
+              {hasil.serviceDitagih.toLocaleString("id-ID")} ditagih
+              {hasil.serviceGratis > 0
+                ? ` — ${hasil.serviceGratis.toLocaleString("id-ID")} dipotong jatah gratis ${hasil.tarif.gratisServicePerBulan.toLocaleString("id-ID")} per bulan kalender.`
+                : "."}
             </div>
             <div style={{ marginTop: 6 }}>
               Memakai kartu tarif yang berlaku sejak {tanggalSaja(hasil.tarif.berlakuSejak)}. Pesan yang gagal diantar
@@ -340,13 +367,22 @@ export default function Biaya() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <strong style={{ fontSize: 13.5 }}>Berlaku sejak {tanggalSaja(t.berlakuSejak)}</strong>
                   <Badge>{t.mataUang}</Badge>
-                  {t.pajakPersen > 0 ? <Badge tone="yellow">Pajak {t.pajakPersen}%</Badge> : null}
+                  {t.pajakPersen > 0 ? (
+                    <Badge tone="yellow">
+                      Pajak {t.pajakPersen}%
+                      {t.pajakEfektifPersen != null && t.pajakEfektifPersen !== t.pajakPersen
+                        ? ` → ${t.pajakEfektifPersen}%`
+                        : ""}
+                    </Badge>
+                  ) : null}
                 </div>
                 <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 6 }}>
                   Marketing {uangTarif(t.marketing, t.mataUang)} · Utility {uangTarif(t.utility, t.mataUang)} ·{" "}
                   Authentication {uangTarif(t.authentication, t.mataUang)} · Service{" "}
-                  {uangTarif(t.service, t.mataUang)} ·{" "}
-                  {t.gratisServicePerBulan.toLocaleString("id-ID")} service gratis/bulan
+                  {uangTarif(t.service, t.mataUang)}
+                  {t.gratisServicePerBulan > 0
+                    ? ` · ${t.gratisServicePerBulan.toLocaleString("id-ID")} service gratis/bulan`
+                    : " · tanpa potongan jatah gratis"}
                 </div>
                 {t.catatan ? (
                   <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 6 }}>{t.catatan}</div>
@@ -428,15 +464,23 @@ export default function Biaya() {
               type="number"
               value={tarifModal.gratisServicePerBulan}
               onChange={(e) => setTarifModal({ ...tarifModal, gratisServicePerBulan: e.target.value })}
-              hint="Per nomor, tidak diakumulasi."
+              hint="0 = semua pesan service ditagih. Jatah ini milik bulan, bukan satu survei."
             />
             <Input
-              label="Pajak (%)"
+              label="Pajak ditulis (%)"
               type="number"
               step="any"
               value={tarifModal.pajakPersen}
               onChange={(e) => setTarifModal({ ...tarifModal, pajakPersen: e.target.value })}
-              hint="Isi 0 bila pajak diurus terpisah."
+              hint="Angka yang tercetak di invoice. Isi 0 bila pajak diurus terpisah."
+            />
+            <Input
+              label="Pajak dikenakan (%)"
+              type="number"
+              step="any"
+              value={tarifModal.pajakEfektifPersen ?? ""}
+              onChange={(e) => setTarifModal({ ...tarifModal, pajakEfektifPersen: e.target.value })}
+              hint="Angka yang benar-benar dikalikan. PPN 12% dikenakan 11% — invoice Meta pun begitu. Kosongkan bila sama."
             />
           </div>
           <Input
@@ -455,42 +499,65 @@ export default function Biaya() {
       ) : null}
 
       {invoiceOpen ? (
-        <Modal
-          title="Buat invoice"
-          onClose={() => setInvoiceOpen(false)}
-          dirty
-          width={620}
-        >
+        <Modal title="Buat invoice" onClose={() => setInvoiceOpen(false)} dirty width={660}>
+          <Notice kind="info">
+            Bidang di bawah mengikuti invoice Meta supaya dokumen ke klien bisa disandingkan langsung dengan invoice
+            aslinya. Reference Number dan Transaction ID hanya ada di invoice Meta — salin dari sana.
+          </Notice>
           <div style={grid2}>
             <Input
-              label="Nama klien"
-              value={klien.nama}
-              onChange={(e) => setKlien({ ...klien, nama: e.target.value })}
+              label="Nama (tertulis di judul invoice)"
+              value={inv.nama}
+              onChange={(e) => setInv({ ...inv, nama: e.target.value })}
+              hint="Mis. nama klien atau lembaga."
             />
             <Input
-              label="Nomor invoice"
-              value={klien.nomor}
-              onChange={(e) => setKlien({ ...klien, nomor: e.target.value })}
-              hint="Mis. INV/2026/10/001"
+              label="Account ID"
+              value={inv.accountId}
+              onChange={(e) => setInv({ ...inv, accountId: e.target.value })}
+            />
+            <Input
+              label="Transaction Date"
+              type="date"
+              value={inv.tanggal}
+              onChange={(e) => setInv({ ...inv, tanggal: e.target.value })}
+            />
+            <Input
+              label="Status"
+              value={inv.status}
+              onChange={(e) => setInv({ ...inv, status: e.target.value })}
+              hint="Mis. Paid."
+            />
+            <Input
+              label="Payment method"
+              value={inv.metode}
+              onChange={(e) => setInv({ ...inv, metode: e.target.value })}
+              hint="Mis. Visa ···· 3809."
+            />
+            <Input
+              label="Reference Number"
+              value={inv.referensi}
+              onChange={(e) => setInv({ ...inv, referensi: e.target.value })}
+            />
+            <Input
+              label="Transaction ID"
+              value={inv.transaksi}
+              onChange={(e) => setInv({ ...inv, transaksi: e.target.value })}
+            />
+            <Input
+              label="Product Type"
+              value={inv.produk}
+              onChange={(e) => setInv({ ...inv, produk: e.target.value })}
             />
           </div>
           <Input
-            label="Alamat klien (opsional)"
-            value={klien.alamat}
-            onChange={(e) => setKlien({ ...klien, alamat: e.target.value })}
-          />
-          <Input
             label="Catatan (opsional)"
-            value={klien.catatan}
-            onChange={(e) => setKlien({ ...klien, catatan: e.target.value })}
+            value={inv.catatan}
+            onChange={(e) => setInv({ ...inv, catatan: e.target.value })}
             hint="Mis. nama survei atau nomor kontrak."
           />
-          <Notice kind="info">
-            Invoice terbuka di jendela baru dan langsung bisa dicetak atau disimpan sebagai PDF lewat dialog cetak
-            browser.
-          </Notice>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-            <Button onClick={cetakInvoice} disabled={!klien.nama.trim()}>
+            <Button onClick={cetakInvoice} disabled={!inv.nama.trim()}>
               Cetak / Simpan PDF
             </Button>
             <Button variant="secondary" onClick={() => setInvoiceOpen(false)}>
@@ -501,93 +568,4 @@ export default function Biaya() {
       ) : null}
     </div>
   );
-}
-
-// Dokumen invoice dibuat sebagai HTML mandiri di jendela baru, bukan dengan CSS cetak di
-// aplikasi: dialog cetak browser akan membawa seluruh tata letak dashboard kalau dicetak
-// dari halaman ini, dan melawannya dengan @media print jauh lebih rapuh.
-function invoiceHtml({ hasil, klien, dari, sampai }) {
-  const mu = hasil.mataUang;
-  const n = (v) =>
-    `${mu === "IDR" ? "Rp " : `${mu} `}${Number(v || 0).toLocaleString("id-ID", {
-      minimumFractionDigits: mu === "IDR" ? 0 : 2,
-      maximumFractionDigits: mu === "IDR" ? 0 : 2,
-    })}`;
-  // Tarif satuan selalu 2 desimal — lihat catatan pada uangTarif di atas.
-  const nt = (v) =>
-    `${mu === "IDR" ? "Rp " : `${mu} `}${Number(v || 0).toLocaleString("id-ID", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 4,
-    })}`;
-  const esc = (s) =>
-    String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const tgl = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
-
-  const baris = hasil.baris
-    .map(
-      (b) => `<tr>
-        <td>${esc(b.label)}</td>
-        <td class="r">${b.jumlah.toLocaleString("id-ID")}</td>
-        <td class="r">${nt(b.tarif)}</td>
-        <td class="r">${n(b.subtotal)}</td>
-      </tr>`,
-    )
-    .join("");
-
-  const total = (label, nilai, tebal) =>
-    `<tr class="${tebal ? "total" : ""}"><td colspan="3" class="r">${esc(label)}</td><td class="r">${n(nilai)}</td></tr>`;
-
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8">
-<title>Invoice ${esc(klien.nomor || "")} — ${esc(klien.nama)}</title>
-<style>
-  *{box-sizing:border-box} body{font:13px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;margin:0;padding:40px;max-width:820px}
-  h1{font-size:22px;margin:0 0 2px} .muted{color:#64748b}
-  .head{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:26px}
-  .box{border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin:0 0 18px}
-  table{width:100%;border-collapse:collapse;margin:0 0 18px}
-  th,td{padding:9px 8px;border-bottom:1px solid #e2e8f0;text-align:left}
-  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
-  .r{text-align:right;white-space:nowrap}
-  tr.total td{font-weight:700;font-size:15px;border-top:2px solid #0f172a;border-bottom:none}
-  .note{font-size:11.5px;color:#64748b;margin-top:22px;border-top:1px solid #e2e8f0;padding-top:12px}
-  @media print{body{padding:0}}
-</style></head><body>
-<div class="head">
-  <div><h1>Invoice</h1><div class="muted">${esc(klien.nomor || "")}</div></div>
-  <div class="muted" style="text-align:right">
-    <div>Tanggal: ${esc(tgl)}</div>
-    <div>Periode: ${esc(dari)} s.d. ${esc(sampai)}</div>
-  </div>
-</div>
-
-<div class="box">
-  <div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:.05em">Ditagihkan kepada</div>
-  <div style="font-weight:700;margin-top:4px">${esc(klien.nama)}</div>
-  ${klien.alamat ? `<div class="muted">${esc(klien.alamat)}</div>` : ""}
-</div>
-
-<table>
-  <thead><tr><th>Komponen</th><th class="r">Jumlah</th><th class="r">Tarif</th><th class="r">Subtotal</th></tr></thead>
-  <tbody>
-    ${baris || `<tr><td colspan="4" class="muted">Tidak ada komponen berbayar pada periode ini.</td></tr>`}
-    ${total("Subtotal biaya Meta", hasil.subtotal)}
-    ${hasil.marginPersen > 0 ? total(`Margin ${hasil.marginPersen}%`, hasil.margin) : ""}
-    ${hasil.pajakPersen > 0 ? total(`Pajak ${hasil.pajakPersen}%`, hasil.pajak) : ""}
-    ${total("Total", hasil.total, true)}
-  </tbody>
-</table>
-
-${klien.catatan ? `<div class="box">${esc(klien.catatan)}</div>` : ""}
-
-<div class="note">
-  Pesan service terkirim ${hasil.serviceTerkirim.toLocaleString("id-ID")}, di antaranya
-  ${hasil.serviceGratis.toLocaleString("id-ID")} berada dalam jatah gratis
-  (${hasil.tarif.gratisServicePerBulan.toLocaleString("id-ID")} per bulan kalender, tidak diakumulasi) dan
-  ${hasil.serviceDitagih.toLocaleString("id-ID")} ditagih. Tarif mengikuti kartu tarif yang berlaku sejak
-  ${esc(new Date(hasil.tarif.berlakuSejak).toLocaleDateString("id-ID", { timeZone: "UTC" }))}. Pesan yang gagal diantar tidak dihitung.
-  Angka pada dokumen ini dihitung dari catatan pengiriman sistem; dokumen yang mengikat untuk biaya pihak ketiga
-  adalah invoice resmi Meta.
-</div>
-<script>window.onload=function(){window.print()}</script>
-</body></html>`;
 }

@@ -68,6 +68,7 @@ describe("hitungBiaya", () => {
     expect(r.serviceTerkirim).toBe(6000);
     expect(r.serviceGratis).toBe(1000);
     expect(r.serviceDitagih).toBe(5000);
+    expect(r.baris[1]!.label).toBe("Pesan service (di luar jatah gratis)");
     expect(r.baris[1]!.subtotal).toBe(1783250);
     expect(r.subtotal).toBe(2486846);
     expect(r.total).toBe(2486846);
@@ -94,6 +95,53 @@ describe("hitungBiaya", () => {
     expect(r.margin).toBe(11726.6); // 20% dari 58.633
     expect(r.pajak).toBe(7739.56); // 11% dari 70.359,60
     expect(r.total).toBe(78099.16); // 58.633 + 11.726,60 + 7.739,56
+  });
+
+  it("memakai tarif pajak EFEKTIF, bukan yang tertulis di label", () => {
+    // Invoice Meta untuk Indonesia menulis "Tax (12%)" lalu menagih 11% dari subtotal,
+    // karena PPN 12% dikenakan atas dasar pengenaan pajak 11/12 nilai. Memakai 12% penuh
+    // membuat invoice ke klien tidak cocok dengan invoice Meta yang direkonsiliasi.
+    const r = hitungBiaya({
+      jumlah: { marketing: 0, utility: 0, authentication: 0, servicePerBulan: {} },
+      tarif: { ...TARIF, pajakPersen: 12, pajakEfektifPersen: 11 },
+    });
+    expect(r.pajakPersen).toBe(12); // yang ditulis
+    expect(r.pajakEfektifPersen).toBe(11); // yang dikalikan
+  });
+
+  it("mereproduksi angka invoice Meta yang sebenarnya", () => {
+    // Subtotal IDR 301.726 → Tax (12%) IDR 33.190 → Total IDR 334.916.
+    // 33.190 / 301.726 = tepat 11,0%.
+    const r = hitungBiaya({
+      jumlah: { marketing: 1, utility: 0, authentication: 0, servicePerBulan: {} },
+      tarif: { ...TARIF, marketing: 301726, pajakPersen: 12, pajakEfektifPersen: 11 },
+    });
+    expect(r.subtotal).toBe(301726);
+    expect(Math.round(r.pajak)).toBe(33190);
+    expect(Math.round(r.total)).toBe(334916);
+  });
+
+  it("tanpa pajakEfektifPersen, angka yang ditulis juga yang dikalikan", () => {
+    const r = hitungBiaya({
+      jumlah: { marketing: 100, utility: 0, authentication: 0, servicePerBulan: {} },
+      tarif: { ...TARIF, pajakPersen: 11 },
+    });
+    expect(r.pajakEfektifPersen).toBe(11);
+    expect(r.pajak).toBe(6449.63); // 11% dari 58.633
+  });
+
+  it("jatah gratis 0 berarti SELURUH pesan service ditagih", () => {
+    // Jatah itu milik bulan, bukan milik satu survei; bila sebulan ada dua-tiga survei,
+    // membebankannya ke salah satunya sewenang-wenang.
+    const r = hitungBiaya({
+      jumlah: { marketing: 0, utility: 0, authentication: 0, servicePerBulan: { "2026-10": 6000 } },
+      tarif: { ...TARIF, gratisServicePerBulan: 0 },
+    });
+    expect(r.serviceGratis).toBe(0);
+    expect(r.serviceDitagih).toBe(6000);
+    expect(r.subtotal).toBe(2139900); // 6.000 × 356,65
+    // Label tidak menyebut jatah gratis kalau tak ada yang dipotong.
+    expect(r.baris[0]!.label).toBe("Pesan service");
   });
 
   it("tidak membuat baris untuk kategori yang tak terpakai", () => {
