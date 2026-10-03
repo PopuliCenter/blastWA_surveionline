@@ -8,6 +8,7 @@ export const TYPE_LABEL = {
   date: "Tanggal",
   consent: "Persetujuan",
   image: "Gambar",
+  wilayah: "Wilayah",
 };
 export const QTYPE_OPTIONS = [
   { value: "text", label: "Teks bebas" },
@@ -19,11 +20,15 @@ export const QTYPE_OPTIONS = [
   { value: "date", label: "Tanggal (pemilih tanggal di Flow)" },
   { value: "consent", label: "Persetujuan / informed consent" },
   { value: "image", label: "Gambar / foto" },
+  { value: "wilayah", label: "Wilayah (provinsi → kabupaten/kota)" },
 ];
 // Tipe yang memakai daftar pilihan (choices).
 export const HAS_CHOICES = (t) => t === "choice" || t === "multichoice";
 
 export function qSummary(q) {
+  // Daftarnya bawaan dari kode resmi Kepmendagri, jadi pembuat survei tak perlu (dan tak
+  // bisa) mengisinya sendiri — disebutkan agar jelas tanpa harus membuka pratinjau.
+  if (q.type === "wilayah") return "38 provinsi, 514 kab/kota";
   if (q.type === "rating") return `skala ${q.options?.min ?? 1}-${q.options?.max ?? 5}`;
   if (HAS_CHOICES(q.type))
     return `${(q.options?.choices || []).length} pilihan${q.type === "multichoice" ? " (multi)" : ""}`;

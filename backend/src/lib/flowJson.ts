@@ -9,6 +9,14 @@
 // dideklarasikan di `data` layar berikutnya, sehingga payload complete memuat SEMUA jawaban.
 // Layar pertama tetap ber-id "SURVEY" (dipakai provider.sendFlow → flow_action_payload).
 
+import {
+  PROVINSI,
+  kabKotaDari,
+  fieldProvinsi,
+  fieldKabKota,
+  readWilayahAnswer,
+} from "./wilayah.js";
+
 export type FlowQuestion = { id: string; text: string; type: string; required?: boolean; options?: any };
 export type FlowSurvey = {
   title?: string;
@@ -23,6 +31,17 @@ export const DEFAULT_PER_SCREEN = 4;
 // Nama field di flow untuk satu pertanyaan (charset aman: huruf/angka/underscore).
 export function fieldName(qid: string): string {
   return "q_" + String(qid).replace(/[^a-zA-Z0-9_]/g, "");
+}
+
+// Semua field yang dihasilkan satu pertanyaan. Hampir semua tipe memakai satu field,
+// KECUALI "wilayah": provinsi plus satu dropdown kabupaten/kota per provinsi (hanya satu
+// yang pernah dirender, sisanya berada di dalam If yang bernilai salah). Dipakai untuk
+// mendeklarasikan `data` dan menyusun `payload` antar layar, yang dulu mengasumsikan
+// satu pertanyaan = satu field.
+export function fieldNamesOf(q: FlowQuestion): string[] {
+  const base = fieldName(q.id);
+  if (q.type !== "wilayah") return [base];
+  return [fieldProvinsi(base), ...PROVINSI.map((p) => fieldKabKota(base, p.kode))];
 }
 
 function ratingValues(q: FlowQuestion): number[] {
@@ -41,13 +60,17 @@ function choiceList(q: FlowQuestion): string[] {
 
 // Pertanyaan yang punya kontrol input di flow (image tidak didukung di flow → dilewati).
 export function flowSupported(q: FlowQuestion): boolean {
-  return ["text", "number", "rating", "choice", "boolean", "multichoice", "date", "consent"].includes(q.type);
+  return ["text", "number", "rating", "choice", "boolean", "multichoice", "date", "consent", "wilayah"].includes(
+    q.type,
+  );
 }
 
 // Tipe data field saat diteruskan antar layar (dideklarasikan di `data` tiap layar).
-function fieldDataType(q: FlowQuestion): Record<string, unknown> {
+// `field` dibutuhkan karena satu pertanyaan bisa menghasilkan beberapa field (wilayah).
+function fieldDataType(q: FlowQuestion, _field?: string): Record<string, unknown> {
   if (q.type === "multichoice") return { type: "array", items: { type: "string" }, __example__: [] };
   if (q.type === "consent") return { type: "boolean", __example__: false };
+  // wilayah: provinsi maupun kabupaten/kota sama-sama id berupa string kode.
   return { type: "string", __example__: "" };
 }
 
@@ -216,6 +239,40 @@ function questionChildren(q: FlowQuestion, number: number): any[] {
     const opts = choiceList(q);
     const ds = opts.map((c, idx) => ({ id: String(idx), title: c.slice(0, 80) }));
     out.push({ type: opts.length > 3 ? "Dropdown" : "RadioButtonsGroup", name, label: "Pilih", "data-source": ds, required });
+  } else if (q.type === "wilayah") {
+    // Dropdown bertingkat TANPA Flow Endpoint. Pola resmi Meta untuk daftar bergantung
+    // adalah data_exchange — endpoint terenkripsi yang dipanggil Flow di tengah jalan —
+    // dan aplikasi ini sengaja memakai flow statis. Jadi dipakai primitif yang sudah
+    // terbukti di produksi pada percabangan survei: komponen dibungkus If, dan komponen
+    // di dalam If yang salah TIDAK dirender sehingga `required`-nya pun tidak ikut menagih.
+    //
+    // Hasilnya 38 dropdown kabupaten/kota yang saling eksklusif — satu per provinsi, dengan
+    // daftar maksimum 38 entri (Jawa Timur). Memuat 514 kabupaten/kota dalam satu dropdown
+    // bukan hanya melanggar batas praktis, tapi juga tak mungkin dipakai responden.
+    out.push({
+      type: "Dropdown",
+      name: fieldProvinsi(name),
+      label: "Provinsi",
+      "data-source": PROVINSI.map((p) => ({ id: p.kode, title: p.nama.slice(0, 80) })),
+      required,
+    });
+    for (const p of PROVINSI) {
+      const ds = kabKotaDari(p.kode).map((k) => ({ id: k.kode, title: k.nama.slice(0, 80) }));
+      if (!ds.length) continue;
+      out.push({
+        type: "If",
+        condition: "${form." + fieldProvinsi(name) + "} == '" + p.kode + "'",
+        then: [
+          {
+            type: "Dropdown",
+            name: fieldKabKota(name, p.kode),
+            label: "Kabupaten/Kota",
+            "data-source": ds,
+            required,
+          },
+        ],
+      });
+    }
   }
   return out;
 }
@@ -264,11 +321,11 @@ export function buildSurveyFlow(survey: FlowSurvey): object {
     // Jawaban layar-layar sebelumnya: dideklarasikan di `data` & diteruskan ke payload.
     const prev = screensQs.slice(0, i).flat();
     const data: Record<string, unknown> = {};
-    for (const q of prev) data[fieldName(q.id)] = fieldDataType(q);
+    for (const q of prev) for (const f of fieldNamesOf(q)) data[f] = fieldDataType(q, f);
 
     const payload: Record<string, string> = {};
-    for (const q of prev) payload[fieldName(q.id)] = "${data." + fieldName(q.id) + "}";
-    for (const q of qs) payload[fieldName(q.id)] = "${form." + fieldName(q.id) + "}";
+    for (const q of prev) for (const f of fieldNamesOf(q)) payload[f] = "${data." + f + "}";
+    for (const q of qs) for (const f of fieldNamesOf(q)) payload[f] = "${form." + f + "}";
 
     children.push({
       type: "Footer",
@@ -344,7 +401,10 @@ export function flowOutOfSync(response: Record<string, unknown>, questions: Flow
   const keys = answerKeys(response);
   if (!keys.length) return false;
   const supported = questions.filter(flowSupported);
-  return !supported.some((q) => Object.prototype.hasOwnProperty.call(response, fieldName(q.id)));
+  // Memeriksa SEMUA field milik tiap pertanyaan, bukan hanya q_<id>. Survei yang pertanyaan
+  // wilayahnya tidak memakai nama field itu akan selalu tampak tak sinkron bila diperiksa
+  // dengan nama dasarnya saja.
+  return !supported.some((q) => fieldNamesOf(q).some((f) => Object.prototype.hasOwnProperty.call(response, f)));
 }
 
 // Petakan response_json flow balik ke jawaban per pertanyaan.
@@ -357,6 +417,12 @@ export function parseFlowAnswers(
   // Jalur normal: cocokkan berdasarkan nama field (q_<id pertanyaan>).
   const byId: { questionId: string; value: string }[] = [];
   for (const q of supported) {
+    if (q.type === "wilayah") {
+      // Wilayah memakai beberapa field sekaligus, jadi dibaca dari seluruh response.
+      const v = readWilayahAnswer(fieldName(q.id), response);
+      if (v) byId.push({ questionId: q.id, value: v });
+      continue;
+    }
     const a = toAnswer(q, response[fieldName(q.id)]);
     if (a) byId.push(a);
   }
@@ -367,6 +433,10 @@ export function parseFlowAnswers(
   // bila AMAN: jumlah field sama persis DAN tiap nilai masuk akal untuk tipe pertanyaannya.
   // Kalau ragu → kembalikan kosong. Data salah-pasang jauh lebih berbahaya daripada data kosong.
   const keys = answerKeys(response);
+  // Penyelamatan by-urutan mengandalkan "satu pertanyaan = satu field". Pertanyaan wilayah
+  // memecah itu (39 field untuk satu pertanyaan), sehingga pencocokan posisi pasti meleset
+  // dan jawaban akan terpasang ke soal yang salah. Lebih baik kosong daripada salah-pasang.
+  if (supported.some((q) => q.type === "wilayah")) return byId;
   if (!keys.length || keys.length !== supported.length) return byId;
   if (!keys.every((k, i) => plausible(supported[i]!, response[k]))) return byId;
 

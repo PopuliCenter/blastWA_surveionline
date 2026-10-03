@@ -153,6 +153,10 @@ export function inputPlaceholder(q) {
   if (q.type === "choice") return "Nomor atau teks pilihan…";
   if (q.type === "multichoice") return "Nomor pilihan, mis. 1,3…";
   if (q.type === "image") return "Nama file gambar (simulasi)…";
+  // Pratinjau ini mensimulasikan mode chat dan sengaja TIDAK memuat 514 kab/kota ke bundel
+  // frontend. Pencocokan ke daftar resmi Kepmendagri dilakukan di server saat survei jalan;
+  // di Flow, pertanyaan ini muncul sebagai dua dropdown bertingkat, bukan ketikan.
+  if (q.type === "wilayah") return "Nama kabupaten/kota, mis. Sleman…";
   if (!q.required) return "Jawaban atau ketik lewati…";
   return "Ketik jawaban…";
 }

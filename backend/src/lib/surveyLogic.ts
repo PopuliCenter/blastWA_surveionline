@@ -1,6 +1,7 @@
 // Logika MURNI mesin survei (tanpa efek samping: tanpa DB, tanpa jaringan, tanpa env).
 // Dipisah dari services/surveyEngine.ts agar mudah diuji unit. Lihat surveyLogic.test.ts.
 import { normalizeMessage } from "./optOut.js";
+import { cariWilayah } from "./wilayah.js";
 import type { NormalizedInbound } from "../providers/types.js";
 
 export type QLite = { id: string; text: string; type: string; required: boolean; options: any };
@@ -235,6 +236,28 @@ export function validateAnswer(
       }
       return { ok: true, value: picked.join(", ") };
     }
+    case "wilayah": {
+      // Mode chat: responden MENGETIK wilayahnya (di Flow ia berupa dropdown bertingkat).
+      // Dicocokkan ke daftar resmi Kepmendagri agar hasilnya sepadan dengan tabel pembobot,
+      // bukan sekadar teks bebas yang nanti harus dirapikan manual.
+      if (!text) return { ok: false, error: "Mohon tulis nama kabupaten/kota Anda." };
+      const r = cariWilayah(text);
+      if (r.ok) return { ok: true, value: r.value };
+      // Ambigu → tawarkan kandidatnya. Menebak di antara wilayah bernama mirip akan
+      // merusak data tanpa meninggalkan jejak.
+      if (r.kandidat.length)
+        return {
+          ok: false,
+          error: `Ada beberapa wilayah dengan nama itu. Mohon tulis lebih lengkap:\n${r.kandidat
+            .slice(0, 8)
+            .map((k) => `• ${k}`)
+            .join("\n")}`,
+        };
+      return {
+        ok: false,
+        error: "Wilayah belum dikenali. Mohon tulis nama kabupaten/kota, mis. Sleman atau Kota Bandung.",
+      };
+    }
     case "consent":
     case "boolean": {
       const t = text.toLowerCase();
@@ -294,6 +317,9 @@ export function formatQuestion(q: QLite): string {
       break;
     case "date":
       hint = "\n\nBalas tanggal, format DD-MM-YYYY (mis. 17-08-2026).";
+      break;
+    case "wilayah":
+      hint = "\n\nTulis nama kabupaten/kota Anda (mis. Sleman atau Kota Bandung).";
       break;
     case "image":
       hint = "\n\nKirim foto/gambar.";

@@ -81,7 +81,10 @@ model Question {
   id       String  @id @default(cuid())
   surveyId String
   survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  type     String  @default("text") // text | rating | number | choice | boolean | image
+  // text | rating | number | choice | multichoice | boolean | consent | date | image | wilayah
+  // wilayah = provinsi + kabupaten/kota menurut kode resmi Kepmendagri (lihat lib/wilayah.ts).
+  // Di Flow ia jadi dua dropdown bertingkat; di mode chat responden mengetik nama wilayahnya.
+  type     String  @default("text")
   text     String
   order    Int     @default(0)
   required Boolean @default(true)
