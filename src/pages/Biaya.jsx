@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
 import { invoiceHtml } from "../lib/invoiceHtml";
+import { invoiceAwal, profilDariInvoice } from "../lib/invoiceProfil";
 import {
   PageHeader,
   Card,
@@ -64,6 +65,7 @@ export default function Biaya() {
   const isMobile = useIsMobile();
   const tarif = useLoader(useCallback(() => api.listTarif(), []));
   const surveiList = useLoader(useCallback(() => api.biayaSurvei(), []));
+  const profil = useLoader(useCallback(() => api.getProfilInvoice(), []));
 
   const [dari, setDari] = useState(awalBulan);
   const [sampai, setSampai] = useState(hariIni);
@@ -77,21 +79,34 @@ export default function Biaya() {
 
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   // Bidangnya mengikuti invoice Meta supaya dokumen ke klien bisa disandingkan langsung
-  // dengan invoice aslinya. Semuanya diisi manual — nilai seperti Reference Number dan
-  // Transaction ID hanya ada di invoice Meta, tidak di sistem ini.
-  const [inv, setInv] = useState({
-    nama: "",
-    accountId: "",
-    tanggal: hariIni(),
-    metode: "",
-    referensi: "",
-    transaksi: "",
-    produk: "WhatsApp Business Account",
-    status: "Paid",
-    catatan: "",
-    penerbit: "",
-    alamatKlien: "",
-  });
+  // dengan invoice aslinya. Bidang tetap (alamat penerbit, NPWP, Account ID, metode bayar)
+  // terisi dari Profil penerbit; bidang per klien selalu dimulai kosong.
+  const [inv, setInv] = useState(() => invoiceAwal(null, hariIni()));
+
+  const [profilDraf, setProfilDraf] = useState(null);
+  const [profilErr, setProfilErr] = useState("");
+  const [profilNote, setProfilNote] = useState("");
+
+  // Formulir invoice disiapkan ULANG tiap kali dibuka, bukan dibiarkan menyimpan isi
+  // sebelumnya: invoice untuk klien baru yang masih memuat nama klien sebelumnya adalah
+  // kesalahan yang jauh lebih memalukan daripada kolom kosong.
+  const bukaInvoice = () => {
+    setInv(invoiceAwal(profil.data, hariIni()));
+    setInvoiceOpen(true);
+  };
+
+  const simpanProfil = async () => {
+    setProfilErr("");
+    setProfilNote("");
+    try {
+      await api.saveProfilInvoice(profilDariInvoice(profilDraf));
+      await profil.reload();
+      setProfilDraf(null);
+      setProfilNote("Profil penerbit disimpan. Invoice berikutnya terisi otomatis.");
+    } catch (e) {
+      setProfilErr(e.message);
+    }
+  };
 
   const hitung = async () => {
     setErr("");
@@ -242,7 +257,7 @@ export default function Biaya() {
             {sibuk ? "Menghitung..." : "Hitung Biaya"}
           </Button>
           {hasil ? (
-            <Button variant="secondary" onClick={() => setInvoiceOpen(true)}>
+            <Button variant="secondary" onClick={bukaInvoice}>
               Buat Invoice
             </Button>
           ) : null}
@@ -350,6 +365,84 @@ export default function Biaya() {
           </div>
         </Card>
       ) : null}
+
+      <Card
+        title="Profil penerbit"
+        actions={
+          profilDraf ? null : (
+            <Button size="sm" variant="secondary" icon="edit" onClick={() => setProfilDraf({ ...(profil.data || {}) })}>
+              Ubah
+            </Button>
+          )
+        }
+      >
+        <Notice kind="info">
+          Bagian invoice yang tidak pernah berganti — alamat lembaga Anda beserta NPWP, Account ID, dan metode
+          pembayaran. Disimpan sekali, lalu terisi otomatis di setiap invoice. Data klien tidak disimpan di sini, agar
+          invoice untuk klien berikutnya tidak memuat sisa klien sebelumnya.
+        </Notice>
+        {profilErr ? <Notice>{profilErr}</Notice> : null}
+        {profilNote ? <Notice kind="success">{profilNote}</Notice> : null}
+
+        {profilDraf ? (
+          <>
+            <div style={grid2}>
+              <Input
+                label="Account ID"
+                value={profilDraf.accountId || ""}
+                onChange={(e) => setProfilDraf({ ...profilDraf, accountId: e.target.value })}
+                hint="Account ID pada invoice Meta."
+              />
+              <Input
+                label="Payment method"
+                value={profilDraf.metode || ""}
+                onChange={(e) => setProfilDraf({ ...profilDraf, metode: e.target.value })}
+                hint="Mis. Visa ···· 3809."
+              />
+              <Input
+                label="Product Type"
+                value={profilDraf.produk || ""}
+                onChange={(e) => setProfilDraf({ ...profilDraf, produk: e.target.value })}
+              />
+              <Input
+                label="Status"
+                value={profilDraf.status || ""}
+                onChange={(e) => setProfilDraf({ ...profilDraf, status: e.target.value })}
+                hint="Mis. Paid."
+              />
+            </div>
+            <Textarea
+              label="Alamat penerbit"
+              value={profilDraf.penerbit || ""}
+              onChange={(e) => setProfilDraf({ ...profilDraf, penerbit: e.target.value })}
+              hint="Satu baris per baris alamat, diakhiri NPWP. Periksa NPWP-nya sekali di sini — setelah ini tidak perlu diketik ulang."
+              placeholder={["Populi Center", "Jalan ...", "Jakarta ...", "Indonesia", "Tax ID (NPWP): ..."].join("\n")}
+            />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <Button onClick={simpanProfil}>Simpan Profil</Button>
+              <Button variant="secondary" onClick={() => setProfilDraf(null)}>
+                Batal
+              </Button>
+            </div>
+          </>
+        ) : profil.loading ? (
+          <Loading />
+        ) : profil.data?.penerbit || profil.data?.accountId ? (
+          <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, fontSize: 13 }}>
+            <div style={{ whiteSpace: "pre-wrap" }}>{profil.data.penerbit || "— alamat belum diisi —"}</div>
+            <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 8 }}>
+              Account ID {profil.data.accountId || "—"} · {profil.data.metode || "metode bayar belum diisi"} ·{" "}
+              {profil.data.produk} · {profil.data.status}
+            </div>
+          </div>
+        ) : (
+          <Empty
+            icon="invoice"
+            title="Profil penerbit belum diisi"
+            note="Isi sekali agar alamat dan NPWP tidak perlu diketik ulang di setiap invoice."
+          />
+        )}
+      </Card>
 
       <Card
         title="Kartu tarif"
@@ -505,7 +598,9 @@ export default function Biaya() {
         <Modal title="Buat invoice" onClose={() => setInvoiceOpen(false)} dirty width={660}>
           <Notice kind="info">
             Bidang di bawah mengikuti invoice Meta supaya dokumen ke klien bisa disandingkan langsung dengan invoice
-            aslinya. Reference Number dan Transaction ID hanya ada di invoice Meta — salin dari sana.
+            aslinya. Account ID, metode pembayaran, dan alamat penerbit sudah terisi dari <strong>Profil penerbit</strong>;
+            mengubahnya di sini hanya berlaku untuk invoice ini. Reference Number dan Transaction ID hanya ada di invoice
+            Meta — salin dari sana.
           </Notice>
           <div style={grid2}>
             <Input

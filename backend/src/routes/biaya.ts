@@ -67,6 +67,46 @@ export async function biayaRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  // ===== Profil penerbit invoice (pengaturan tunggal) =====
+  //
+  // Hanya bagian yang TIDAK pernah berganti. Data per klien sengaja tidak disimpan:
+  // menyimpannya akan membuat invoice untuk klien berikutnya terisi data klien sebelumnya.
+
+  app.get("/api/profil-invoice", async () => {
+    const p = await prisma.profilInvoice.findUnique({ where: { id: "default" } });
+    return {
+      penerbit: p?.penerbit ?? "",
+      accountId: p?.accountId ?? "",
+      metode: p?.metode ?? "",
+      produk: p?.produk ?? "WhatsApp Business Account",
+      status: p?.status ?? "Paid",
+    };
+  });
+
+  app.put("/api/profil-invoice", async (req, reply) => {
+    if (req.user.role === "viewer") return reply.code(403).send({ error: "forbidden" });
+    const parsed = z
+      .object({
+        penerbit: z.string().max(600).optional(),
+        accountId: z.string().max(120).optional(),
+        metode: z.string().max(120).optional(),
+        produk: z.string().max(120).optional(),
+        status: z.string().max(60).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const d = parsed.data;
+    const data = {
+      ...(d.penerbit !== undefined ? { penerbit: d.penerbit } : {}),
+      ...(d.accountId !== undefined ? { accountId: d.accountId } : {}),
+      ...(d.metode !== undefined ? { metode: d.metode } : {}),
+      ...(d.produk ? { produk: d.produk } : {}),
+      ...(d.status ? { status: d.status } : {}),
+    };
+    await prisma.profilInvoice.upsert({ where: { id: "default" }, update: data, create: { id: "default", ...data } });
+    return { ok: true };
+  });
+
   // ===== Rentang tanggal tiap survei =====
   // Dipakai pemilih survei di halaman Biaya untuk mengisi tanggal otomatis. Biaya tetap
   // dihitung per PERIODE, bukan per survei: itu satu-satunya cara yang bisa dicocokkan

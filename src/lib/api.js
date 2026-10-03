@@ -92,6 +92,8 @@ export const api = {
   updateTarif: (id, data) => request(`/api/tarif/${id}`, { method: "PUT", body: data }),
   deleteTarif: (id) => request(`/api/tarif/${id}`, { method: "DELETE" }),
   biayaSurvei: () => request("/api/biaya/survei"),
+  getProfilInvoice: () => request("/api/profil-invoice"),
+  saveProfilInvoice: (data) => request("/api/profil-invoice", { method: "PUT", body: data }),
   hitungBiaya: ({ dari, sampai, marginPersen = 0 }) =>
     request(`/api/biaya?dari=${dari}&sampai=${sampai}&marginPersen=${marginPersen}`),
 

@@ -381,3 +381,24 @@ model TarifWa {
 
   @@index([berlakuSejak])
 }
+
+// Profil penerbit invoice — pengaturan tunggal, seperti AiConfig/SheetConfig/SendingPolicy.
+//
+// Isinya bagian invoice yang TIDAK pernah berganti: alamat lembaga penerbit beserta NPWP,
+// Account ID Meta, dan metode pembayaran. Sebelumnya semua itu harus diketik ulang di
+// setiap invoice. Bukan sekadar merepotkan — satu digit NPWP yang salah ketik di invoice
+// pajak adalah persoalan nyata, dan kesalahan seperti itu justru paling mungkin terjadi
+// saat mengetik ulang hal yang sama berkali-kali.
+//
+// Yang berganti per klien (nama, alamat penagihan, Reference Number, Transaction ID)
+// sengaja TIDAK disimpan di sini: menyimpannya akan membuat invoice klien berikutnya
+// terisi data klien sebelumnya.
+model ProfilInvoice {
+  id        String   @id // singleton: "default"
+  penerbit  String? // alamat penerbit, bebas baris, diakhiri NPWP
+  accountId String?
+  metode    String? // mis. "Visa ···· 3809"
+  produk    String   @default("WhatsApp Business Account")
+  status    String   @default("Paid")
+  updatedAt DateTime @updatedAt
+}
