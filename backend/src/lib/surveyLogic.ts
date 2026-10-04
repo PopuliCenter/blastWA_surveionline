@@ -131,24 +131,46 @@ export function closingText(custom?: string | null): string {
   return c || "Terima kasih, semua jawaban Anda sudah kami terima. 🙏";
 }
 
-// Langkah berikutnya berdasarkan aturan percabangan (options.branches). Lompat hanya MAJU.
+// ===== Percabangan (options.branches) =====
 // branches: [{ value: "<jawaban>", goto: "end" | <indeks 0-based> }].
-export function nextStepWithBranch(current: QLite, step: number, savedValue: string, total: number): number {
-  const def = step + 1;
-  const branches = (current.options as { branches?: { value: string; goto: string | number }[] } | null)?.branches;
-  if (!Array.isArray(branches) || !savedValue || savedValue === "[dilewati]") return def;
+// Aturan ini adalah SATU-SATUNYA sumber kebenaran soal pertanyaan mana yang berlaku bagi
+// seorang responden — dipakai mesin chat untuk memilih pertanyaan berikutnya, dipakai
+// flowJson untuk menyusun komponen If, dan dipakai server untuk menolak jawaban yang
+// seharusnya tidak pernah ada.
+
+type Percabangan = { value?: unknown; goto?: unknown };
+
+// Percabangan yang cocok dengan jawaban ini, bila ada. Tak peka huruf besar/kecil & spasi.
+function cabangCocok(options: unknown, savedValue: string): Percabangan | undefined {
+  const b = (options as { branches?: unknown } | null | undefined)?.branches;
+  if (!Array.isArray(b)) return undefined;
   const sv = savedValue.trim().toLowerCase();
-  const m = branches.find(
-    (b) =>
-      String(b.value ?? "")
+  if (!sv || sv === "[dilewati]") return undefined;
+  return (b as Percabangan[]).find(
+    (x) =>
+      String(x?.value ?? "")
         .trim()
         .toLowerCase() === sv,
   );
-  if (!m) return def;
-  if (m.goto === "end" || m.goto === -1) return total; // akhiri survei lebih awal
+}
+
+// Percabangan yang MENGHENTIKAN survei (bukan sekadar melompati beberapa pertanyaan).
+function mengakhiri(b: Percabangan | undefined): boolean {
+  return !!b && (b.goto === "end" || b.goto === -1);
+}
+
+// Langkah berikutnya setelah pertanyaan indeks `step` dijawab `savedValue`. Lompat hanya MAJU.
+export function langkahBerikut(options: unknown, step: number, savedValue: string, total: number): number {
+  const m = cabangCocok(options, savedValue);
+  if (!m) return step + 1;
+  if (mengakhiri(m)) return total; // akhiri survei lebih awal
   const g = Number(m.goto);
   if (Number.isInteger(g) && g > step && g < total) return g; // lompat maju ke pertanyaan g
-  return def;
+  return step + 1;
+}
+
+export function nextStepWithBranch(current: QLite, step: number, savedValue: string, total: number): number {
+  return langkahBerikut(current.options, step, savedValue, total);
 }
 
 export function ratingRange(q: QLite): { min: number; max: number } {
@@ -360,19 +382,7 @@ export function disaringKeluar(
   answers: readonly { questionId: string; value: string }[],
 ): boolean {
   const byId = new Map(questions.map((q) => [q.id, q]));
-  for (const a of answers) {
-    const branches = (byId.get(a.questionId)?.options as { branches?: unknown } | null | undefined)?.branches;
-    if (!Array.isArray(branches)) continue;
-    const nilai = a.value.trim().toLowerCase();
-    const kena = branches.find(
-      (b) =>
-        String((b as { value?: unknown })?.value ?? "")
-          .trim()
-          .toLowerCase() === nilai,
-    ) as { goto?: unknown } | undefined;
-    if (kena && (kena.goto === "end" || kena.goto === -1)) return true;
-  }
-  return false;
+  return answers.some((a) => mengakhiri(cabangCocok(byId.get(a.questionId)?.options, a.value)));
 }
 
 // Indeks pertanyaan yang MENGHENTIKAN survei — yaitu jawabannya memicu percabangan
@@ -395,38 +405,67 @@ export function indeksPenyaringan(
   answers.forEach((a) => {
     const i = questions.findIndex((q) => q.id === a.questionId);
     if (i < 0) return;
-    const branches = (questions[i]!.options as { branches?: unknown } | null | undefined)?.branches;
-    if (!Array.isArray(branches)) return;
-    const nilai = a.value.trim().toLowerCase();
-    const kena = branches.find(
-      (b) =>
-        String((b as { value?: unknown })?.value ?? "")
-          .trim()
-          .toLowerCase() === nilai,
-    ) as { goto?: unknown } | undefined;
-    if (!kena || (kena.goto !== "end" && kena.goto !== -1)) return;
+    if (!mengakhiri(cabangCocok(questions[i]!.options, a.value))) return;
     if (paling === null || i < paling) paling = i;
   });
   return paling;
 }
 
-// Buang jawaban yang datang SETELAH titik penyaringan. Jawaban sebelum titik itu tetap sah
-// — responden memang menjawabnya sebelum tersaring.
+// Pertanyaan mana saja yang BENAR-BENAR berlaku bagi responden ini — ditelusuri dari
+// pertanyaan pertama mengikuti percabangan, persis seperti yang dilakukan mesin chat.
 //
-// Untuk informed consent di urutan 0, hasilnya: hanya jawaban consent yang disimpan, dan
-// seluruh data pribadi di belakangnya ditolak. Itu bukan sekadar kebersihan data; menyimpan
-// jawaban orang yang menyatakan tidak bersedia adalah pemrosesan tanpa dasar persetujuan.
+// Mesin chat tidak pernah salah soal ini: ia memang tidak mengirim pertanyaan yang
+// dilompati. Flow lain ceritanya — seluruh formulir dikirim sekali jalan, dan penyaringan
+// hanya ada di sisi klien.
+//
+// Lompatan selalu MAJU, jadi penelusuran ini pasti berhenti.
+export function jalurPertanyaan(
+  questions: readonly { id: string; options?: unknown }[],
+  answers: readonly { questionId: string; value: string }[],
+): Set<number> {
+  const nilai = new Map(answers.map((a) => [a.questionId, a.value]));
+  const total = questions.length;
+  const jalur = new Set<number>();
+  for (let step = 0; step < total; ) {
+    jalur.add(step);
+    const q = questions[step]!;
+    step = langkahBerikut(q.options, step, nilai.get(q.id) ?? "", total);
+  }
+  return jalur;
+}
+
+// Buang jawaban atas pertanyaan yang TIDAK BERLAKU bagi responden ini menurut percabangan
+// survei — baik karena ia tersaring keluar (goto "end") maupun karena pertanyaannya
+// dilompati (goto maju). Jawaban di jalurnya tetap sah.
+//
+// Dua wujudnya di produksi, dua akibat yang berbeda:
+//
+//   • Tersaring keluar. Satu responden menjawab "Tidak" pada informed consent di urutan 0,
+//     namun 20 jawaban berikutnya tetap tersimpan. Menyimpan jawaban orang yang menyatakan
+//     tidak bersedia adalah pemrosesan tanpa dasar persetujuan — soal kepatuhan, bukan
+//     kebersihan data.
+//
+//   • Dilompati. Responden menjawab "Tidak" pada "Apakah Anda tahu program X", namun
+//     pertanyaan lanjutannya ("Jika Anda tahu, beri nilai…") tetap membawa angka. Itu
+//     jawaban yang maknanya mustahil, dan kalau ikut dianalisis ia menggeser rata-rata.
+//
+// Keduanya lolos lewat pintu yang sama: di Flow, penyaringan hanya dikerjakan komponen If
+// di sisi KLIEN, sedangkan payload `complete` mendaftar SEMUA field layar tanpa syarat.
+// Begitu responden sempat mengisi lalu mengubah jawaban pemicunya, komponennya memang
+// hilang dari layar tetapi nilainya masih tersimpan di state formulir dan ikut terkirim.
 export function saringJawaban<T extends { questionId: string; value: string }>(
   questions: readonly { id: string; options?: unknown }[],
   answers: readonly T[],
 ): { diterima: T[]; ditolak: T[]; batas: number | null } {
-  const batas = indeksPenyaringan(questions, answers);
-  if (batas === null) return { diterima: [...answers], ditolak: [], batas: null };
+  const jalur = jalurPertanyaan(questions, answers);
   const diterima: T[] = [];
   const ditolak: T[] = [];
   for (const a of answers) {
     const i = questions.findIndex((q) => q.id === a.questionId);
-    (i >= 0 && i <= batas ? diterima : ditolak).push(a);
+    // Pertanyaan yang tidak ditemukan DITERIMA: tanpa posisinya kita tak bisa menyimpulkan
+    // ia dilompati, dan menghapus data atas dasar ketidaktahuan lebih buruk daripada
+    // menyimpan satu baris yang tak bisa dinilai.
+    (i < 0 || jalur.has(i) ? diterima : ditolak).push(a);
   }
-  return { diterima, ditolak, batas };
+  return { diterima, ditolak, batas: indeksPenyaringan(questions, answers) };
 }

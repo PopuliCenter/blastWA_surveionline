@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { periksaKuota, sisaKuota, persenKuota } from "../src/lib/kuota.js";
 import { provinsiDariAtribut } from "../src/services/kuotaSurvei.js";
 import { kodeProvinsiDari } from "../src/lib/wilayah.js";
-import { disaringKeluar, saringJawaban, indeksPenyaringan } from "../src/lib/surveyLogic.js";
+import { disaringKeluar, saringJawaban, indeksPenyaringan, jalurPertanyaan } from "../src/lib/surveyLogic.js";
 
 const batas = (o: Partial<Parameters<typeof periksaKuota>[0]> = {}) => ({
   targetGlobal: null,
@@ -233,5 +233,111 @@ describe("saringJawaban — penegakan di server", () => {
     const jawab = [{ questionId: "q0", value: "Tidak" }];
     expect(disaringKeluar(questions, jawab)).toBe(true);
     expect(indeksPenyaringan(questions, jawab)).toBe(0);
+  });
+});
+
+describe("saringJawaban — pertanyaan yang dilompati percabangan maju", () => {
+  // Struktur NYATA dari produksi (terlihat di file ekspor): tiap kebijakan ditanya dengan
+  // satu gerbang "Apakah Anda tahu…", dan dua pertanyaan lanjutan yang hanya berlaku bila
+  // jawabannya "Ya". Menjawab "Tidak" melompat ke gerbang kebijakan BERIKUTNYA.
+  const questions = [
+    { id: "mbg", options: { branches: [{ goto: 3, value: "Tidak" }] } }, // tahu MBG?
+    { id: "mbg_nilai", options: null }, // "Jika Anda tahu… beri nilai"
+    { id: "mbg_setuju", options: null }, // "Seberapa setuju…"
+    { id: "kop", options: { branches: [{ goto: 6, value: "Tidak" }] } }, // tahu program lain?
+    { id: "kop_nilai", options: null },
+    { id: "kop_setuju", options: null },
+    { id: "penutup", options: null },
+  ];
+
+  it("membuang nilai yang terbawa padahal respondennya menjawab tidak tahu", () => {
+    // Di Flow, komponen lanjutan memang hilang dari layar — tapi nilainya sudah telanjur
+    // masuk ke state formulir sebelum jawaban gerbangnya diubah, dan payload "complete"
+    // mendaftar SEMUA field tanpa syarat. Angka itu lalu ikut dianalisis.
+    const r = saringJawaban(questions, [
+      { questionId: "mbg", value: "Tidak" },
+      { questionId: "mbg_nilai", value: "1" },
+      { questionId: "kop", value: "Ya" },
+      { questionId: "kop_nilai", value: "8" },
+      { questionId: "penutup", value: "selesai" },
+    ]);
+    // Bukan penyaringan keluar: respondennya tetap mengisi survei sampai habis.
+    expect(r.batas).toBeNull();
+    expect(r.ditolak.map((a) => a.questionId)).toEqual(["mbg_nilai"]);
+    expect(r.diterima.map((a) => a.questionId)).toEqual(["mbg", "kop", "kop_nilai", "penutup"]);
+  });
+
+  it("blok yang dijawab 'Ya' tidak ikut terbuang", () => {
+    const r = saringJawaban(questions, [
+      { questionId: "mbg", value: "Ya" },
+      { questionId: "mbg_nilai", value: "4" },
+      { questionId: "mbg_setuju", value: "Setuju" },
+      { questionId: "kop", value: "Ya" },
+      { questionId: "kop_nilai", value: "6" },
+    ]);
+    expect(r.ditolak).toEqual([]);
+  });
+
+  it("dua gerbang ditolak sekaligus — kedua blok lanjutannya dibuang", () => {
+    const r = saringJawaban(questions, [
+      { questionId: "mbg", value: "Tidak" },
+      { questionId: "mbg_setuju", value: "Setuju" },
+      { questionId: "kop", value: "Tidak" },
+      { questionId: "kop_nilai", value: "1" },
+      { questionId: "penutup", value: "selesai" },
+    ]);
+    expect(r.ditolak.map((a) => a.questionId).sort()).toEqual(["kop_nilai", "mbg_setuju"]);
+    expect(r.diterima.map((a) => a.questionId)).toEqual(["mbg", "kop", "penutup"]);
+  });
+
+  it("gerbang tanpa jawaban tidak melompat apa pun", () => {
+    // Pertanyaan opsional yang dikosongkan tidak boleh menghapus blok di belakangnya.
+    const r = saringJawaban(questions, [
+      { questionId: "mbg_nilai", value: "4" },
+      { questionId: "kop_nilai", value: "6" },
+    ]);
+    expect(r.ditolak).toEqual([]);
+  });
+
+  it("goto yang menunjuk mundur atau ke luar daftar diabaikan", () => {
+    // Penjaga terhadap aturan percabangan yang usang (pertanyaan pernah diurut ulang):
+    // lebih baik tidak melompat sama sekali daripada menghapus jawaban yang sah.
+    const q = [
+      { id: "a", options: null },
+      { id: "b", options: { branches: [{ goto: 0, value: "Tidak" }] } },
+      { id: "c", options: { branches: [{ goto: 99, value: "Tidak" }] } },
+      { id: "d", options: null },
+    ];
+    const r = saringJawaban(q, [
+      { questionId: "a", value: "x" },
+      { questionId: "b", value: "Tidak" },
+      { questionId: "c", value: "Tidak" },
+      { questionId: "d", value: "z" },
+    ]);
+    expect(r.ditolak).toEqual([]);
+  });
+
+  it("jalurPertanyaan menelusuri sama seperti mesin chat", () => {
+    const jawab = [
+      { questionId: "mbg", value: "Tidak" },
+      { questionId: "kop", value: "Ya" },
+    ];
+    expect([...jalurPertanyaan(questions, jawab)]).toEqual([0, 3, 4, 5, 6]);
+  });
+
+  it("penyaringan keluar tetap mengalahkan lompatan maju", () => {
+    // Consent "Tidak" di urutan 0 menghentikan survei: tak ada satu pun pertanyaan setelahnya
+    // yang berlaku, termasuk yang punya percabangan sendiri.
+    const q = [
+      { id: "consent", options: { branches: [{ goto: "end", value: "Tidak" }] } },
+      ...questions,
+    ];
+    const r = saringJawaban(q, [
+      { questionId: "consent", value: "Tidak" },
+      { questionId: "mbg", value: "Ya" },
+      { questionId: "mbg_nilai", value: "9" },
+    ]);
+    expect(r.batas).toBe(0);
+    expect(r.diterima.map((a) => a.questionId)).toEqual(["consent"]);
   });
 });

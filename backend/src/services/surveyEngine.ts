@@ -570,24 +570,28 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
 
   const semuaJawaban = parseFlowAnswers(flowResp, questions);
 
-  // Penyaringan ditegakkan DI SERVER, bukan hanya di Flow.
+  // Percabangan ditegakkan DI SERVER, bukan hanya di Flow.
   //
-  // Komponen If pada Flow bekerja di sisi klien dan bisa dilewati: responden menekan tombol
-  // kembali lalu mengubah jawabannya, atau Flow yang terbit di Meta dibuat sebelum aturan
-  // percabangan ditambahkan. Terjadi nyata di produksi — satu responden menjawab "Tidak"
-  // pada informed consent di urutan 0, namun 20 jawaban berikutnya tetap tersimpan.
+  // Komponen If pada Flow bekerja di sisi klien, dan payload "complete" mendaftar SEMUA
+  // field layar tanpa syarat. Responden yang sempat mengisi lalu mengubah jawaban pemicunya
+  // membuat komponennya hilang dari layar — tetapi nilainya masih ada di state formulir dan
+  // tetap terkirim. Dua-duanya terjadi nyata di produksi: satu responden menolak informed
+  // consent namun 20 jawaban berikutnya tetap tersimpan, dan responden yang menjawab tidak
+  // tahu suatu program tetap membawa nilai pada pertanyaan lanjutan "jika Anda tahu…".
   //
-  // Menyimpan jawaban orang yang menyatakan tidak bersedia adalah pemrosesan tanpa dasar
-  // persetujuan, bukan sekadar data kotor.
+  // Mesin chat tidak pernah punya masalah ini — ia memang tidak mengirim pertanyaan yang
+  // dilompati. Ini menyamakan Flow dengan perilaku yang sudah benar itu.
   const { diterima: answers, ditolak } = saringJawaban(questions, semuaJawaban);
   if (ditolak.length) {
-    logError("backend", new Error("Jawaban setelah titik penyaringan ditolak"), {
+    const judul = new Map(questions.map((q) => [q.id, q.text]));
+    logError("backend", new Error("Jawaban di luar jalur percabangan ditolak"), {
       surveyId: surveyResponse.surveyId,
       responseId: surveyResponse.id,
       jumlahDitolak: ditolak.length,
+      pertanyaan: ditolak.map((a) => (judul.get(a.questionId) ?? a.questionId).slice(0, 60)),
       catatan:
-        "Responden tersaring (mis. menolak informed consent) tetapi formulir tetap membawa jawaban berikutnya. " +
-        "Periksa apakah Flow yang terbit di Meta sudah memuat aturan percabangan survei ini.",
+        "Formulir membawa jawaban atas pertanyaan yang seharusnya dilewati responden ini. " +
+        "Bila sering berulang, periksa apakah Flow yang terbit di Meta sudah memuat aturan percabangan survei ini.",
     });
   }
   for (const a of answers)
