@@ -102,8 +102,9 @@ export function SurveyKuotaModal({ survey, onClose }) {
             </div>
             {d.penolakConsent > 0 ? (
               <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
-                {d.penolakConsent.toLocaleString("id-ID")} responden menolak pada pertanyaan persetujuan dan{" "}
-                <strong>tidak dihitung</strong> — responsnya tercatat selesai tetapi tidak berisi data.
+                {d.penolakConsent.toLocaleString("id-ID")} responden berhenti di pertanyaan penyaring — biasanya
+                persetujuan — dan <strong>tidak dihitung</strong>. Responsnya tercatat selesai karena survei memang
+                berakhir di situ, tetapi tidak berisi data.
               </div>
             ) : null}
             {typeof d.targetResponden === "number" ? (

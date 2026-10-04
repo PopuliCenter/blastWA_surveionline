@@ -344,17 +344,33 @@ export function formatQuestion(q: QLite): string {
   return `${q.text}${hint}${skip}`;
 }
 
-// Apakah jawaban-jawaban ini berisi PENOLAKAN pada pertanyaan bertipe consent?
+// Apakah responden tersaring KELUAR — yaitu salah satu jawabannya memicu percabangan
+// yang menghentikan survei (goto "end")?
 //
-// Responden yang menolak tetap tercatat "selesai" karena surveinya memang berakhir di situ
-// lewat percabangan goto:end — tapi responsnya tidak mengandung data, jadi tidak boleh
-// memakan jatah kuota. Nilai consent disimpan persis "Ya"/"Tidak" oleh validateAnswer dan
-// toAnswer, sehingga pencocokannya pasti dan bukan tebakan.
-export function menolakConsent(
-  questions: readonly { id: string; type: string }[],
+// Dikenali dari KONFIGURASI PERCABANGAN survei itu sendiri, bukan dari tipe pertanyaan.
+// Pelajaran dari produksi: pertanyaan persetujuan di instrumen yang berjalan bertipe
+// "boolean", bukan "consent" — aturan yang bersandar pada tipe tidak mengenai apa pun dan
+// gagal secara senyap. Sebaliknya, pertanyaan yang MENGHENTIKAN survei ketika dijawab
+// begitu memang gerbang penyaring, menurut konfigurasi pembuat surveinya sendiri.
+//
+// Responsnya tetap tercatat "selesai" karena survei memang berakhir di situ, tetapi tidak
+// membawa data — karena itu tidak dihitung ke kuota. Klien membayar untuk data.
+export function disaringKeluar(
+  questions: readonly { id: string; options?: unknown }[],
   answers: readonly { questionId: string; value: string }[],
 ): boolean {
-  const idConsent = new Set(questions.filter((q) => q.type === "consent").map((q) => q.id));
-  if (!idConsent.size) return false;
-  return answers.some((a) => idConsent.has(a.questionId) && a.value.trim().toLowerCase() === "tidak");
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  for (const a of answers) {
+    const branches = (byId.get(a.questionId)?.options as { branches?: unknown } | null | undefined)?.branches;
+    if (!Array.isArray(branches)) continue;
+    const nilai = a.value.trim().toLowerCase();
+    const kena = branches.find(
+      (b) =>
+        String((b as { value?: unknown })?.value ?? "")
+          .trim()
+          .toLowerCase() === nilai,
+    ) as { goto?: unknown } | undefined;
+    if (kena && (kena.goto === "end" || kena.goto === -1)) return true;
+  }
+  return false;
 }

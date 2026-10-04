@@ -27,7 +27,7 @@ import {
   shouldStartSurveyFromBlast,
   looksLikeQuestion,
   matchesTriggerInSentence,
-  menolakConsent,
+  disaringKeluar,
   type QLite,
 } from "../lib/surveyLogic.js";
 
@@ -591,7 +591,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       // Penolak consent tetap "selesai" tapi tidak membawa data, jadi tidak dihitung ke
       // kuota. Ditandai di sini supaya pemeriksaan kuota — yang berjalan pada setiap pesan
       // masuk dan setiap pengiriman blast — tidak perlu menelusuri tabel jawaban.
-      consentDitolak: menolakConsent(questions, answers),
+      consentDitolak: disaringKeluar(questions, answers),
     },
   });
   await enqueueSheetSync(surveyResponse.id);
@@ -635,7 +635,7 @@ async function advanceSurvey(
     await saveAnswer(responseId, current.id, savedValue);
     if (current.type === "wilayah" || current.id === idProvinsiSurvei)
       await stempelProvinsi(responseId, kodeProvinsiDari(savedValue));
-    if (current.type === "consent" && savedValue.trim().toLowerCase() === "tidak")
+    if (disaringKeluar([current], [{ questionId: current.id, value: savedValue }]))
       await prisma.surveyResponse.update({ where: { id: responseId }, data: { consentDitolak: true } });
   }
 
