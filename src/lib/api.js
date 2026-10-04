@@ -87,6 +87,13 @@ export const api = {
   // Reports
   stats: () => request("/api/stats"),
   webhookLogs: (limit = 100) => request(`/api/webhook-logs?limit=${limit}`),
+  // Log galat terstruktur (berkas .log di server) — hanya superadmin.
+  errorLog: ({ limit = 200, sumber = "", cari = "" } = {}) =>
+    request(
+      `/api/log?limit=${limit}` +
+        (sumber ? `&sumber=${encodeURIComponent(sumber)}` : "") +
+        (cari ? `&cari=${encodeURIComponent(cari)}` : ""),
+    ),
 
   // Biaya & invoice
   listTarif: () => request("/api/tarif"),

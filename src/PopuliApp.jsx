@@ -31,6 +31,7 @@ const Biaya = lazy(() => import("./pages/Biaya"));
 const WhatsAppAccount = lazy(() => import("./pages/WhatsAppAccount"));
 const Webhook = lazy(() => import("./pages/Webhook"));
 const Admin = lazy(() => import("./pages/Admin"));
+const Log = lazy(() => import("./pages/Log"));
 
 const NAV = [
   {
@@ -72,6 +73,7 @@ const NAV = [
     group: "Sistem",
     items: [
       { id: "webhook", label: "Webhook", icon: "webhook" },
+      { id: "log", label: "Log Galat", icon: "alert", superadmin: true },
       { id: "admin", label: "Admin", icon: "admin", superadmin: true },
     ],
   },
@@ -571,6 +573,7 @@ export default function PopuliApp() {
         />
       ),
       webhook: <Webhook />,
+      log: currentUser?.role === "superadmin" ? <Log /> : <Dashboard />,
       admin: currentUser?.role === "superadmin" ? <Admin currentUser={currentUser} /> : <Dashboard />,
     }),
     [currentUser],

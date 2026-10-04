@@ -136,6 +136,13 @@ export function Icon({ name, size = 18 }) {
         <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
       </svg>
     ),
+    alert: (
+      <svg {...c}>
+        <path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </svg>
+    ),
     settings: (
       <svg {...c}>
         <circle cx="12" cy="12" r="3" />
