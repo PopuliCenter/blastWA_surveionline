@@ -68,7 +68,7 @@ export function ConfirmHost() {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(15,23,42,0.45)",
+        background: theme.overlay,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -81,7 +81,7 @@ export function ConfirmHost() {
         role="alertdialog"
         aria-modal="true"
         aria-label={o.title || "Konfirmasi"}
-        style={{ ...card, width: "100%", maxWidth: 420, padding: 22, boxShadow: "0 12px 40px rgba(16,24,40,0.22)" }}
+        style={{ ...card, width: "100%", maxWidth: 420, padding: 22, boxShadow: theme.shadowFloat }}
       >
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <span

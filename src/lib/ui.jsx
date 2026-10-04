@@ -2,25 +2,68 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { confirmDialog, isConfirmOpen } from "./confirmBus";
 import { isChanged, needsDiscardConfirm } from "./formGuard";
 
-// ===== Tema terang & clean (SaaS modern) =====
+// ===== Tema =====
+// Nilainya TIDAK ada di sini, melainkan di :root pada index.css. Objek ini hanya menunjuk
+// ke variabel CSS, dan itulah yang membuat mode gelap mungkin: seluruh gaya komponen
+// ditulis sebagai inline style, dan inline style tidak bisa menyatakan media query maupun
+// keadaan tema. Dengan var(), mengganti satu atribut pada <html> sudah mengubah seluruh
+// aplikasi — tanpa render ulang, tanpa kedipan, dan tanpa satu pun halaman perlu diubah.
+//
+// Konsekuensinya: nilai di sini tidak bisa dibaca atau dihitung dari JavaScript. Yang dulu
+// ditulis `${theme.primary}33` untuk membuat garis tipis harus memakai token *Line di
+// bawah; menempelkan alpha ke "var(--primary)" menghasilkan nilai tak sah dan gayanya
+// hilang tanpa pesan apa pun.
 export const theme = {
-  bg: "#f5f7fb",
-  surface: "#ffffff",
-  surfaceAlt: "#f1f5f9",
-  border: "#e6eaf1",
-  text: "#0f172a",
-  textMuted: "#64748b",
-  primary: "#2563eb",
-  primarySoft: "#eff5ff",
-  green: "#16a34a",
-  greenSoft: "#ecfdf3",
-  yellow: "#d97706",
-  yellowSoft: "#fffbeb",
-  red: "#dc2626",
-  redSoft: "#fef2f2",
-  purple: "#7c3aed",
-  purpleSoft: "#f5f3ff",
+  bg: "var(--bg)",
+  surface: "var(--surface)",
+  surfaceAlt: "var(--surface-alt)",
+  border: "var(--border)",
+  text: "var(--text)",
+  textMuted: "var(--text-muted)",
+  primary: "var(--primary)",
+  primarySoft: "var(--primary-soft)",
+  green: "var(--green)",
+  greenSoft: "var(--green-soft)",
+  yellow: "var(--yellow)",
+  yellowSoft: "var(--yellow-soft)",
+  red: "var(--red)",
+  redSoft: "var(--red-soft)",
+  purple: "var(--purple)",
+  purpleSoft: "var(--purple-soft)",
+  // Garis tipis berwarna, menggantikan penggabungan hex + alpha.
+  primaryLine: "var(--primary-line)",
+  redLine: "var(--red-line)",
+  greenLine: "var(--green-line)",
+  yellowLine: "var(--yellow-line)",
+  overlay: "var(--overlay)",
+  shadowFloat: "var(--shadow-float)",
 };
+
+// ===== Mode gelap =====
+// Bawaannya mengikuti sistem; pilihan pemakai disimpan dan menang atas sistem.
+const KUNCI_TEMA = "populi.tema";
+
+export function temaTersimpan() {
+  try {
+    const v = localStorage.getItem(KUNCI_TEMA);
+    return v === "dark" || v === "light" ? v : "sistem";
+  } catch {
+    return "sistem";
+  }
+}
+
+// Dipanggil sekali sedini mungkin (main.jsx) dan setiap kali pemakai mengganti pilihan.
+export function pasangTema(mode) {
+  const el = document.documentElement;
+  if (mode === "dark" || mode === "light") el.setAttribute("data-theme", mode);
+  else el.removeAttribute("data-theme"); // tanpa atribut → media query sistem yang berlaku
+  try {
+    if (mode === "sistem") localStorage.removeItem(KUNCI_TEMA);
+    else localStorage.setItem(KUNCI_TEMA, mode);
+  } catch {
+    /* mode privat — pilihannya cukup berlaku untuk sesi ini */
+  }
+}
 
 // Bayangan BERLAPIS, bukan satu bayangan datar. Cahaya nyata menghasilkan bayangan kontak
 // yang rapat dan tajam ditambah bayangan ruang yang luas dan samar; satu lapis saja selalu
@@ -30,7 +73,7 @@ export const card = {
   background: theme.surface,
   border: `1px solid ${theme.border}`,
   borderRadius: 14,
-  boxShadow: "0 1px 2px rgba(16,24,40,0.04), 0 2px 6px -2px rgba(16,24,40,0.04), 0 12px 24px -16px rgba(16,24,40,0.10)",
+  boxShadow: "var(--shadow-card)",
 };
 
 export const fontStack = "'Inter','Segoe UI',system-ui,sans-serif";
@@ -138,6 +181,23 @@ export function Icon({ name, size = 18 }) {
       <svg {...c}>
         <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
         <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+      </svg>
+    ),
+    monitor: (
+      <svg {...c}>
+        <rect x="3" y="4" width="18" height="12" rx="2" />
+        <path d="M9 20h6M12 16v4" />
+      </svg>
+    ),
+    sun: (
+      <svg {...c}>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+    ),
+    moon: (
+      <svg {...c}>
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
       </svg>
     ),
     alert: (
@@ -712,7 +772,7 @@ export function Modal({ title, children, onClose, width = 600, dirty, dismissibl
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(15,23,42,0.45)",
+        background: theme.overlay,
         display: "flex",
         justifyContent: "center",
         overflowY: "auto",
@@ -1032,7 +1092,7 @@ export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDel
         gap: 12,
         padding: "9px 13px",
         background: theme.primarySoft,
-        border: `1px solid ${theme.primary}33`,
+        border: `1px solid ${theme.primaryLine}`,
         borderRadius: 10,
         marginBottom: 12,
         flexWrap: "wrap",

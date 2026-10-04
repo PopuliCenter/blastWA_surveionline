@@ -165,7 +165,7 @@ export default function WhatsAppAccount() {
             borderRadius: 12,
             marginBottom: 16,
             background: theme.redSoft,
-            border: `1px solid ${theme.red}33`,
+            border: `1px solid ${theme.redLine}`,
             color: theme.red,
             fontSize: 13,
             lineHeight: 1.6,
@@ -194,7 +194,7 @@ export default function WhatsAppAccount() {
           borderRadius: 12,
           marginBottom: 16,
           background: activeReady ? theme.greenSoft : theme.yellowSoft,
-          border: `1px solid ${activeReady ? theme.green : theme.yellow}22`,
+          border: `1px solid ${activeReady ? theme.greenLine : theme.yellowLine}`,
         }}
       >
         <span

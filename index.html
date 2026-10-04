@@ -10,6 +10,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Populi WA" />
     <title>Populi Center – WA Survey Platform</title>
+    <script>
+      // Tema dipasang SEBELUM gaya apa pun dilukis. Kalau menunggu modul React dimuat,
+      // pemakai yang memilih gelap sementara sistemnya terang akan melihat kilatan putih
+      // di tiap muat halaman — kecil, tapi persis jenis detail yang membuat aplikasi
+      // terasa belum jadi. Sengaja ditulis tanpa modul dan tanpa dependensi.
+      try {
+        var t = localStorage.getItem("populi.tema");
+        if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

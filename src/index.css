@@ -1,3 +1,139 @@
+/* ===== Token warna =====
+   Nilai tema tinggal di sini, bukan di JavaScript, karena seluruh gaya komponen ditulis
+   sebagai inline style — dan inline style tidak bisa menyatakan media query maupun
+   keadaan tema. Objek `theme` di ui.jsx kini hanya menunjuk ke variabel-variabel ini,
+   sehingga pergantian mode cukup mengganti satu atribut pada <html>: tidak ada komponen
+   yang perlu dirender ulang, tidak ada kedipan, dan tidak ada satu pun halaman yang perlu
+   diubah untuk ikut mendukungnya.
+
+   data-theme kosong  → ikut pengaturan sistem
+   data-theme="light" → selalu terang
+   data-theme="dark"  → selalu gelap */
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-alt: #f1f5f9;
+  --border: #e6eaf1;
+  --text: #0f172a;
+  --text-muted: #64748b;
+
+  /* Hijau, kuning, dan merah DIPERDALAM dari nilai lamanya. Di atas latar lembutnya
+     masing-masing, #16a34a hanya mencapai 3.1:1 dan #d97706 3.1:1 — di bawah ambang AA
+     4.5:1 untuk teks sekecil badge (11.5px). Jadi label "active" dan "draft" selama ini
+     memang sulit dibaca, dan itu baru ketahuan saat kontras mode gelap diukur dan ternyata
+     lebih baik daripada mode terang. */
+  --primary: #2563eb;
+  --primary-soft: #eff5ff;
+  --green: #15803d;
+  --green-soft: #ecfdf3;
+  --yellow: #b45309;
+  --yellow-soft: #fffbeb;
+  --red: #c81e1e;
+  --red-soft: #fef2f2;
+  --purple: #7c3aed;
+  --purple-soft: #f5f3ff;
+
+  /* Garis tipis berwarna. Dulu ditulis `${theme.primary}33` — menempelkan alpha ke kode
+     hex. Begitu warnanya jadi var(), penggabungan string itu menghasilkan nilai tak sah
+     dan bordernya hilang tanpa pesan apa pun. */
+  --primary-line: rgba(37, 99, 235, 0.2);
+  --red-line: rgba(220, 38, 38, 0.2);
+  --green-line: rgba(22, 163, 74, 0.14);
+  --yellow-line: rgba(217, 119, 6, 0.14);
+
+  --ring: rgba(37, 99, 235, 0.16);
+  --overlay: rgba(15, 23, 42, 0.45);
+  --scrollbar: #cbd5e1;
+  --scrollbar-hover: #94a3b8;
+
+  --shadow-card:
+    0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 6px -2px rgba(16, 24, 40, 0.04), 0 12px 24px -16px rgba(16, 24, 40, 0.1);
+  --shadow-float: 0 12px 40px rgba(16, 24, 40, 0.22);
+
+  color-scheme: light;
+}
+
+/* Palet gelap. Bukan terang yang dibalik: permukaan dinaikkan bertahap (bg → surface →
+   surfaceAlt) supaya kedalaman datang dari terang permukaan, bukan dari bayangan — di
+   latar gelap bayangan nyaris tak terlihat. Warna aksen DICERAHKAN; biru #2563eb yang
+   enak dibaca di atas putih jatuh di bawah ambang kontras saat dipakai di atas #111827. */
+:root[data-theme="dark"] {
+  --bg: #0b1120;
+  --surface: #121a2a;
+  --surface-alt: #1a2335;
+  --border: #27324a;
+  --text: #e8edf7;
+  --text-muted: #94a3b8;
+
+  --primary: #60a5fa;
+  --primary-soft: #16233c;
+  --green: #4ade80;
+  --green-soft: #0f2b20;
+  --yellow: #fbbf24;
+  --yellow-soft: #2d2512;
+  --red: #f87171;
+  --red-soft: #351c1f;
+  --purple: #a78bfa;
+  --purple-soft: #231d3d;
+
+  --primary-line: rgba(96, 165, 250, 0.28);
+  --red-line: rgba(248, 113, 113, 0.28);
+  --green-line: rgba(74, 222, 128, 0.2);
+  --yellow-line: rgba(251, 191, 36, 0.2);
+
+  --ring: rgba(96, 165, 250, 0.3);
+  --overlay: rgba(2, 6, 16, 0.66);
+  --scrollbar: #334155;
+  --scrollbar-hover: #475569;
+
+  /* Bayangan tetap ada tapi lebih pekat dan lebih rendah kontrasnya; yang membentuk
+     kedalaman di mode gelap terutama border dan beda terang permukaan. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px -2px rgba(0, 0, 0, 0.25), 0 12px 24px -16px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+/* Tanpa pilihan eksplisit, ikut sistem. Ditulis sebagai :root:not([data-theme="light"])
+   supaya pemakai yang sengaja memilih terang tidak ikut terbawa saat sistemnya gelap. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1120;
+    --surface: #121a2a;
+    --surface-alt: #1a2335;
+    --border: #27324a;
+    --text: #e8edf7;
+    --text-muted: #94a3b8;
+
+    --primary: #60a5fa;
+    --primary-soft: #16233c;
+    --green: #4ade80;
+    --green-soft: #0f2b20;
+    --yellow: #fbbf24;
+    --yellow-soft: #2d2512;
+    --red: #f87171;
+    --red-soft: #351c1f;
+    --purple: #a78bfa;
+    --purple-soft: #231d3d;
+
+    --primary-line: rgba(96, 165, 250, 0.28);
+    --red-line: rgba(248, 113, 113, 0.28);
+    --green-line: rgba(74, 222, 128, 0.2);
+    --yellow-line: rgba(251, 191, 36, 0.2);
+
+    --ring: rgba(96, 165, 250, 0.3);
+    --overlay: rgba(2, 6, 16, 0.66);
+    --scrollbar: #334155;
+    --scrollbar-hover: #475569;
+
+    --shadow-card:
+      0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px -2px rgba(0, 0, 0, 0.25), 0 12px 24px -16px rgba(0, 0, 0, 0.5);
+    --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+    color-scheme: dark;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -13,9 +149,8 @@ body {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  color: #0f172a;
-  background: #f5f7fb;
-  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -73,11 +208,11 @@ img {
 }
 
 :where(input, select, textarea):focus-visible {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 
 :where(button, a, summary, [tabindex]):focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: 9px;
 }
@@ -93,14 +228,14 @@ textarea {
 }
 
 ::selection {
-  background: rgba(37, 99, 235, 0.16);
+  background: var(--ring);
 }
 
 /* Batang gulir ramping. Bawaan Windows lebarnya 17px dengan latar abu terang yang memotong
    tepi kanan panel; pada dashboard dengan banyak daftar, itu yang pertama terlihat kasar. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -113,14 +248,14 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--scrollbar);
   border: 3px solid transparent;
   background-clip: padding-box;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-hover);
   background-clip: padding-box;
 }
 

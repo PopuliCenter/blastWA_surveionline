@@ -12,6 +12,8 @@ import {
   Notice,
   Loading,
   useIsMobile,
+  temaTersimpan,
+  pasangTema,
 } from "./lib/ui";
 import { LegalModal } from "./lib/legal";
 import ComingSoon from "./pages/ComingSoon"; // kecil & dipakai beberapa menu → biarkan statis
@@ -183,6 +185,19 @@ function Sidebar({
   unread = 0,
 }) {
   const mini = !mobile && collapsed;
+  // Tiga keadaan, bukan dua. "Ikut sistem" adalah bawaannya dan harus bisa dituju kembali:
+  // sekali pemakai memilih terang atau gelap, pilihan itu menang selamanya atas sistem, dan
+  // tanpa jalan pulang satu-satunya cara membatalkannya adalah menghapus penyimpanan situs.
+  const [tema, setTema] = useState(temaTersimpan);
+  const temaBerikut = { sistem: "light", light: "dark", dark: "sistem" };
+  const temaIkon = { sistem: "monitor", light: "sun", dark: "moon" };
+  const temaNama = { sistem: "ikut sistem", light: "terang", dark: "gelap" };
+  const gantiTema = () => {
+    const v = temaBerikut[tema];
+    pasangTema(v);
+    setTema(v);
+  };
+
   const asideStyle = mobile
     ? {
         width: "100%",
@@ -437,6 +452,19 @@ function Sidebar({
           <Icon name="settings" size={17} />
         </button>
         <button
+          onClick={gantiTema}
+          title={`Tampilan: ${temaNama[tema]}. Klik untuk ${temaNama[temaBerikut[tema]]}.`}
+          style={{
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            color: theme.textMuted,
+            display: "flex",
+          }}
+        >
+          <Icon name={temaIkon[tema]} size={17} />
+        </button>
+        <button
           onClick={onLogout}
           title="Keluar"
           style={{
@@ -638,7 +666,7 @@ export default function PopuliApp() {
           <>
             <div
               onClick={() => setDrawerOpen(false)}
-              style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 50 }}
+              style={{ position: "fixed", inset: 0, background: theme.overlay, zIndex: 50 }}
             />
             <div
               style={{
@@ -650,7 +678,7 @@ export default function PopuliApp() {
                 maxWidth: "84vw",
                 background: theme.surface,
                 zIndex: 55,
-                boxShadow: "2px 0 18px rgba(15,23,42,0.18)",
+                boxShadow: theme.shadowFloat,
                 overflowY: "auto",
               }}
             >

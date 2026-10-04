@@ -36,13 +36,16 @@ export class ErrorBoundary extends Component {
           gap: 14,
           padding: 24,
           fontFamily: "system-ui, -apple-system, sans-serif",
-          color: "#334155",
+          // Memakai variabel tema langsung, bukan objek theme: layar ini tampil justru
+          // ketika aplikasi gagal, dan tidak boleh ikut jatuh bila modul ui gagal dimuat.
+          color: "var(--text)",
+          background: "var(--bg)",
           textAlign: "center",
         }}
       >
         <div style={{ fontSize: 40 }}>⚠️</div>
         <div style={{ fontWeight: 700, fontSize: 18 }}>Terjadi kesalahan</div>
-        <div style={{ fontSize: 14, color: "#64748b", maxWidth: 380, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, color: "var(--text-muted)", maxWidth: 380, lineHeight: 1.6 }}>
           Aplikasi mengalami gangguan sesaat. Coba muat ulang halaman. Bila berlanjut, hubungi admin.
         </div>
         <button
