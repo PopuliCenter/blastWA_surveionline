@@ -180,6 +180,9 @@ export default function Log() {
                   <summary style={{ cursor: "pointer", listStyle: "none", minWidth: 0 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <Badge tone={TONE[e.source] || "default"}>{e.source}</Badge>
+                      {/* Entri penutup gangguan adalah kabar baik di tengah daftar galat.
+                          Tanpa penanda, ia terbaca sebagai masalah baru. */}
+                      {e.context?.pulih ? <Badge tone="green">pulih</Badge> : null}
                       <span style={{ fontSize: 12, color: theme.textMuted }}>{fmtDate(e.ts)}</span>
                       <span style={{ fontSize: 11.5, color: theme.textMuted, fontFamily: "monospace" }}>
                         {e.berkas}

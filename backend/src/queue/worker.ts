@@ -7,6 +7,7 @@ import { loadProviders, getProvider } from "../providers/registry.js";
 import { BLAST_QUEUE, type BlastJob } from "./blastQueue.js";
 import { SHEET_QUEUE, type SheetJob } from "./sheetQueue.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "../lib/errorLog.js";
+import { logGalatBerulang, logPulih } from "../lib/peredamGalat.js";
 import { startRetentionSweeper } from "../lib/retention.js";
 import { bolehMulaiSurvei, provinsiDariAtribut } from "../services/kuotaSurvei.js";
 import { decryptJson } from "../lib/crypto.js";
@@ -159,8 +160,10 @@ async function main() {
   worker.on("failed", (job, err) => {
     console.error(`Job ${job?.id} gagal:`, err.message);
   });
-  // Error tingkat worker (mis. koneksi Redis putus) → catat ke file log.
-  worker.on("error", (err) => logError("worker", err, { scope: "worker" }));
+  // Error tingkat worker (mis. koneksi Redis putus) → catat ke file log, TEREDAM.
+  // ioredis memancarkan error tiap percobaan sambung ulang; tanpa peredam, satu deploy
+  // menghasilkan puluhan baris identik berstempel waktu sama.
+  worker.on("error", (err) => logGalatBerulang("worker", "worker", err));
   worker.on("completed", (job) => {
     console.log(`Job ${job.id} selesai → ${job.returnvalue}`);
   });
@@ -208,11 +211,16 @@ async function main() {
     { connection: bullConnection, concurrency: 1 },
   );
   sheetWorker.on("failed", (job, err) => logError("worker", err, { scope: "sheetWorker", jobId: job?.id }));
-  sheetWorker.on("error", (err) => logError("worker", err, { scope: "sheetWorker" }));
+  sheetWorker.on("error", (err) => logGalatBerulang("worker", "sheetWorker", err));
 
   // Pembersihan WebhookLog berkala. Ditaruh di worker, bukan backend, supaya hanya ada
   // SATU proses yang menjalankannya walau backend kelak diperbanyak.
   startRetentionSweeper();
+
+  // Penutup cerita gangguan koneksi. Satu instance Redis dipakai kedua worker, jadi satu
+  // sinyal "ready" menutup semua gangguan yang sedang aktif. Pada sambungan pertama yang
+  // normal tidak ada gangguan aktif, sehingga tidak menulis apa pun.
+  connection.on("ready", () => logPulih("worker", "Koneksi Redis"));
 
   console.log("✅ Blast worker berjalan, menunggu job...");
 
