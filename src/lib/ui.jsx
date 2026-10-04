@@ -997,7 +997,9 @@ export function Checkbox({ checked, onChange, onClick }) {
 }
 
 // Bar aksi massal — muncul saat ada item terpilih
-export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDelete, noun = "item", busy }) {
+// `actions`: tombol tambahan (mis. Unduh) yang tampil sebelum tombol Hapus.
+// `onDelete` opsional — ada daftar yang boleh diekspor tapi tidak boleh dihapus massal.
+export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDelete, actions, noun = "item", busy }) {
   if (!count) return null;
   return (
     <div
@@ -1038,9 +1040,74 @@ export function BulkBar({ count, total, allSelected, onToggleAll, onClear, onDel
       >
         Bersihkan
       </button>
-      <Button variant="danger" size="sm" icon="trash" onClick={onDelete} disabled={busy} style={{ marginLeft: "auto" }}>
-        {busy ? "Menghapus..." : `Hapus ${count}`}
-      </Button>
+      <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+        {actions}
+        {onDelete ? (
+          <Button variant="danger" size="sm" icon="trash" onClick={onDelete} disabled={busy}>
+            {busy ? "Menghapus..." : `Hapus ${count}`}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// Baris paginasi di kaki daftar. Diangkat dari halaman Kontak saat halaman Log Galat
+// membutuhkan pola yang sama — daftar panjang yang harus di-scroll terus itu bukan
+// sekadar tidak nyaman, ia membuat entri lama praktis tak terjangkau.
+//
+// `start` dihitung pemanggil karena hanya dia yang tahu apakah datanya dipotong di server
+// (indeks global) atau di klien.
+export function Pagination({ page, pageCount, pageSize, pageSizes, total, start, onPage, onPageSize, noun = "item" }) {
+  if (!total) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 10,
+        flexWrap: "wrap",
+        padding: "12px 18px",
+        borderTop: `1px solid ${theme.border}`,
+      }}
+    >
+      <div style={{ fontSize: 12.5, color: theme.textMuted }}>
+        Menampilkan {start + 1}–{Math.min(start + pageSize, total)} dari {total} {noun}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        {pageSizes?.length ? (
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSize(Number(e.target.value))}
+            aria-label="Jumlah per halaman"
+            style={{
+              padding: "6px 9px",
+              border: `1px solid ${theme.border}`,
+              borderRadius: 8,
+              background: theme.surface,
+              color: theme.text,
+              fontSize: 12.5,
+              cursor: "pointer",
+            }}
+          >
+            {pageSizes.map((n) => (
+              <option key={n} value={n}>
+                {n} / halaman
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <Button variant="secondary" size="sm" onClick={() => onPage(page - 1)} disabled={page <= 1}>
+          Sebelumnya
+        </Button>
+        <span style={{ fontSize: 12.5, color: theme.textMuted, minWidth: 78, textAlign: "center" }}>
+          Hal. {page} / {pageCount}
+        </span>
+        <Button variant="secondary" size="sm" onClick={() => onPage(page + 1)} disabled={page >= pageCount}>
+          Berikutnya
+        </Button>
+      </div>
     </div>
   );
 }

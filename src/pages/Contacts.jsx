@@ -15,11 +15,13 @@ import {
   useSelection,
   Checkbox,
   BulkBar,
+  Pagination,
   theme,
   fmtDate,
   Icon,
 } from "../lib/ui";
 import { ContactImporter } from "../lib/contactImport";
+import { exportContacts } from "../lib/exportKontak";
 
 const PAGE_SIZES = [100, 500, 1000, 1500];
 
@@ -41,6 +43,7 @@ export default function Contacts({ readOnly = false }) {
   const [actionError, setActionError] = useState("");
   const sel = useSelection();
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [unduhBusy, setUnduhBusy] = useState(false);
 
   // Tenangkan ketikan 350 ms — tiap huruf tidak boleh jadi satu query ke server.
   // Halaman kembali ke 1: hasil saringan baru bisa lebih pendek dari posisi lama.
@@ -66,6 +69,39 @@ export default function Contacts({ readOnly = false }) {
       await loader.reload();
     } catch (e) {
       setActionError(e.message);
+    }
+  };
+
+  // Unduh kontak sebagai .xlsx. `ids` kosong berarti SEMUA yang cocok dengan pencarian,
+  // bukan hanya halaman yang terlihat — karena itu jumlahnya dikonfirmasi lebih dulu.
+  const unduh = async (ids) => {
+    const jumlah = ids?.length ?? total;
+    if (!jumlah) return;
+    if (
+      !ids &&
+      !(await confirmDialog({
+        title: "Unduh kontak",
+        // Menyebut isinya, bukan sekadar jumlahnya. Berkas berisi nomor telepon berpindah
+        // dari sistem yang berizin ke komputer siapa pun yang mengunduhnya.
+        message: `Unduh ${jumlah} kontak${search ? " yang cocok dengan pencarian" : ""}? Berkasnya memuat nomor telepon dan atribut hasil impor.`,
+        confirmText: "Unduh",
+      }))
+    )
+      return;
+    setUnduhBusy(true);
+    setActionError("");
+    try {
+      const data = await api.exportContacts(ids ? { ids } : { search });
+      if (!data.length) {
+        setActionError("Tidak ada kontak untuk diunduh.");
+        return;
+      }
+      await exportContacts(data, "xlsx");
+      if (ids) sel.clear();
+    } catch (e) {
+      setActionError(e.message);
+    } finally {
+      setUnduhBusy(false);
     }
   };
 
@@ -108,6 +144,16 @@ export default function Contacts({ readOnly = false }) {
           ...(readOnly
             ? []
             : [
+                <Button
+                  key="d"
+                  variant="secondary"
+                  icon="download"
+                  onClick={() => unduh(null)}
+                  disabled={unduhBusy || !total}
+                  title="Unduh semua kontak yang cocok dengan pencarian"
+                >
+                  {unduhBusy ? "Menyiapkan..." : "Unduh"}
+                </Button>,
                 <Button key="b" variant="secondary" icon="upload" onClick={() => setBulkOpen(true)}>
                   Impor Massal
                 </Button>,
@@ -128,6 +174,17 @@ export default function Contacts({ readOnly = false }) {
           onToggleAll={() => (allSelected ? sel.clear() : sel.setAll(contacts.map((c) => c.id)))}
           onClear={sel.clear}
           onDelete={bulkDelete}
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="download"
+              onClick={() => unduh(sel.list())}
+              disabled={unduhBusy}
+            >
+              {unduhBusy ? "Menyiapkan..." : `Unduh ${sel.size}`}
+            </Button>
+          }
         />
       )}
       <Card pad={0}>
@@ -265,62 +322,20 @@ export default function Contacts({ readOnly = false }) {
             }
           />
         )}
-        {total > 0 ? (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-              padding: "12px 18px",
-              borderTop: `1px solid ${theme.border}`,
-            }}
-          >
-            <div style={{ fontSize: 12.5, color: theme.textMuted }}>
-              Menampilkan {start + 1}–{Math.min(start + pageSize, total)} dari {total} kontak
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                aria-label="Jumlah per halaman"
-                style={{
-                  padding: "6px 9px",
-                  border: `1px solid ${theme.border}`,
-                  borderRadius: 8,
-                  background: theme.surface,
-                  color: theme.text,
-                  fontSize: 12.5,
-                  cursor: "pointer",
-                }}
-              >
-                {PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>
-                    {n} / halaman
-                  </option>
-                ))}
-              </select>
-              <Button variant="secondary" size="sm" onClick={() => setPage(curPage - 1)} disabled={curPage <= 1}>
-                Sebelumnya
-              </Button>
-              <span style={{ fontSize: 12.5, color: theme.textMuted, minWidth: 78, textAlign: "center" }}>
-                Hal. {curPage} / {pageCount}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage(curPage + 1)}
-                disabled={curPage >= pageCount}
-              >
-                Berikutnya
-              </Button>
-            </div>
-          </div>
-        ) : null}
+        <Pagination
+          page={curPage}
+          pageCount={pageCount}
+          pageSize={pageSize}
+          pageSizes={PAGE_SIZES}
+          total={total}
+          start={start}
+          onPage={setPage}
+          onPageSize={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+          noun="kontak"
+        />
       </Card>
       {modal !== null ? (
         <ContactModal

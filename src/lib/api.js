@@ -88,9 +88,9 @@ export const api = {
   stats: () => request("/api/stats"),
   webhookLogs: (limit = 100) => request(`/api/webhook-logs?limit=${limit}`),
   // Log galat terstruktur (berkas .log di server) — hanya superadmin.
-  errorLog: ({ limit = 200, sumber = "", cari = "" } = {}) =>
+  errorLog: ({ limit = 100, halaman = 1, sumber = "", cari = "" } = {}) =>
     request(
-      `/api/log?limit=${limit}` +
+      `/api/log?limit=${limit}&halaman=${halaman}` +
         (sumber ? `&sumber=${encodeURIComponent(sumber)}` : "") +
         (cari ? `&cari=${encodeURIComponent(cari)}` : ""),
     ),
@@ -123,6 +123,8 @@ export const api = {
   updateContact: (id, data) => request(`/api/contacts/${id}`, { method: "PUT", body: data }),
   deleteContact: (id) => request(`/api/contacts/${id}`, { method: "DELETE" }),
   bulkDeleteContacts: (ids) => request("/api/contacts/bulk-delete", { method: "POST", body: { ids } }),
+  // Kontak untuk diunduh: yang dipilih (ids), atau semua yang cocok dengan pencarian.
+  exportContacts: ({ ids, search } = {}) => request("/api/contacts/export", { method: "POST", body: { ids, search } }),
   bulkDeleteConversations: (ids) => request("/api/conversations/bulk-delete", { method: "POST", body: { ids } }),
 
   // Chat

@@ -11,6 +11,7 @@ import {
   Loading,
   Empty,
   StatStrip,
+  Pagination,
   useLoader,
   useIsMobile,
   theme,
@@ -25,6 +26,7 @@ import {
 // dan yang kedua justru muncul saat paling dibutuhkan.
 
 const TONE = { backend: "blue", worker: "purple", "ai-agent": "yellow" };
+const PER_HALAMAN = 100;
 
 function ukuranTeks(b) {
   if (b < 1024) return `${b} B`;
@@ -62,8 +64,8 @@ export default function Log() {
   const isMobile = useIsMobile();
   const [sumber, setSumber] = useState("");
   const [cari, setCari] = useState("");
-  const [kueri, setKueri] = useState({ sumber: "", cari: "" });
-  const log = useLoader(useCallback(() => api.errorLog({ ...kueri, limit: 200 }), [kueri]));
+  const [kueri, setKueri] = useState({ sumber: "", cari: "", halaman: 1 });
+  const log = useLoader(useCallback(() => api.errorLog({ ...kueri, limit: PER_HALAMAN }), [kueri]));
 
   const d = log.data;
   const entri = d?.entri || [];
@@ -71,7 +73,9 @@ export default function Log() {
   const terakhir = useMemo(() => [...berkas.map((b) => b.terakhir)].sort().at(-1) || null, [berkas]);
   const menyaring = Boolean(kueri.sumber || kueri.cari);
 
-  const terapkan = () => setKueri({ sumber, cari: cari.trim() });
+  // Penyaringan baru selalu kembali ke halaman 1: hasilnya bisa lebih pendek dari
+  // posisi lama, dan mendarat di halaman kosong terbaca sebagai log yang hilang.
+  const terapkan = () => setKueri({ sumber, cari: cari.trim(), halaman: 1 });
 
   return (
     <div>
@@ -151,7 +155,7 @@ export default function Log() {
             value={sumber}
             onChange={(e) => {
               setSumber(e.target.value);
-              setKueri({ sumber: e.target.value, cari: cari.trim() });
+              setKueri({ sumber: e.target.value, cari: cari.trim(), halaman: 1 });
             }}
             options={[{ value: "", label: "Semua" }, ...(d?.sumberTersedia || []).map((s) => ({ value: s, label: s }))]}
           />
@@ -209,11 +213,19 @@ export default function Log() {
                 </details>
               ))}
             </div>
-            {d?.adaLagi ? (
-              <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 12 }}>
-                Hanya 200 entri terbaru yang ditampilkan. Persempit dengan pencarian untuk melihat yang lebih lama.
-              </div>
-            ) : null}
+            {/* Margin negatif agar garis atas paginasi membentang penuh selebar kartu,
+                sejajar dengan halaman Kontak. */}
+            <div style={{ margin: "14px -18px -18px" }}>
+              <Pagination
+                page={d?.halaman ?? 1}
+                pageCount={Math.max(1, Math.ceil((d?.total ?? 0) / PER_HALAMAN))}
+                pageSize={PER_HALAMAN}
+                total={d?.total ?? 0}
+                start={((d?.halaman ?? 1) - 1) * PER_HALAMAN}
+                onPage={(n) => setKueri((k) => ({ ...k, halaman: n }))}
+                noun="entri"
+              />
+            </div>
           </>
         ) : menyaring ? (
           <Empty icon="search" title="Tidak ada yang cocok" note="Ubah kata pencarian atau pilih sumber lain." />

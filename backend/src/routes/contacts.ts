@@ -191,6 +191,44 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, deleted: r.count };
   });
 
+  // Kontak untuk diunduh: yang dipilih (ids), atau SEMUA yang cocok dengan pencarian.
+  //
+  // Dibuat POST, bukan GET, dengan sengaja. Pertama, daftar id bisa ribuan dan tidak muat
+  // di URL. Kedua — yang lebih penting — hook requireWriter menolak non-GET untuk peran
+  // viewer, sehingga viewer tidak bisa membawa pulang seluruh basis nomor dalam satu
+  // berkas. Ia tetap boleh melihat kontak di layar; memindahkan 5.000 nomor keluar sistem
+  // adalah perbuatan yang berbeda bobotnya, dan pembatasannya ikut gratis di sini.
+  app.post("/api/contacts/export", async (req, reply) => {
+    const parsed = z
+      .object({ ids: z.array(z.string()).max(50_000).optional(), search: z.string().optional() })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    const { ids, search } = parsed.data;
+    const q = search?.trim();
+    const where = ids?.length
+      ? { id: { in: ids } }
+      : q
+        ? { OR: [{ phone: { contains: q } }, { name: { contains: q, mode: "insensitive" as const } }] }
+        : {};
+    // Batas atas supaya satu permintaan tidak menarik tabel sebesar apa pun ke memori.
+    // Bila kena, klien diberi tahu — unduhan yang diam-diam terpotong jauh lebih buruk
+    // daripada unduhan yang gagal.
+    const MAKS = 50_000;
+    const total = await prisma.contact.count({ where });
+    if (total > MAKS) return reply.code(413).send({ error: `Terlalu banyak (${total}). Persempit dengan pencarian.` });
+    const contacts = await prisma.contact.findMany({ where, orderBy: { createdAt: "desc" } });
+    return contacts.map((c) => ({
+      id: c.id,
+      phone: c.phone,
+      name: c.name,
+      attributes: c.attributes,
+      subscribed: c.subscribed,
+      optOutAt: c.optOutAt,
+      consentSource: c.consentSource,
+      createdAt: c.createdAt,
+    }));
+  });
+
   // Hapus banyak percakapan (riwayat pesan) sekaligus — kontak tetap ada
   app.post("/api/conversations/bulk-delete", async (req, reply) => {
     const parsed = z.object({ ids: z.array(z.string()).min(1).max(5000) }).safeParse(req.body);

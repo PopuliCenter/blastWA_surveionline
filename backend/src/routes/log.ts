@@ -78,9 +78,10 @@ export async function logRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/log", async (req) => {
-    const { limit, sumber, cari } = z
+    const { limit, halaman, sumber, cari } = z
       .object({
-        limit: z.coerce.number().int().min(1).max(500).default(200),
+        limit: z.coerce.number().int().min(1).max(500).default(100),
+        halaman: z.coerce.number().int().min(1).default(1),
         sumber: z.string().trim().optional(),
         cari: z.string().trim().optional(),
       })
@@ -100,7 +101,7 @@ export async function logRoutes(app: FastifyInstance): Promise<void> {
     try {
       nama = (await readdir(dir)).filter((f) => f.endsWith(".log")).sort();
     } catch {
-      return { dir, bisaDitulis, berkas: [], entri: [], sumberTersedia: [], adaLagi: false };
+      return { dir, bisaDitulis, berkas: [], entri: [], sumberTersedia: [], total: 0, halaman: 1, limit };
     }
 
     const berkas: { nama: string; ukuran: number; terakhir: string | null }[] = [];
@@ -133,13 +134,22 @@ export async function logRoutes(app: FastifyInstance): Promise<void> {
     );
     tersaring.sort((a, b) => b.ts.localeCompare(a.ts));
 
+    // Halaman diambil SETELAH penyaringan, dan dijepit ke halaman terakhir yang ada:
+    // jendela ekor bisa menyusut di antara dua permintaan, dan halaman 7 yang tiba-tiba
+    // kosong terbaca sebagai log yang hilang.
+    const halamanTerakhir = Math.max(1, Math.ceil(tersaring.length / limit));
+    const h = Math.min(halaman, halamanTerakhir);
+    const mulai = (h - 1) * limit;
+
     return {
       dir,
       bisaDitulis,
       berkas,
       sumberTersedia,
-      adaLagi: tersaring.length > limit,
-      entri: tersaring.slice(0, limit),
+      total: tersaring.length,
+      halaman: h,
+      limit,
+      entri: tersaring.slice(mulai, mulai + limit),
     };
   });
 }
