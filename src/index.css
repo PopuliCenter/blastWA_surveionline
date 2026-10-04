@@ -10,7 +10,7 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: #0f172a;
@@ -19,6 +19,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* Angka selebar sama. Dashboard ini penuh kolom angka — jumlah respons, kuota, nominal
+     invoice — dan dengan lebar proporsional digitnya bergoyang antar baris sehingga kolom
+     terbaca miring. Perbedaannya kecil per baris, tapi kentara pada tabel. */
+  font-variant-numeric: tabular-nums;
 }
 
 #root {
@@ -33,6 +37,20 @@ p {
   margin: 0;
 }
 
+/* Judul besar: spasi huruf dirapatkan sedikit. Inter pada ukuran 20px ke atas terbaca
+   renggang dengan tracking bawaannya, dan itulah yang membuat judul tampak seperti teks
+   badan yang dibesarkan, bukan judul. */
+h1 {
+  letter-spacing: -0.021em;
+}
+
+/* Baris terakhir judul tidak menyisakan satu kata menggantung sendirian. Diabaikan
+   browser yang belum mendukung, jadi aman dipasang begitu saja. */
+h1,
+h2 {
+  text-wrap: balance;
+}
+
 button {
   font-family: inherit;
 }
@@ -41,11 +59,88 @@ img {
   max-width: 100%;
 }
 
+/* ===== Fokus keyboard =====
+   Gaya kontrol ditulis inline di ui.jsx dan inline tidak bisa menyatakan :focus, sehingga
+   sebelum ini fokus keyboard TIDAK terlihat sama sekali pada input: inputStyle memasang
+   outline:none tanpa pengganti. Itu bukan soal rasa — tanpa penanda fokus, aplikasi ini
+   tidak bisa dipakai tanpa tetikus.
+
+   Dipakai :focus-visible, bukan :focus, supaya klik tetikus tidak meninggalkan cincin yang
+   mengganggu sementara navigasi Tab tetap jelas. :where() menjaga spesifisitasnya nol agar
+   tidak pernah menang atas gaya komponen. */
+:where(input, select, textarea, button, a, [tabindex]):focus {
+  outline: none;
+}
+
+:where(input, select, textarea):focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+:where(button, a, summary, [tabindex]):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 9px;
+}
+
+/* Perpindahan keadaan dihaluskan. Tanpa ini border input berganti warna seketika saat
+   fokus, dan perubahan mendadak terbaca sebagai kedipan, bukan sebagai respons. */
+input,
+select,
+textarea {
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+/* Batang gulir ramping. Bawaan Windows lebarnya 17px dengan latar abu terang yang memotong
+   tepi kanan panel; pada dashboard dengan banyak daftar, itu yang pertama terlihat kasar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
 /* Cegah auto-zoom iOS Safari saat fokus ke input di layar kecil */
 @media (max-width: 768px) {
   input,
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Hormati pengaturan sistem. Animasi di sini sekadar penghalus, jadi mematikannya tidak
+   menghilangkan informasi apa pun. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

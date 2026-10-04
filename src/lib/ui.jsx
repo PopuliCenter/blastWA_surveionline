@@ -22,11 +22,15 @@ export const theme = {
   purpleSoft: "#f5f3ff",
 };
 
+// Bayangan BERLAPIS, bukan satu bayangan datar. Cahaya nyata menghasilkan bayangan kontak
+// yang rapat dan tajam ditambah bayangan ruang yang luas dan samar; satu lapis saja selalu
+// terbaca sebagai stiker yang ditempel. Ketiganya sengaja nyaris tak terlihat sendiri-sendiri
+// — yang dicari kedalaman, bukan efek.
 export const card = {
   background: theme.surface,
   border: `1px solid ${theme.border}`,
   borderRadius: 14,
-  boxShadow: "0 1px 2px rgba(16,24,40,0.04)",
+  boxShadow: "0 1px 2px rgba(16,24,40,0.04), 0 2px 6px -2px rgba(16,24,40,0.04), 0 12px 24px -16px rgba(16,24,40,0.10)",
 };
 
 export const fontStack = "'Inter','Segoe UI',system-ui,sans-serif";
@@ -372,7 +376,7 @@ export function Button({ children, icon, variant = "primary", size = "md", ...pr
         gap: 7,
         cursor: props.disabled ? "not-allowed" : "pointer",
         opacity: props.disabled ? 0.55 : 1,
-        transition: "filter .15s",
+        transition: "filter .15s, box-shadow .15s",
         fontFamily: fontStack,
         ...variants[variant],
         ...(props.style || {}),
@@ -800,7 +804,18 @@ export function StatCard({ label, value, note, tone = "blue", icon }) {
           </span>
         ) : null}
       </div>
-      <div style={{ fontSize: 23, fontWeight: 700, color: theme.text, marginTop: 5, lineHeight: 1.2 }}>{value}</div>
+      <div
+        style={{
+          fontSize: 23,
+          fontWeight: 700,
+          color: theme.text,
+          marginTop: 5,
+          lineHeight: 1.2,
+          letterSpacing: "-0.02em",
+        }}
+      >
+        {value}
+      </div>
       {note ? <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 4 }}>{note}</div> : null}
     </div>
   );
@@ -838,7 +853,15 @@ export function StatStrip({ items, min = 120 }) {
     >
       {items.map((it) => (
         <div key={it.label} style={{ background: theme.surfaceAlt, padding: "9px 12px" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25, color: TONE_FG[it.tone] || TONE_FG.default }}>
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              lineHeight: 1.25,
+              letterSpacing: "-0.02em",
+              color: TONE_FG[it.tone] || TONE_FG.default,
+            }}
+          >
             {it.value}
           </div>
           <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 2 }}>{it.label}</div>
