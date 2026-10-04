@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
+import { PROVINSI } from "../lib/wilayah.js";
 
 const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
@@ -156,5 +157,73 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
         .sort((a, b) => (a.question.order ?? 0) - (b.question.order ?? 0))
         .map((a) => ({ question: a.question.text, value: a.value })),
     }));
+  });
+
+  // ===== Kuota responden =====
+  //
+  // Dua tingkat: batas global untuk seluruh survei, dan batas per provinsi. Dipakai klien
+  // untuk membatasi sebaran sekaligus menahan biaya — tiap responden berbiaya pesan.
+
+  app.get("/api/surveys/:id/kuota", async (req) => {
+    const id = (req.params as { id: string }).id;
+    const [survey, kuota, perProvinsi, terisiGlobal] = await Promise.all([
+      prisma.survey.findUnique({ where: { id }, select: { targetResponden: true } }),
+      prisma.kuotaProvinsi.findMany({ where: { surveyId: id }, orderBy: { kodeProvinsi: "asc" } }),
+      // Keterisian dihitung dari responden SELESAI yang provinsinya sudah distempel.
+      prisma.surveyResponse.groupBy({
+        by: ["kodeProvinsi"],
+        where: { surveyId: id, completedAt: { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null } } }),
+    ]);
+    const terisi = new Map(perProvinsi.map((r) => [r.kodeProvinsi ?? "", r._count._all]));
+    return {
+      targetResponden: survey?.targetResponden ?? null,
+      terisiGlobal,
+      // Tanpa provinsi = responden selesai yang provinsinya tidak diketahui. Ditampilkan
+      // apa adanya: menyembunyikannya membuat jumlah per provinsi tampak tidak menjumlah.
+      tanpaProvinsi: terisi.get("") ?? 0,
+      provinsi: PROVINSI.map((p) => ({
+        kodeProvinsi: p.kode,
+        nama: p.nama,
+        target: kuota.find((k) => k.kodeProvinsi === p.kode)?.target ?? null,
+        terisi: terisi.get(p.kode) ?? 0,
+      })),
+    };
+  });
+
+  app.put("/api/surveys/:id/kuota", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const parsed = z
+      .object({
+        targetResponden: z.coerce.number().int().min(0).nullable().optional(),
+        provinsi: z
+          .array(z.object({ kodeProvinsi: z.string().min(2).max(2), target: z.coerce.number().int().min(0).nullable() }))
+          .max(40)
+          .optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+
+    if (parsed.data.targetResponden !== undefined)
+      await prisma.survey.update({ where: { id }, data: { targetResponden: parsed.data.targetResponden } });
+
+    for (const p of parsed.data.provinsi ?? []) {
+      // target null/0 dihapus, bukan disimpan sebagai 0 — 0 berarti "tak seorang pun boleh",
+      // yang hampir pasti bukan maksud pemakai saat ia mengosongkan kolomnya.
+      if (p.target === null || p.target === undefined) {
+        await prisma.kuotaProvinsi
+          .delete({ where: { surveyId_kodeProvinsi: { surveyId: id, kodeProvinsi: p.kodeProvinsi } } })
+          .catch(() => {});
+        continue;
+      }
+      await prisma.kuotaProvinsi.upsert({
+        where: { surveyId_kodeProvinsi: { surveyId: id, kodeProvinsi: p.kodeProvinsi } },
+        update: { target: p.target },
+        create: { surveyId: id, kodeProvinsi: p.kodeProvinsi, target: p.target },
+      });
+    }
+    return { ok: true };
   });
 }

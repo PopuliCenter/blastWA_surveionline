@@ -6,12 +6,14 @@ import { SurveyBuilder } from "./survey/SurveyBuilder";
 import { SurveyResponses } from "./survey/SurveyResponses";
 import { SurveyPreviewModal } from "./survey/SurveyPreviewModal";
 import { SurveyGuide } from "./survey/SurveyGuide";
+import { SurveyKuotaModal } from "./survey/SurveyKuotaModal";
 
 export default function Surveys() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
   const [modal, setModal] = useState(null);
   const [responsesFor, setResponsesFor] = useState(null);
   const [previewFor, setPreviewFor] = useState(null);
+  const [kuotaFor, setKuotaFor] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
   const surveys = data || [];
@@ -139,6 +141,9 @@ export default function Surveys() {
                 <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>
                   Preview
                 </Button>
+                <Button variant="secondary" size="sm" icon="survey" onClick={() => setKuotaFor(s)}>
+                  Kuota
+                </Button>
                 <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
                   Edit
                 </Button>
@@ -157,6 +162,7 @@ export default function Surveys() {
       )}
 
       {previewFor ? <SurveyPreviewModal survey={previewFor} onClose={() => setPreviewFor(null)} /> : null}
+      {kuotaFor ? <SurveyKuotaModal survey={kuotaFor} onClose={() => setKuotaFor(null)} /> : null}
     </div>
   );
 }

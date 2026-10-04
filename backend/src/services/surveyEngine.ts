@@ -12,6 +12,8 @@ import {
   OPT_IN_REPLY,
 } from "../lib/optOut.js";
 import { suppressNumber, unsuppressNumber } from "../lib/optOutList.js";
+import { kodeProvinsiDari } from "../lib/wilayah.js";
+import { bolehMulaiSurvei, pesanKuotaPenuh, provinsiDariAtribut, stempelProvinsi } from "./kuotaSurvei.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
@@ -370,9 +372,30 @@ async function startSurvey(
   blastId?: string,
 ): Promise<void> {
   const provider = getProvider(vendor);
+
+  // Kuota diperiksa SEBELUM apa pun dikirim. Untuk kontak hasil impor, provinsinya sudah
+  // diketahui dari atribut, sehingga penerima dari provinsi yang kuotanya penuh ditolak
+  // tanpa satu pesan survei pun terkirim. Untuk responden organik, provinsinya belum
+  // diketahui di titik ini — yang berlaku hanya batas global.
+  const kontak = await prisma.contact.findUnique({ where: { id: contactId }, select: { attributes: true } });
+  const kodeProv = provinsiDariAtribut(kontak?.attributes);
+  const kuota = await bolehMulaiSurvei(survey.id, kodeProv);
+  if (!kuota.boleh) {
+    // Dijawab, bukan didiamkan: kebisuan terbaca seperti nomor mati dan merusak kepercayaan
+    // justru pada orang yang bersedia ikut.
+    await reply(vendor, phone, pesanKuotaPenuh(kuota, kodeProv), contactId, "survey");
+    return;
+  }
+
   if (survey.mode === "flow" && survey.flowId && typeof provider.sendFlow === "function") {
     const resp = await prisma.surveyResponse.create({
-      data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) },
+      data: {
+        surveyId: survey.id,
+        contactId,
+        currentStep: 0,
+        ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
+        ...(blastId ? { blastId } : {}),
+      },
     });
     const body = survey.description ? `${survey.title}\n\n${survey.description}` : survey.title;
     const flowInput = {
@@ -424,7 +447,13 @@ async function startSurvey(
   }
   // Fallback / mode chat
   await prisma.surveyResponse.create({
-    data: { surveyId: survey.id, contactId, currentStep: 0, ...(blastId ? { blastId } : {}) },
+    data: {
+      surveyId: survey.id,
+      contactId,
+      currentStep: 0,
+      ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
+      ...(blastId ? { blastId } : {}),
+    },
   });
   const first = formatQuestion(survey.questions[0]!);
   const intro = survey.description ? `${survey.description}\n\n${first}` : first;
@@ -539,6 +568,14 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
   const answers = parseFlowAnswers(flowResp, questions);
   for (const a of answers)
     await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
+
+  // Jawaban responden MENIMPA tebakan dari atribut impor: yang mengisi tahu domisilinya
+  // sendiri, sedangkan atribut impor bisa usang atau salah kolom.
+  const qWilayah = questions.find((q) => q.type === "wilayah");
+  if (qWilayah) {
+    const jawab = answers.find((a) => a.questionId === qWilayah.id);
+    if (jawab) await stempelProvinsi(surveyResponse.id, kodeProvinsiDari(jawab.value));
+  }
   await prisma.surveyResponse.update({
     where: { id: surveyResponse.id },
     data: { completedAt: new Date(), currentStep: surveyResponse.survey.questions.length },
@@ -580,6 +617,7 @@ async function advanceSurvey(
     }
     savedValue = v.value;
     await saveAnswer(responseId, current.id, savedValue);
+    if (current.type === "wilayah") await stempelProvinsi(responseId, kodeProvinsiDari(savedValue));
   }
 
   // Skip logic: pertanyaan berikutnya bisa dilompati / survei diakhiri sesuai jawaban.

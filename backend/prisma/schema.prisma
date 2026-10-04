@@ -71,10 +71,31 @@ model Survey {
   privacyUrl      String? // tautan kebijakan privasi (EmbeddedLink di layar pertama flow)
   bannerUrl       String? // gambar banner di pesan pembuka survei (header pesan Flow / caption di mode chat)
   closingMessage  String? // kata penutup custom saat survei selesai (kosong = pakai default)
+  // Batas jumlah responden SELESAI untuk seluruh survei. null = tanpa batas.
+  // Begitu tercapai, survei berhenti menerima responden baru — pemicu ditolak halus dan
+  // blast melewati sisa penerimanya. Ini pengendali biaya: tiap responden berbiaya pesan.
+  targetResponden Int?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]
   responses       SurveyResponse[]
+  kuotaProvinsi   KuotaProvinsi[]
+}
+
+// Kuota responden per provinsi untuk satu survei.
+//
+// Dipakai saat klien membatasi sebaran, mis. Jawa Barat 200 responden dan Jawa Tengah 150.
+// Tanpa ini, satu provinsi yang ramai bisa menghabiskan anggaran pesan sebelum provinsi
+// lain terwakili — dan datanya pun jadi timpang.
+model KuotaProvinsi {
+  id           String @id @default(cuid())
+  surveyId     String
+  survey       Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  kodeProvinsi String // 2 digit, kode resmi Kepmendagri (lihat lib/wilayah.ts)
+  target       Int
+
+  @@unique([surveyId, kodeProvinsi])
+  @@index([surveyId])
 }
 
 model Question {
@@ -205,9 +226,15 @@ model SurveyResponse {
   // Sudah tertulis ke Google Sheets. Penjaga idempoten worker sheets sekaligus dasar
   // backfill (completedAt terisi + sheetSyncedAt kosong = belum terdorong).
   sheetSyncedAt DateTime?
+  // Provinsi responden, 2 digit kode resmi. Distempel saat diketahui — dari atribut kontak
+  // hasil impor bila ada, atau dari jawaban pertanyaan wilayah. Disimpan di sini, bukan
+  // dihitung ulang dari jawaban, supaya penghitungan kuota cukup satu groupBy dan tidak
+  // bergantung pada format nilai jawaban.
+  kodeProvinsi  String?
   answers       Answer[]
 
   @@index([contactId])
+  @@index([surveyId, kodeProvinsi]) // untuk menghitung kuota per provinsi
 }
 
 model Answer {

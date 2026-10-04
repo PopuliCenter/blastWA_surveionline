@@ -8,6 +8,7 @@ import { BLAST_QUEUE, type BlastJob } from "./blastQueue.js";
 import { SHEET_QUEUE, type SheetJob } from "./sheetQueue.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "../lib/errorLog.js";
 import { startRetentionSweeper } from "../lib/retention.js";
+import { bolehMulaiSurvei, provinsiDariAtribut } from "../services/kuotaSurvei.js";
 import { decryptJson } from "../lib/crypto.js";
 import { parseServiceAccount } from "../lib/googleAuth.js";
 import { sheetTabName, sheetHeader, sheetRow } from "../lib/sheetRows.js";
@@ -51,7 +52,7 @@ async function main() {
 
       const recipient = await prisma.blastRecipient.findUnique({
         where: { id: recipientId },
-        include: { contact: { select: { subscribed: true } } },
+        include: { contact: { select: { subscribed: true, attributes: true } } },
       });
 
       // 0) Idempotensi: bila recipient sudah TIDAK "queued" (mis. sudah terkirim lalu job
@@ -67,6 +68,32 @@ async function main() {
         });
         await maybeComplete(blastId);
         return "skip-optout";
+      }
+
+      // 1b) Kuota responden → lewati tanpa mengirim apa pun.
+      //
+      // Di SINILAH kuota per provinsi benar-benar menekan biaya. Penerima blast berasal dari
+      // impor, jadi provinsinya sudah diketahui sebelum pesan dikirim; begitu kuota provinsi
+      // itu penuh, sisa penerimanya dilewati dan tidak ada satu pesan pun yang ditagih.
+      // Pemeriksaannya di sini, bukan saat blast dibuat, supaya angkanya SEGAR — kuota bisa
+      // penuh di tengah pengiriman oleh responden yang masuk belakangan.
+      if (blastId) {
+        const blast = await prisma.blast.findUnique({ where: { id: blastId }, select: { surveyId: true } });
+        if (blast?.surveyId) {
+          const kodeProv = provinsiDariAtribut(recipient.contact?.attributes);
+          const kuota = await bolehMulaiSurvei(blast.surveyId, kodeProv);
+          if (!kuota.boleh) {
+            await prisma.blastRecipient.update({
+              where: { id: recipientId },
+              data: {
+                status: "failed",
+                error: `dilewati: kuota ${kuota.alasan} terpenuhi (${kuota.terisi}/${kuota.target})`,
+              },
+            });
+            await maybeComplete(blastId);
+            return `skip-kuota-${kuota.alasan}`;
+          }
+        }
       }
 
       // 2) Batas harian (warm-up) → tunda job ke besok bila kuota habis

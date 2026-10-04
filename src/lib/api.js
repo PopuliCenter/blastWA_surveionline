@@ -45,6 +45,8 @@ export const api = {
 
   // Surveys
   listSurveys: () => request("/api/surveys"),
+  getKuota: (id) => request(`/api/surveys/${id}/kuota`),
+  saveKuota: (id, data) => request(`/api/surveys/${id}/kuota`, { method: "PUT", body: data }),
   createSurvey: (data) => request("/api/surveys", { method: "POST", body: data }),
   updateSurvey: (id, data) => request(`/api/surveys/${id}`, { method: "PUT", body: data }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),

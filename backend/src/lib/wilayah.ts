@@ -91,3 +91,59 @@ export function cariWilayah(teks: string): { ok: true; value: string } | { ok: f
   }
   return { ok: false, kandidat: [] };
 }
+
+// Kode provinsi (2 digit) dari berbagai bentuk masukan yang nyata ada di sistem ini:
+// kode provinsi itu sendiri, kode kabupaten/kota ("34.04"), nama provinsi dari atribut
+// kontak hasil impor, atau nilai jawaban wilayah yang tersimpan
+// ("Kabupaten Sleman, DI Yogyakarta (34.04)").
+//
+// Satu pintu untuk semuanya, karena kuota per provinsi harus memberi angka yang SAMA
+// apa pun asal datanya — kalau tidak, kuota Jawa Barat dari impor dan dari jawaban akan
+// terhitung sebagai dua provinsi berbeda.
+export function kodeProvinsiDari(nilai: unknown): string | null {
+  const t = String(nilai ?? "").trim();
+  if (!t) return null;
+
+  // Kode dalam tanda kurung di akhir nilai jawaban tersimpan.
+  const kurung = t.match(/\((\d{2})(?:\.\d{2})?\)\s*$/);
+  if (kurung) return PROV_BY_KODE.has(kurung[1]!) ? kurung[1]! : null;
+
+  // Kode polos: "34" atau "34.04".
+  const polos = t.match(/^(\d{2})(?:\.\d{2})?$/);
+  if (polos) return PROV_BY_KODE.has(polos[1]!) ? polos[1]! : null;
+
+  const lc = t.toLowerCase();
+
+  // Sinonim yang HARUS dikenali, bukan hasil tebakan.
+  //
+  // Dua provinsi di daftar ini memakai label pendek (DKI Jakarta, DI Yogyakarta), sedangkan
+  // berkas impor dan data pemerintah lazim memakai bentuk panjangnya. Tanpa pemetaan ini,
+  // kontak dari Jakarta atau Yogyakarta tidak terhitung ke kuota provinsinya — dan salah
+  // hitung seperti itu tidak menimbulkan galat apa pun, cuma angka kuota yang keliru.
+  const SINONIM: Record<string, string> = {
+    "daerah khusus ibukota jakarta": "31",
+    "daerah khusus ibu kota jakarta": "31",
+    "daerah khusus jakarta": "31", // nama resmi sejak UU 2/2024
+    dki: "31",
+    jakarta: "31",
+    "daerah istimewa yogyakarta": "34",
+    diy: "34",
+    yogyakarta: "34",
+    jogjakarta: "34",
+    jogja: "34",
+  };
+
+  // Nama provinsi — dicocokkan ke bentuk resmi maupun label pendek yang dipakai di sini.
+  const persis = PROVINSI.find((p) => p.nama.toLowerCase() === lc);
+  if (persis) return persis.kode;
+
+  // Toleransi penulisan atribut impor: "DKI Jakarta" vs "Daerah Khusus Ibukota Jakarta",
+  // "Jawa Barat" vs "Prov. Jawa Barat". Hanya diterima bila TIDAK ambigu.
+  const bersih = lc.replace(/^(provinsi|prov\.?)\s+/, "").trim();
+  if (SINONIM[bersih]) return SINONIM[bersih]!;
+  const cocok = PROVINSI.filter((p) => {
+    const n = p.nama.toLowerCase();
+    return n === bersih || n.includes(bersih) || bersih.includes(n);
+  });
+  return cocok.length === 1 ? cocok[0]!.kode : null;
+}
