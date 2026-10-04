@@ -137,9 +137,16 @@ export function kodeProvinsiDari(nilai: unknown): string | null {
   const persis = PROVINSI.find((p) => p.nama.toLowerCase() === lc);
   if (persis) return persis.kode;
 
+  // Titik dihilangkan sebelum pencocokan nama. Data lapangan menulis "D.I Yogyakarta" dan
+  // "D.K.I Jakarta", sementara daftar memakai "DI Yogyakarta" dan "DKI Jakarta" — tanpa
+  // penyeragaman ini 63 responden Yogyakarta tidak terhitung, dan kegagalannya senyap.
+  const tanpaTitik = lc.replace(/\./g, "").replace(/\s+/g, " ").trim();
+  const persisTitik = PROVINSI.find((p) => p.nama.toLowerCase().replace(/\./g, "") === tanpaTitik);
+  if (persisTitik) return persisTitik.kode;
+
   // Toleransi penulisan atribut impor: "DKI Jakarta" vs "Daerah Khusus Ibukota Jakarta",
   // "Jawa Barat" vs "Prov. Jawa Barat". Hanya diterima bila TIDAK ambigu.
-  const bersih = lc.replace(/^(provinsi|prov\.?)\s+/, "").trim();
+  const bersih = tanpaTitik.replace(/^(provinsi|prov)\s+/, "").trim();
   if (SINONIM[bersih]) return SINONIM[bersih]!;
   const cocok = PROVINSI.filter((p) => {
     const n = p.nama.toLowerCase();

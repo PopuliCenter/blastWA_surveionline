@@ -81,6 +81,16 @@ describe("kodeProvinsiDari", () => {
     expect(kodeProvinsiDari("Daerah Istimewa Yogyakarta")).toBe("34");
     expect(kodeProvinsiDari("DIY")).toBe("34");
     expect(kodeProvinsiDari("Provinsi DKI Jakarta")).toBe("31");
+    // Bentuk bertitik yang NYATA ada di jawaban lapangan.
+    expect(kodeProvinsiDari("D.I Yogyakarta")).toBe("34");
+    expect(kodeProvinsiDari("D.K.I Jakarta")).toBe("31");
+    expect(kodeProvinsiDari("Prov. Jawa Barat")).toBe("32");
+    // Nama tanpa awalan "Kepulauan" yang juga ada di jawaban lapangan.
+    expect(kodeProvinsiDari("Bangka Belitung")).toBe("19");
+    // Nama pendek yang TIDAK boleh tertukar dengan nama panjang yang memuatnya.
+    expect(kodeProvinsiDari("Riau")).toBe("14");
+    expect(kodeProvinsiDari("Papua")).toBe("91");
+    expect(kodeProvinsiDari("Maluku")).toBe("81");
   });
 
   it("menolak yang tidak dikenali atau ambigu, bukan menebak", () => {

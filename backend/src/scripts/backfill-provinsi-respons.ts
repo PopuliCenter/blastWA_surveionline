@@ -4,16 +4,22 @@
  * Kenapa perlu: kolom itu baru ditambahkan bersama fitur kuota responden, sehingga seluruh
  * respons yang terkumpul sebelumnya bernilai null. Tanpa pengisian mundur, kuota per
  * provinsi mulai menghitung dari NOL — menetapkan Jawa Barat 200 tidak akan memperhitungkan
- * responden Jawa Barat yang sudah masuk, dan kuotanya jadi jauh lebih longgar dari maksud.
+ * responden Jawa Barat yang sudah masuk, dan batasnya jadi jauh lebih longgar dari maksud.
  *
- * Dua sumber, berurutan:
- *   1. Jawaban pertanyaan bertipe "wilayah" pada respons itu — yang mengisi tahu domisilinya
- *      sendiri, jadi ini didahulukan.
- *   2. Atribut kontak hasil impor (kolom Provinsi) — dipakai bila survei tidak punya
- *      pertanyaan wilayah atau pertanyaannya tidak dijawab.
+ * Tiga sumber, berurutan dari yang paling dipercaya:
+ *   1. Jawaban pertanyaan bertipe "wilayah".
+ *   2. Jawaban pertanyaan LAIN yang terbukti berisi nama provinsi — lihat deteksi di bawah.
+ *   3. Atribut kontak hasil impor (kolom Provinsi).
  *
- * Yang tidak bisa ditentukan dibiarkan null, bukan ditebak: satu respons yang terhitung ke
- * provinsi salah merusak kuota dua provinsi sekaligus.
+ * Deteksi sumber 2 sengaja TIDAK mencocokkan teks pertanyaan. Redaksi bisa berubah antar
+ * survei ("Sebutkan Provinsi Anda tinggal:", "Domisili:", "Asal daerah"), dan pencocokan
+ * kata kunci akan diam-diam meleset begitu redaksinya diganti. Sebagai gantinya, tiap
+ * pertanyaan dinilai dari JAWABANNYA: bila sebagian besar jawaban dapat diterjemahkan jadi
+ * kode provinsi, pertanyaan itu memang pertanyaan provinsi — apa pun bunyinya. Cara ini
+ * memeriksa dirinya sendiri; pertanyaan "Apa pekerjaan Anda" tidak akan pernah lolos.
+ *
+ * Yang tidak dapat ditentukan DIBIARKAN kosong, bukan ditebak: satu respons yang terhitung
+ * ke provinsi salah merusak kuota dua provinsi sekaligus.
  *
  * Pemakaian (dari folder backend/):
  *   npm run backfill:provinsi            # hanya menampilkan rencana, tidak menulis
@@ -32,6 +38,51 @@ import { provinsiDariAtribut } from "../services/kuotaSurvei.js";
 const NAMA = new Map(PROVINSI.map((p) => [p.kode, p.nama]));
 const UKURAN_BATCH = 500;
 
+// Ambang deteksi. Sengaja tinggi: lebih baik melewatkan satu pertanyaan provinsi dan
+// membiarkan datanya kosong daripada salah mengira pertanyaan lain sebagai provinsi.
+const AMBANG_COCOK = 0.8;
+const MIN_JAWABAN = 10;
+
+type Kandidat = { questionId: string; teks: string; tipe: string; cocok: number; total: number };
+
+// Temukan, per survei, pertanyaan mana yang jawabannya berisi nama provinsi.
+async function deteksiPertanyaanProvinsi(): Promise<{ perSurvei: Map<string, Kandidat>; semua: Kandidat[] }> {
+  const surveys = await prisma.survey.findMany({
+    select: { id: true, title: true, questions: { select: { id: true, text: true, type: true } } },
+  });
+
+  const perSurvei = new Map<string, Kandidat>();
+  const semua: Kandidat[] = [];
+
+  for (const s of surveys) {
+    let terbaik: Kandidat | null = null;
+    for (const q of s.questions) {
+      const nilai = await prisma.answer.groupBy({
+        by: ["value"],
+        where: { questionId: q.id },
+        _count: { _all: true },
+      });
+      let total = 0;
+      let cocok = 0;
+      for (const v of nilai) {
+        total += v._count._all;
+        if (kodeProvinsiDari(v.value)) cocok += v._count._all;
+      }
+      if (total < MIN_JAWABAN || cocok / total < AMBANG_COCOK) continue;
+      const k: Kandidat = { questionId: q.id, teks: q.text, tipe: q.type, cocok, total };
+      semua.push(k);
+      // Tipe wilayah selalu menang; selain itu, yang rasio cocoknya tertinggi.
+      const lebihBaik =
+        !terbaik ||
+        (q.type === "wilayah" && terbaik.tipe !== "wilayah") ||
+        (q.type !== "wilayah" && terbaik.tipe !== "wilayah" && k.cocok / k.total > terbaik.cocok / terbaik.total);
+      if (lebihBaik) terbaik = k;
+    }
+    if (terbaik) perSurvei.set(s.id, terbaik);
+  }
+  return { perSurvei, semua };
+}
+
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
 
@@ -41,6 +92,18 @@ async function main(): Promise<void> {
     return;
   }
   console.log(`Respons selesai tanpa provinsi: ${total}\n`);
+
+  console.log("Mencari pertanyaan yang jawabannya berisi nama provinsi…");
+  const { perSurvei, semua } = await deteksiPertanyaanProvinsi();
+  if (!semua.length) {
+    console.log("  tidak ada. Provinsi hanya akan diambil dari atribut kontak (bila ada).\n");
+  } else {
+    for (const k of semua) {
+      const persen = Math.round((k.cocok / k.total) * 100);
+      console.log(`  [${k.tipe}] "${k.teks.slice(0, 50)}" — ${persen}% dari ${k.total} jawaban cocok`);
+    }
+    console.log("");
+  }
 
   const dariJawaban = new Map<string, number>();
   const dariAtribut = new Map<string, number>();
@@ -55,8 +118,8 @@ async function main(): Promise<void> {
       where: { completedAt: { not: null }, kodeProvinsi: null },
       select: {
         id: true,
+        surveyId: true,
         contact: { select: { attributes: true } },
-        survey: { select: { questions: { where: { type: "wilayah" }, select: { id: true } } } },
         answers: { select: { questionId: true, value: true } },
       },
       orderBy: { id: "asc" },
@@ -68,19 +131,17 @@ async function main(): Promise<void> {
 
     for (const r of batch) {
       diproses++;
-      // 1) Jawaban pertanyaan wilayah lebih dipercaya daripada atribut impor.
-      const idWilayah = new Set(r.survey.questions.map((q) => q.id));
       let kode: string | null = null;
       let sumber: "jawaban" | "atribut" | null = null;
-      for (const a of r.answers) {
-        if (!idWilayah.has(a.questionId)) continue;
-        kode = kodeProvinsiDari(a.value);
-        if (kode) {
-          sumber = "jawaban";
-          break;
+
+      const pertanyaan = perSurvei.get(r.surveyId);
+      if (pertanyaan) {
+        const a = r.answers.find((x) => x.questionId === pertanyaan.questionId);
+        if (a) {
+          kode = kodeProvinsiDari(a.value);
+          if (kode) sumber = "jawaban";
         }
       }
-      // 2) Atribut kontak hasil impor.
       if (!kode) {
         kode = provinsiDariAtribut(r.contact?.attributes);
         if (kode) sumber = "atribut";
@@ -107,7 +168,9 @@ async function main(): Promise<void> {
   for (const [kode, n] of baris) {
     const j = dariJawaban.get(kode) ?? 0;
     const a = dariAtribut.get(kode) ?? 0;
-    console.log(`  ${kode}  ${(NAMA.get(kode) ?? kode).padEnd(28)} ${String(n).padStart(5)}  (jawaban ${j}, atribut ${a})`);
+    console.log(
+      `  ${kode}  ${(NAMA.get(kode) ?? kode).padEnd(28)} ${String(n).padStart(5)}  (jawaban ${j}, atribut ${a})`,
+    );
   }
 
   const terisi = [...gabung.values()].reduce((x, y) => x + y, 0);
