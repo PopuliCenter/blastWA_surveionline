@@ -1,0 +1,11 @@
+-- Penunjuk pertanyaan sumber provinsi pada survei.
+--
+-- Pertanyaan provinsi tidak selalu bertipe "wilayah". Instrumen yang sudah berjalan memakai
+-- tipe "choice" berisi nama provinsi ("Sebutkan Provinsi Anda tinggal:"), dan mengganti
+-- tipenya berarti membangun ulang Flow di Meta untuk survei yang sedang jalan.
+--
+-- Tanpa penunjuk ini, mesin hanya mengenali tipe "wilayah": responden baru tidak pernah
+-- distempel provinsinya, kuota per provinsi tidak pernah bertambah, dan satu-satunya cara
+-- memperbaikinya adalah menjalankan skrip backfill berulang kali secara manual — yang
+-- berarti kuota selalu tertinggal dari kenyataan dan meloloskan responden melebihi batas.
+ALTER TABLE "Survey" ADD COLUMN "questionProvinsiId" TEXT;

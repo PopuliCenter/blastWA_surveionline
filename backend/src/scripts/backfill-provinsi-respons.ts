@@ -95,6 +95,17 @@ async function main(): Promise<void> {
 
   console.log("Mencari pertanyaan yang jawabannya berisi nama provinsi…");
   const { perSurvei, semua } = await deteksiPertanyaanProvinsi();
+
+  // Penunjuk disimpan ke survei, bukan hanya dipakai sekali di sini. Tanpa itu, responden
+  // BARU tidak akan distempel dan kuota provinsi berhenti bertambah — skrip ini harus
+  // dijalankan berulang kali secara manual, dan di antara dua jalannya kuota meloloskan
+  // responden melebihi batas.
+  if (apply) {
+    for (const [surveyId, k] of perSurvei) {
+      if (k.tipe === "wilayah") continue; // tipe wilayah selalu dikenali, tak perlu ditunjuk
+      await prisma.survey.update({ where: { id: surveyId }, data: { questionProvinsiId: k.questionId } });
+    }
+  }
   if (!semua.length) {
     console.log("  tidak ada. Provinsi hanya akan diambil dari atribut kontak (bila ada).\n");
   } else {
@@ -102,6 +113,13 @@ async function main(): Promise<void> {
       const persen = Math.round((k.cocok / k.total) * 100);
       console.log(`  [${k.tipe}] "${k.teks.slice(0, 50)}" — ${persen}% dari ${k.total} jawaban cocok`);
     }
+    const akanDitunjuk = [...perSurvei.values()].filter((k) => k.tipe !== "wilayah").length;
+    if (akanDitunjuk)
+      console.log(
+        `
+  ${akanDitunjuk} survei akan DITANDAI memakai pertanyaan di atas sebagai sumber provinsi,` +
+          ` sehingga responden BARU ikut terhitung ke kuota tanpa menjalankan skrip ini lagi.`,
+      );
     console.log("");
   }
 

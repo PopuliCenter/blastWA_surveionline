@@ -113,13 +113,22 @@ export function SurveyKuotaModal({ survey, onClose }) {
 
           <div style={{ fontWeight: 700, fontSize: 13.5, margin: "0 0 8px" }}>Kuota per provinsi</div>
 
-          {adaKuotaProvinsi && d.punyaPertanyaanWilayah === false ? (
+          {adaKuotaProvinsi && d.sumberProvinsi === "pertanyaan" ? (
+            <div style={{ fontSize: 12.5, color: theme.textMuted, margin: "0 0 10px" }}>
+              Provinsi responden diambil dari pertanyaan{" "}
+              <strong>&ldquo;{(d.teksPertanyaanProvinsi || "").slice(0, 60)}&rdquo;</strong> — jawabannya diterjemahkan
+              ke kode provinsi resmi, jadi kuota di bawah ikut bertambah tanpa perlu mengubah instrumen yang sedang
+              berjalan.
+            </div>
+          ) : null}
+
+          {adaKuotaProvinsi && !d.sumberProvinsi ? (
             <Notice kind="warning">
-              Survei ini <strong>belum punya pertanyaan bertipe Wilayah</strong>. Tanpa itu, provinsi responden hanya
-              bisa diketahui dari atribut kontak hasil impor — responden yang datang sendiri lewat kata pemicu tidak
-              akan terhitung ke provinsi mana pun, sehingga kuota di bawah tidak akan pernah penuh dan sebarannya
-              meleset tanpa gejala. Tambahkan satu pertanyaan Wilayah di editor survei, atau pastikan setiap kontak
-              diimpor dengan kolom Provinsi.
+              Survei ini <strong>belum punya sumber provinsi</strong> — tidak ada pertanyaan bertipe Wilayah, dan
+              belum ada pertanyaan lain yang ditandai sebagai sumber provinsi. Akibatnya responden yang datang sendiri
+              lewat kata pemicu tidak terhitung ke provinsi mana pun, kuota di bawah tidak akan pernah penuh, dan
+              sebarannya meleset tanpa gejala. Tambahkan pertanyaan bertipe Wilayah di editor survei, atau jalankan{" "}
+              <code>npm run backfill:provinsi -- --apply</code> yang akan menandai pertanyaan provinsi yang sudah ada.
             </Notice>
           ) : null}
 

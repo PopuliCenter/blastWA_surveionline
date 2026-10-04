@@ -242,6 +242,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       ev.vendor,
       ev,
       active.survey.closingMessage,
+      active.survey.questionProvinsiId,
     );
     return;
   }
@@ -572,9 +573,14 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
 
   // Jawaban responden MENIMPA tebakan dari atribut impor: yang mengisi tahu domisilinya
   // sendiri, sedangkan atribut impor bisa usang atau salah kolom.
-  const qWilayah = questions.find((q) => q.type === "wilayah");
-  if (qWilayah) {
-    const jawab = answers.find((a) => a.questionId === qWilayah.id);
+  //
+  // Sumbernya bisa pertanyaan bertipe "wilayah", atau pertanyaan lain yang ditunjuk survei
+  // lewat questionProvinsiId — instrumen yang sudah berjalan memakai tipe "choice" berisi
+  // nama provinsi, dan tanpa penunjuk itu responden baru tidak pernah distempel.
+  const idProvinsi =
+    questions.find((q) => q.type === "wilayah")?.id ?? surveyResponse.survey.questionProvinsiId ?? null;
+  if (idProvinsi) {
+    const jawab = answers.find((a) => a.questionId === idProvinsi);
     if (jawab) await stempelProvinsi(surveyResponse.id, kodeProvinsiDari(jawab.value));
   }
   await prisma.surveyResponse.update({
@@ -601,6 +607,8 @@ async function advanceSurvey(
   vendor: string,
   ev: NormalizedInbound,
   closingMessage?: string | null,
+  // Pertanyaan yang ditunjuk survei sebagai sumber provinsi (selain tipe "wilayah").
+  idProvinsiSurvei?: string | null,
 ): Promise<void> {
   const current = questions[step];
   if (!current) {
@@ -625,7 +633,8 @@ async function advanceSurvey(
     }
     savedValue = v.value;
     await saveAnswer(responseId, current.id, savedValue);
-    if (current.type === "wilayah") await stempelProvinsi(responseId, kodeProvinsiDari(savedValue));
+    if (current.type === "wilayah" || current.id === idProvinsiSurvei)
+      await stempelProvinsi(responseId, kodeProvinsiDari(savedValue));
     if (current.type === "consent" && savedValue.trim().toLowerCase() === "tidak")
       await prisma.surveyResponse.update({ where: { id: responseId }, data: { consentDitolak: true } });
   }

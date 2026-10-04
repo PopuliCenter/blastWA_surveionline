@@ -168,7 +168,10 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/surveys/:id/kuota", async (req) => {
     const id = (req.params as { id: string }).id;
     const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah, penolakConsent] = await Promise.all([
-      prisma.survey.findUnique({ where: { id }, select: { targetResponden: true } }),
+      prisma.survey.findUnique({
+        where: { id },
+        select: { targetResponden: true, questionProvinsiId: true },
+      }),
       prisma.kuotaProvinsi.findMany({ where: { surveyId: id }, orderBy: { kodeProvinsi: "asc" } }),
       // Keterisian dihitung dari responden SELESAI yang BUKAN penolak consent — syaratnya
       // sama persis dengan yang dipakai mesin untuk menutup survei, supaya angka di layar
@@ -192,7 +195,17 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     return {
       targetResponden: survey?.targetResponden ?? null,
       terisiGlobal,
+      // Provinsi bisa diketahui lewat pertanyaan bertipe wilayah ATAU pertanyaan lain yang
+      // ditunjuk survei. Dilaporkan sebagai satu jawaban supaya layar tidak memperingatkan
+      // survei yang sebenarnya sudah punya sumber provinsi.
       punyaPertanyaanWilayah: jmlWilayah > 0,
+      sumberProvinsi: jmlWilayah > 0 ? "wilayah" : survey?.questionProvinsiId ? "pertanyaan" : null,
+      teksPertanyaanProvinsi: survey?.questionProvinsiId
+        ? ((await prisma.question.findUnique({
+            where: { id: survey.questionProvinsiId },
+            select: { text: true },
+          })) ?? null)?.text ?? null
+        : null,
       penolakConsent,
       // Tanpa provinsi = responden selesai yang provinsinya tidak diketahui. Ditampilkan
       // apa adanya: menyembunyikannya membuat jumlah per provinsi tampak tidak menjumlah.

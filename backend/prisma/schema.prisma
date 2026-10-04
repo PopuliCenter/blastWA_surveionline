@@ -75,6 +75,16 @@ model Survey {
   // Begitu tercapai, survei berhenti menerima responden baru — pemicu ditolak halus dan
   // blast melewati sisa penerimanya. Ini pengendali biaya: tiap responden berbiaya pesan.
   targetResponden Int?
+  // Pertanyaan yang jawabannya dipakai sebagai PROVINSI responden, untuk kuota per provinsi.
+  //
+  // Perlu disimpan karena pertanyaan provinsi tidak selalu bertipe "wilayah": instrumen yang
+  // sudah berjalan memakai tipe "choice" berisi nama provinsi, dan mengganti tipenya berarti
+  // membangun ulang Flow di Meta. Tanpa penunjuk ini, mesin hanya mengenali tipe "wilayah"
+  // sehingga responden baru tidak pernah distempel dan kuota provinsi tak pernah bertambah.
+  //
+  // Diisi otomatis oleh skrip backfill:provinsi, yang menilai tiap pertanyaan dari
+  // jawabannya. Pertanyaan bertipe "wilayah" tidak membutuhkannya — ia selalu dikenali.
+  questionProvinsiId String?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]
