@@ -343,3 +343,18 @@ export function formatQuestion(q: QLite): string {
   const skip = q.required ? "" : "\n\n(Ketik LEWATI untuk melewati)";
   return `${q.text}${hint}${skip}`;
 }
+
+// Apakah jawaban-jawaban ini berisi PENOLAKAN pada pertanyaan bertipe consent?
+//
+// Responden yang menolak tetap tercatat "selesai" karena surveinya memang berakhir di situ
+// lewat percabangan goto:end — tapi responsnya tidak mengandung data, jadi tidak boleh
+// memakan jatah kuota. Nilai consent disimpan persis "Ya"/"Tidak" oleh validateAnswer dan
+// toAnswer, sehingga pencocokannya pasti dan bukan tebakan.
+export function menolakConsent(
+  questions: readonly { id: string; type: string }[],
+  answers: readonly { questionId: string; value: string }[],
+): boolean {
+  const idConsent = new Set(questions.filter((q) => q.type === "consent").map((q) => q.id));
+  if (!idConsent.size) return false;
+  return answers.some((a) => idConsent.has(a.questionId) && a.value.trim().toLowerCase() === "tidak");
+}

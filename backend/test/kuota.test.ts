@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { periksaKuota, sisaKuota, persenKuota } from "../src/lib/kuota.js";
 import { provinsiDariAtribut } from "../src/services/kuotaSurvei.js";
 import { kodeProvinsiDari } from "../src/lib/wilayah.js";
+import { menolakConsent } from "../src/lib/surveyLogic.js";
 
 const batas = (o: Partial<Parameters<typeof periksaKuota>[0]> = {}) => ({
   targetGlobal: null,
@@ -117,5 +118,40 @@ describe("provinsiDariAtribut", () => {
     expect(provinsiDariAtribut({ Provinsi: "entah" })).toBeNull();
     expect(provinsiDariAtribut(null)).toBeNull();
     expect(provinsiDariAtribut("bukan objek")).toBeNull();
+  });
+});
+
+describe("menolakConsent", () => {
+  const q = [
+    { id: "c1", type: "consent" },
+    { id: "n1", type: "text" },
+    { id: "b1", type: "boolean" },
+  ];
+
+  it("mengenali penolakan pada pertanyaan consent", () => {
+    expect(menolakConsent(q, [{ questionId: "c1", value: "Tidak" }])).toBe(true);
+    expect(menolakConsent(q, [{ questionId: "c1", value: " tidak " }])).toBe(true);
+    expect(menolakConsent(q, [{ questionId: "c1", value: "TIDAK" }])).toBe(true);
+  });
+
+  it("persetujuan bukan penolakan", () => {
+    expect(menolakConsent(q, [{ questionId: "c1", value: "Ya" }])).toBe(false);
+  });
+
+  it("jawaban 'Tidak' pada pertanyaan LAIN tidak dianggap menolak consent", () => {
+    // Pertanyaan Ya/Tidak biasa ("Apakah Anda pernah memilih?") tidak boleh membatalkan
+    // seluruh respons dari hitungan kuota.
+    expect(menolakConsent(q, [{ questionId: "b1", value: "Tidak" }])).toBe(false);
+    expect(menolakConsent(q, [{ questionId: "n1", value: "Tidak" }])).toBe(false);
+  });
+
+  it("survei tanpa pertanyaan consent tidak pernah dianggap menolak", () => {
+    expect(menolakConsent([{ id: "n1", type: "text" }], [{ questionId: "n1", value: "Tidak" }])).toBe(false);
+    expect(menolakConsent([], [])).toBe(false);
+  });
+
+  it("responden yang menjawab consent lalu berhenti tetap terdeteksi", () => {
+    // Inilah bentuk nyata 15 respons di produksi: hanya berisi jawaban consent.
+    expect(menolakConsent(q, [{ questionId: "c1", value: "Tidak" }])).toBe(true);
   });
 });

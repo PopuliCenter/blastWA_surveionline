@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
+import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
 
 const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
@@ -166,27 +167,33 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/surveys/:id/kuota", async (req) => {
     const id = (req.params as { id: string }).id;
-    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah] = await Promise.all([
+    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah, penolakConsent] = await Promise.all([
       prisma.survey.findUnique({ where: { id }, select: { targetResponden: true } }),
       prisma.kuotaProvinsi.findMany({ where: { surveyId: id }, orderBy: { kodeProvinsi: "asc" } }),
-      // Keterisian dihitung dari responden SELESAI yang provinsinya sudah distempel.
+      // Keterisian dihitung dari responden SELESAI yang BUKAN penolak consent — syaratnya
+      // sama persis dengan yang dipakai mesin untuk menutup survei, supaya angka di layar
+      // tidak pernah berbeda dari angka yang menentukan.
       prisma.surveyResponse.groupBy({
         by: ["kodeProvinsi"],
-        where: { surveyId: id, completedAt: { not: null } },
+        where: { surveyId: id, ...DIHITUNG_KE_KUOTA },
         _count: { _all: true },
       }),
-      prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null } } }),
+      prisma.surveyResponse.count({ where: { surveyId: id, ...DIHITUNG_KE_KUOTA } }),
       // Tanpa pertanyaan wilayah, provinsi HANYA bisa datang dari atribut kontak hasil
       // impor — responden organik tak pernah terhitung, dan kuota provinsinya diam-diam
       // tak pernah penuh. Dilaporkan agar layar bisa memperingatkan, bukan dibiarkan
       // ketahuan belakangan saat datanya sudah timpang.
       prisma.question.count({ where: { surveyId: id, type: "wilayah" } }),
+      // Ditampilkan, bukan sekadar dikecualikan diam-diam: selisih antara "respons selesai"
+      // dan "terhitung kuota" harus bisa dijelaskan ke klien tanpa membuka database.
+      prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null }, consentDitolak: true } }),
     ]);
     const terisi = new Map(perProvinsi.map((r) => [r.kodeProvinsi ?? "", r._count._all]));
     return {
       targetResponden: survey?.targetResponden ?? null,
       terisiGlobal,
       punyaPertanyaanWilayah: jmlWilayah > 0,
+      penolakConsent,
       // Tanpa provinsi = responden selesai yang provinsinya tidak diketahui. Ditampilkan
       // apa adanya: menyembunyikannya membuat jumlah per provinsi tampak tidak menjumlah.
       tanpaProvinsi: terisi.get("") ?? 0,

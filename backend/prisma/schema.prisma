@@ -231,10 +231,19 @@ model SurveyResponse {
   // dihitung ulang dari jawaban, supaya penghitungan kuota cukup satu groupBy dan tidak
   // bergantung pada format nilai jawaban.
   kodeProvinsi  String?
+  // true = responden menolak pada pertanyaan bertipe consent, sehingga surveinya berhenti
+  // di situ. Responsnya tetap "selesai", tapi TIDAK mengandung data — karena itu tidak
+  // dihitung ke kuota. Klien membayar untuk data, bukan untuk penolakan.
+  //
+  // Disimpan sebagai penanda, bukan dihitung ulang dari tabel Answer: pemeriksaan kuota
+  // berjalan pada SETIAP pesan masuk dan SETIAP pengiriman blast, jadi harus murah.
+  // Menelusuri jawaban tiap kali berarti subkueri ke 139 ribu baris jawaban per pemeriksaan.
+  consentDitolak Boolean @default(false)
   answers       Answer[]
 
   @@index([contactId])
   @@index([surveyId, kodeProvinsi]) // untuk menghitung kuota per provinsi
+  @@index([surveyId, consentDitolak]) // kuota global mengecualikan penolak consent
 }
 
 model Answer {

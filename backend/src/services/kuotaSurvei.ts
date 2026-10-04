@@ -26,6 +26,11 @@ export function provinsiDariAtribut(attributes: unknown): string | null {
   return null;
 }
 
+// Syarat sebuah respons DIHITUNG ke kuota: selesai, dan bukan penolakan consent.
+// Dipakai di sini maupun di layar Kuota, supaya angka yang menutup survei dan angka yang
+// dilihat pemakai tidak pernah berbeda.
+export const DIHITUNG_KE_KUOTA = { completedAt: { not: null }, consentDitolak: false } as const;
+
 export type KuotaSurvei = {
   targetGlobal: number | null;
   terisiGlobal: number;
@@ -38,13 +43,14 @@ export type KuotaSurvei = {
 export async function angkaKuota(surveyId: string, kodeProvinsi: string | null): Promise<KuotaSurvei> {
   const [survey, terisiGlobal, kuotaProv, terisiProvinsi] = await Promise.all([
     prisma.survey.findUnique({ where: { id: surveyId }, select: { targetResponden: true } }),
-    // Yang dihitung HANYA responden selesai — lihat catatan di lib/kuota.ts.
-    prisma.surveyResponse.count({ where: { surveyId, completedAt: { not: null } } }),
+    // Yang dihitung HANYA responden selesai yang BUKAN penolak consent — lihat catatan
+    // di lib/kuota.ts dan pada DIHITUNG_KE_KUOTA di atas.
+    prisma.surveyResponse.count({ where: { surveyId, ...DIHITUNG_KE_KUOTA } }),
     kodeProvinsi
       ? prisma.kuotaProvinsi.findUnique({ where: { surveyId_kodeProvinsi: { surveyId, kodeProvinsi } } })
       : Promise.resolve(null),
     kodeProvinsi
-      ? prisma.surveyResponse.count({ where: { surveyId, kodeProvinsi, completedAt: { not: null } } })
+      ? prisma.surveyResponse.count({ where: { surveyId, kodeProvinsi, ...DIHITUNG_KE_KUOTA } })
       : Promise.resolve(0),
   ]);
   return {
