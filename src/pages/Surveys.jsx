@@ -38,6 +38,25 @@ export default function Surveys() {
   const [cari, setCari] = useState("");
   const [status, setStatus] = useState("");
   const [halaman, setHalaman] = useState(1);
+  // Bawaannya daftar: judul survei di sini panjang dan nyaris seragam ("Survei Nasional
+  // Online Populi Center <bulan> 2026"), dan yang membedakannya justru ada di ekor judul.
+  // Pada kartu sempit ekor itu turun ke baris kedua atau terpotong; pada baris selebar
+  // halaman ia terbaca sekali lihat. Pilihannya diingat per browser.
+  const [tampilan, setTampilan] = useState(() => {
+    try {
+      return localStorage.getItem("populi.survei.tampilan") === "kotak" ? "kotak" : "daftar";
+    } catch {
+      return "daftar";
+    }
+  });
+  const gantiTampilan = (v) => {
+    setTampilan(v);
+    try {
+      localStorage.setItem("populi.survei.tampilan", v);
+    } catch {
+      /* mode privat / penyimpanan diblokir — pilihannya cukup berlaku untuk sesi ini */
+    }
+  };
   const semua = useMemo(() => data || [], [data]);
 
   // Penyaringan di klien: jumlah survei dihitung lusinan, bukan ribuan seperti kontak,
@@ -105,6 +124,45 @@ export default function Surveys() {
       />
     );
 
+  // Badge dan tombol dipakai kedua tampilan. Diekstrak supaya daftar dan kotak tidak
+  // pelan-pelan berbeda isi — perbedaan semacam itu baru ketahuan setelah dilaporkan.
+  const badgeSurvei = (s) => (
+    <>
+      <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>{s.status}</Badge>
+      {s.mode === "flow" ? <Badge tone="blue">flow</Badge> : null}
+      {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
+      {s.oncePerContact ? <Badge tone="yellow">sekali isi</Badge> : null}
+    </>
+  );
+
+  const ringkasanSurvei = (s) =>
+    `${s.questions.length} pertanyaan • ${s.responses} respons` +
+    (s.triggerEnabled && s.triggerKeywords?.length
+      ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}`
+      : "");
+
+  const aksiSurvei = (s) => (
+    <>
+      {/* Jumlahnya sudah tertulis di baris ringkasan. Mengulangnya di label membuat lebar
+          tombol ikut membesar — "Respons (1240)" akan memaksa baris tombol membungkus. */}
+      <Button variant="secondary" size="sm" icon="survey" onClick={() => setResponsesFor(s)}>
+        Respons
+      </Button>
+      <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>
+        Preview
+      </Button>
+      <Button variant="secondary" size="sm" icon="survey" onClick={() => setKuotaFor(s)}>
+        Kuota
+      </Button>
+      <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
+        Edit
+      </Button>
+      {/* Tanpa marginLeft:"auto" — di baris flex-wrap, margin auto menyerap seluruh sisa
+          ruang sehingga tombol ini terdorong ke baris kedua padahal sebenarnya masih muat. */}
+      <Button variant="danger" size="sm" icon="trash" title="Hapus survei" onClick={() => delSurvey(s)} />
+    </>
+  );
+
   return (
     <div>
       <PageHeader
@@ -130,7 +188,7 @@ export default function Surveys() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,190px)",
+              gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,190px) auto",
               gap: 10,
               alignItems: "end",
             }}
@@ -158,6 +216,20 @@ export default function Surveys() {
                 { value: "closed", label: "Ditutup" },
               ]}
             />
+            <div style={{ display: "flex", gap: 6 }}>
+              <Button
+                variant={tampilan === "daftar" ? "primary" : "secondary"}
+                icon="menu"
+                title="Tampilkan sebagai daftar"
+                onClick={() => gantiTampilan("daftar")}
+              />
+              <Button
+                variant={tampilan === "kotak" ? "primary" : "secondary"}
+                icon="dashboard"
+                title="Tampilkan sebagai kotak"
+                onClick={() => gantiTampilan("kotak")}
+              />
+            </div>
           </div>
         </Card>
       ) : null}
@@ -165,74 +237,107 @@ export default function Surveys() {
       {loading ? (
         <Loading />
       ) : surveys.length ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 16 }}>
-          {surveys.map((s) => (
-            <Card
-              key={s.id}
-              style={{ display: "flex", flexDirection: "column" }}
-              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
-            >
-              {/* Judul memakai lebar penuh; badge turun ke bawahnya supaya judul panjang
-                  tidak terdesak jadi banyak baris. */}
-              <div style={{ fontWeight: 700, fontSize: 15.5, color: theme.text, lineHeight: 1.35 }}>{s.title}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>
-                  {s.status}
-                </Badge>
-                {s.mode === "flow" ? <Badge tone="blue">flow</Badge> : null}
-                {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
-                {s.oncePerContact ? <Badge tone="yellow">sekali isi</Badge> : null}
-              </div>
-              {s.description ? (
-                /* Dibatasi 2 baris — deskripsi panjang membuat tinggi kartu tak terduga,
-                   dan seluruh baris grid ikut memanjang mengikuti yang tertinggi. */
-                <div
-                  title={s.description}
-                  style={{
-                    color: theme.textMuted,
-                    fontSize: 12.5,
-                    marginTop: 8,
-                    lineHeight: 1.5,
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
-                  }}
-                >
-                  {s.description}
+        tampilan === "daftar" ? (
+          <Card pad={0}>
+            {surveys.map((s, i) => (
+              <div
+                key={s.id}
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  padding: "14px 18px",
+                  borderTop: i ? `1px solid ${theme.border}` : "none",
+                  minWidth: 0,
+                }}
+              >
+                {/* flex-basis 320px: di layar lebar blok teks dan tombol berbagi satu baris,
+                    di layar sempit tombol turun sendiri tanpa perlu media query. */}
+                <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+                    {/* Membungkus, TIDAK dipotong dengan elipsis. Judul survei di sini nyaris
+                        seragam dan yang membedakannya ada di EKOR ("… 1-5 Oktober 2026");
+                        elipsis memotong tepat bagian itu, sehingga di layar sempit semua
+                        survei terbaca sama. Dibatasi dua baris supaya tinggi baris tetap. */}
+                    <span
+                      title={s.title}
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 15,
+                        color: theme.text,
+                        minWidth: 0,
+                        lineHeight: 1.35,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {s.title}
+                    </span>
+                    {badgeSurvei(s)}
+                  </div>
+                  <div
+                    title={s.description || undefined}
+                    style={{
+                      color: theme.textMuted,
+                      fontSize: 12.5,
+                      marginTop: 4,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {ringkasanSurvei(s)}
+                    {s.description ? ` • ${s.description}` : ""}
+                  </div>
                 </div>
-              ) : null}
-              <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
-                {s.questions.length} pertanyaan • {s.responses} respons
-                {s.triggerEnabled && s.triggerKeywords?.length
-                  ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}`
-                  : ""}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{aksiSurvei(s)}</div>
               </div>
-              {/* marginTop auto → baris tombol menempel di dasar kartu, sejajar antar kartu */}
-              <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 12, flexWrap: "wrap" }}>
-                {/* Jumlahnya sudah tertulis di baris ringkasan di atas. Mengulangnya di
-                    label membuat lebar tombol ikut membesar — "Respons (1240)" akan
-                    memaksa baris tombol membungkus. */}
-                <Button variant="secondary" size="sm" icon="survey" onClick={() => setResponsesFor(s)}>
-                  Respons
-                </Button>
-                <Button variant="secondary" size="sm" icon="eye" onClick={() => setPreviewFor(s)}>
-                  Preview
-                </Button>
-                <Button variant="secondary" size="sm" icon="survey" onClick={() => setKuotaFor(s)}>
-                  Kuota
-                </Button>
-                <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
-                  Edit
-                </Button>
-                {/* Tanpa marginLeft:"auto" — di baris flex-wrap, margin auto menyerap
-                    seluruh sisa ruang sehingga tombol ini terdorong ke baris kedua
-                    padahal sebenarnya masih muat. */}
-                <Button variant="danger" size="sm" icon="trash" title="Hapus survei" onClick={() => delSurvey(s)} />
-              </div>
-            </Card>
-          ))}
-        </div>
+            ))}
+          </Card>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 16 }}>
+            {surveys.map((s) => (
+              <Card
+                key={s.id}
+                style={{ display: "flex", flexDirection: "column" }}
+                bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+              >
+                {/* Judul memakai lebar penuh; badge turun ke bawahnya supaya judul panjang
+                    tidak terdesak jadi banyak baris. */}
+                <div style={{ fontWeight: 700, fontSize: 15.5, color: theme.text, lineHeight: 1.35 }}>{s.title}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{badgeSurvei(s)}</div>
+                {s.description ? (
+                  /* Dibatasi 2 baris — deskripsi panjang membuat tinggi kartu tak terduga,
+                     dan seluruh baris grid ikut memanjang mengikuti yang tertinggi. */
+                  <div
+                    title={s.description}
+                    style={{
+                      color: theme.textMuted,
+                      fontSize: 12.5,
+                      marginTop: 8,
+                      lineHeight: 1.5,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {s.description}
+                  </div>
+                ) : null}
+                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8 }}>{ringkasanSurvei(s)}</div>
+                {/* marginTop auto → baris tombol menempel di dasar kartu, sejajar antar kartu */}
+                <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 12, flexWrap: "wrap" }}>
+                  {aksiSurvei(s)}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )
       ) : semua.length ? (
         <Card>
           <Empty
