@@ -28,6 +28,7 @@ import {
   looksLikeQuestion,
   matchesTriggerInSentence,
   disaringKeluar,
+  saringJawaban,
   type QLite,
 } from "../lib/surveyLogic.js";
 
@@ -567,7 +568,28 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     );
   }
 
-  const answers = parseFlowAnswers(flowResp, questions);
+  const semuaJawaban = parseFlowAnswers(flowResp, questions);
+
+  // Penyaringan ditegakkan DI SERVER, bukan hanya di Flow.
+  //
+  // Komponen If pada Flow bekerja di sisi klien dan bisa dilewati: responden menekan tombol
+  // kembali lalu mengubah jawabannya, atau Flow yang terbit di Meta dibuat sebelum aturan
+  // percabangan ditambahkan. Terjadi nyata di produksi — satu responden menjawab "Tidak"
+  // pada informed consent di urutan 0, namun 20 jawaban berikutnya tetap tersimpan.
+  //
+  // Menyimpan jawaban orang yang menyatakan tidak bersedia adalah pemrosesan tanpa dasar
+  // persetujuan, bukan sekadar data kotor.
+  const { diterima: answers, ditolak } = saringJawaban(questions, semuaJawaban);
+  if (ditolak.length) {
+    logError("backend", new Error("Jawaban setelah titik penyaringan ditolak"), {
+      surveyId: surveyResponse.surveyId,
+      responseId: surveyResponse.id,
+      jumlahDitolak: ditolak.length,
+      catatan:
+        "Responden tersaring (mis. menolak informed consent) tetapi formulir tetap membawa jawaban berikutnya. " +
+        "Periksa apakah Flow yang terbit di Meta sudah memuat aturan percabangan survei ini.",
+    });
+  }
   for (const a of answers)
     await prisma.answer.create({ data: { responseId: surveyResponse.id, questionId: a.questionId, value: a.value } });
 

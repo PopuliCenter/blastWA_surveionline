@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { periksaKuota, sisaKuota, persenKuota } from "../src/lib/kuota.js";
 import { provinsiDariAtribut } from "../src/services/kuotaSurvei.js";
 import { kodeProvinsiDari } from "../src/lib/wilayah.js";
-import { disaringKeluar } from "../src/lib/surveyLogic.js";
+import { disaringKeluar, saringJawaban, indeksPenyaringan } from "../src/lib/surveyLogic.js";
 
 const batas = (o: Partial<Parameters<typeof periksaKuota>[0]> = {}) => ({
   targetGlobal: null,
@@ -160,5 +160,78 @@ describe("disaringKeluar", () => {
   it("goto -1 diperlakukan sama dengan 'end'", () => {
     const alt = { id: "a1", options: { branches: [{ goto: -1, value: "Tidak" }] } };
     expect(disaringKeluar([alt], [{ questionId: "a1", value: "Tidak" }])).toBe(true);
+  });
+});
+
+describe("saringJawaban — penegakan di server", () => {
+  // Struktur NYATA dari produksi: informed consent di urutan 0, lalu 20 pertanyaan data.
+  const questions = [
+    { id: "q0", options: { branches: [{ goto: "end", value: "Tidak" }] } },
+    { id: "q1", options: null },
+    { id: "q2", options: null },
+    { id: "q3", options: null },
+  ];
+
+  it("membuang SELURUH jawaban setelah penolakan consent di urutan 0", () => {
+    // Kejadian nyata: responden menjawab "Tidak" tapi 20 jawaban berikutnya tetap terkirim.
+    // Menyimpannya adalah pemrosesan tanpa dasar persetujuan.
+    const r = saringJawaban(questions, [
+      { questionId: "q0", value: "Tidak" },
+      { questionId: "q1", value: "Aji" },
+      { questionId: "q2", value: "Jawa Barat" },
+      { questionId: "q3", value: "Islam" },
+    ]);
+    expect(r.batas).toBe(0);
+    expect(r.diterima.map((a) => a.questionId)).toEqual(["q0"]);
+    expect(r.ditolak.map((a) => a.questionId)).toEqual(["q1", "q2", "q3"]);
+  });
+
+  it("mempertahankan jawaban SEBELUM titik penyaringan", () => {
+    // Saringan di tengah survei: yang sudah dijawab sebelumnya tetap sah.
+    const q = [
+      { id: "a", options: null },
+      { id: "b", options: null },
+      { id: "c", options: { branches: [{ goto: "end", value: "Tidak" }] } },
+      { id: "d", options: null },
+    ];
+    const r = saringJawaban(q, [
+      { questionId: "a", value: "x" },
+      { questionId: "b", value: "y" },
+      { questionId: "c", value: "Tidak" },
+      { questionId: "d", value: "z" },
+    ]);
+    expect(r.batas).toBe(2);
+    expect(r.diterima.map((x) => x.questionId)).toEqual(["a", "b", "c"]);
+    expect(r.ditolak.map((x) => x.questionId)).toEqual(["d"]);
+  });
+
+  it("tidak membuang apa pun bila tak ada penyaringan", () => {
+    const r = saringJawaban(questions, [
+      { questionId: "q0", value: "Ya" },
+      { questionId: "q1", value: "Aji" },
+    ]);
+    expect(r.batas).toBeNull();
+    expect(r.ditolak).toEqual([]);
+    expect(r.diterima).toHaveLength(2);
+  });
+
+  it("memakai titik penyaringan PALING AWAL bila ada lebih dari satu", () => {
+    const q = [
+      { id: "a", options: { branches: [{ goto: "end", value: "Tidak" }] } },
+      { id: "b", options: null },
+      { id: "c", options: { branches: [{ goto: "end", value: "Tidak" }] } },
+    ];
+    expect(
+      indeksPenyaringan(q, [
+        { questionId: "c", value: "Tidak" },
+        { questionId: "a", value: "Tidak" },
+      ]),
+    ).toBe(0);
+  });
+
+  it("konsisten dengan disaringKeluar", () => {
+    const jawab = [{ questionId: "q0", value: "Tidak" }];
+    expect(disaringKeluar(questions, jawab)).toBe(true);
+    expect(indeksPenyaringan(questions, jawab)).toBe(0);
   });
 });

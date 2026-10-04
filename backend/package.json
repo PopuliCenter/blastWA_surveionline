@@ -17,6 +17,8 @@
     "backfill:blast-counters:dev": "tsx src/scripts/backfill-blast-counters.ts",
     "backfill:provinsi": "node dist/scripts/backfill-provinsi-respons.js",
     "backfill:provinsi:dev": "tsx src/scripts/backfill-provinsi-respons.ts",
+    "bersihkan:tersaring": "node dist/scripts/bersihkan-jawaban-tersaring.js",
+    "bersihkan:tersaring:dev": "tsx src/scripts/bersihkan-jawaban-tersaring.ts",
     "purge:orphan-messages": "node dist/scripts/purge-orphan-messages.js",
     "purge:orphan-messages:dev": "tsx src/scripts/purge-orphan-messages.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",

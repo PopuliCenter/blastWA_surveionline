@@ -374,3 +374,59 @@ export function disaringKeluar(
   }
   return false;
 }
+
+// Indeks pertanyaan yang MENGHENTIKAN survei — yaitu jawabannya memicu percabangan
+// goto "end". null bila tidak ada.
+//
+// Dipakai untuk menolak jawaban yang datang SETELAH titik berhenti. Penyaringan di Flow
+// bekerja di sisi klien lewat komponen If, dan itu bisa dilewati: responden menekan tombol
+// kembali lalu mengubah jawabannya, atau Flow yang terbit di Meta dibuat sebelum aturan
+// percabangan ditambahkan sehingga kondisinya memang tidak ada di sana.
+//
+// Kejadian nyata di produksi: satu responden menjawab "Tidak" pada informed consent di
+// urutan 0, namun 20 jawaban berikutnya tetap terkirim dan tersimpan — nama, provinsi,
+// agama, penghasilan, hingga pilihan politiknya. Server tidak boleh memercayai penyaringan
+// yang dilakukan klien.
+export function indeksPenyaringan(
+  questions: readonly { id: string; options?: unknown }[],
+  answers: readonly { questionId: string; value: string }[],
+): number | null {
+  let paling: number | null = null;
+  answers.forEach((a) => {
+    const i = questions.findIndex((q) => q.id === a.questionId);
+    if (i < 0) return;
+    const branches = (questions[i]!.options as { branches?: unknown } | null | undefined)?.branches;
+    if (!Array.isArray(branches)) return;
+    const nilai = a.value.trim().toLowerCase();
+    const kena = branches.find(
+      (b) =>
+        String((b as { value?: unknown })?.value ?? "")
+          .trim()
+          .toLowerCase() === nilai,
+    ) as { goto?: unknown } | undefined;
+    if (!kena || (kena.goto !== "end" && kena.goto !== -1)) return;
+    if (paling === null || i < paling) paling = i;
+  });
+  return paling;
+}
+
+// Buang jawaban yang datang SETELAH titik penyaringan. Jawaban sebelum titik itu tetap sah
+// — responden memang menjawabnya sebelum tersaring.
+//
+// Untuk informed consent di urutan 0, hasilnya: hanya jawaban consent yang disimpan, dan
+// seluruh data pribadi di belakangnya ditolak. Itu bukan sekadar kebersihan data; menyimpan
+// jawaban orang yang menyatakan tidak bersedia adalah pemrosesan tanpa dasar persetujuan.
+export function saringJawaban<T extends { questionId: string; value: string }>(
+  questions: readonly { id: string; options?: unknown }[],
+  answers: readonly T[],
+): { diterima: T[]; ditolak: T[]; batas: number | null } {
+  const batas = indeksPenyaringan(questions, answers);
+  if (batas === null) return { diterima: [...answers], ditolak: [], batas: null };
+  const diterima: T[] = [];
+  const ditolak: T[] = [];
+  for (const a of answers) {
+    const i = questions.findIndex((q) => q.id === a.questionId);
+    (i >= 0 && i <= batas ? diterima : ditolak).push(a);
+  }
+  return { diterima, ditolak, batas };
+}
