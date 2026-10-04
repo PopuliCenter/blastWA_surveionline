@@ -140,6 +140,22 @@ export function QuestionItem({
             </div>
           </>
         ) : null}
+        {d.type === "wilayah" ? (
+          <div
+            style={{
+              background: theme.primarySoft,
+              color: theme.primary,
+              borderRadius: 9,
+              padding: "10px 13px",
+              fontSize: 12.5,
+              marginBottom: 14,
+            }}
+          >
+            Pilihannya memakai daftar resmi Kepmendagri — 38 provinsi dan 514 kabupaten/kota — jadi tidak perlu diisi
+            sendiri. Daftar ini <strong>sama persis</strong> dengan yang dipakai Kuota per provinsi, sehingga jawaban
+            responden langsung terhitung ke kuota wilayahnya tanpa perlu dicocokkan manual.
+          </div>
+        ) : null}
         {HAS_CHOICES(d.type) ? (
           <Textarea
             label={

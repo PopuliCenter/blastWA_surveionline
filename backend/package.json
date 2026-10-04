@@ -15,6 +15,8 @@
     "seed": "tsx prisma/seed.ts",
     "backfill:blast-counters": "node dist/scripts/backfill-blast-counters.js",
     "backfill:blast-counters:dev": "tsx src/scripts/backfill-blast-counters.ts",
+    "backfill:provinsi": "node dist/scripts/backfill-provinsi-respons.js",
+    "backfill:provinsi:dev": "tsx src/scripts/backfill-provinsi-respons.ts",
     "purge:orphan-messages": "node dist/scripts/purge-orphan-messages.js",
     "purge:orphan-messages:dev": "tsx src/scripts/purge-orphan-messages.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -166,7 +166,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/surveys/:id/kuota", async (req) => {
     const id = (req.params as { id: string }).id;
-    const [survey, kuota, perProvinsi, terisiGlobal] = await Promise.all([
+    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah] = await Promise.all([
       prisma.survey.findUnique({ where: { id }, select: { targetResponden: true } }),
       prisma.kuotaProvinsi.findMany({ where: { surveyId: id }, orderBy: { kodeProvinsi: "asc" } }),
       // Keterisian dihitung dari responden SELESAI yang provinsinya sudah distempel.
@@ -176,11 +176,17 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
         _count: { _all: true },
       }),
       prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null } } }),
+      // Tanpa pertanyaan wilayah, provinsi HANYA bisa datang dari atribut kontak hasil
+      // impor — responden organik tak pernah terhitung, dan kuota provinsinya diam-diam
+      // tak pernah penuh. Dilaporkan agar layar bisa memperingatkan, bukan dibiarkan
+      // ketahuan belakangan saat datanya sudah timpang.
+      prisma.question.count({ where: { surveyId: id, type: "wilayah" } }),
     ]);
     const terisi = new Map(perProvinsi.map((r) => [r.kodeProvinsi ?? "", r._count._all]));
     return {
       targetResponden: survey?.targetResponden ?? null,
       terisiGlobal,
+      punyaPertanyaanWilayah: jmlWilayah > 0,
       // Tanpa provinsi = responden selesai yang provinsinya tidak diketahui. Ditampilkan
       // apa adanya: menyembunyikannya membuat jumlah per provinsi tampak tidak menjumlah.
       tanpaProvinsi: terisi.get("") ?? 0,

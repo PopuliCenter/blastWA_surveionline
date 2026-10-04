@@ -36,6 +36,12 @@ export function SurveyKuotaModal({ survey, onClose }) {
 
   // Hanya provinsi yang RELEVAN yang ditampilkan: sudah punya kuota, atau sudah ada
   // respondennya. Menampilkan 38 baris sekaligus membuat yang penting tenggelam.
+  // Kuota provinsi dianggap dipakai bila sudah tersimpan ATAU sedang diisi di layar ini —
+  // peringatannya harus muncul saat orang sedang mengetik angkanya, bukan setelah disimpan.
+  const adaKuotaProvinsi =
+    (d?.provinsi || []).some((p) => typeof p.target === "number") ||
+    Object.values(ubah).some((v) => String(v).trim() !== "");
+
   const tampil = (d?.provinsi || []).filter(
     (p) => p.target !== null || p.terisi > 0 || Object.prototype.hasOwnProperty.call(ubah, p.kodeProvinsi),
   );
@@ -100,6 +106,29 @@ export function SurveyKuotaModal({ survey, onClose }) {
           </div>
 
           <div style={{ fontWeight: 700, fontSize: 13.5, margin: "0 0 8px" }}>Kuota per provinsi</div>
+
+          {adaKuotaProvinsi && d.punyaPertanyaanWilayah === false ? (
+            <Notice kind="warning">
+              Survei ini <strong>belum punya pertanyaan bertipe Wilayah</strong>. Tanpa itu, provinsi responden hanya
+              bisa diketahui dari atribut kontak hasil impor — responden yang datang sendiri lewat kata pemicu tidak
+              akan terhitung ke provinsi mana pun, sehingga kuota di bawah tidak akan pernah penuh dan sebarannya
+              meleset tanpa gejala. Tambahkan satu pertanyaan Wilayah di editor survei, atau pastikan setiap kontak
+              diimpor dengan kolom Provinsi.
+            </Notice>
+          ) : null}
+
+          <div style={{ fontSize: 12.5, color: theme.textMuted, margin: "0 0 10px" }}>
+            Daftar provinsi di sini memakai kode resmi Kepmendagri yang <strong>sama persis</strong> dengan pilihan pada
+            pertanyaan tipe Wilayah, jadi nama dan kodenya tidak mungkin berbeda antara kuota dan jawaban. Nama provinsi
+            dari berkas impor juga dicocokkan ke kode yang sama, termasuk bentuk panjangnya.
+            {d.tanpaProvinsi > 0 ? (
+              <>
+                {" "}
+                Saat ini <strong>{d.tanpaProvinsi.toLocaleString("id-ID")} responden selesai</strong> belum punya data
+                provinsi dan tidak terhitung ke kuota mana pun.
+              </>
+            ) : null}
+          </div>
 
           {tampil.length ? (
             <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
