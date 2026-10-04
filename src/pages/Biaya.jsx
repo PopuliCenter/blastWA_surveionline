@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
 import { invoiceHtml } from "../lib/invoiceHtml";
 import { invoiceAwal, profilDariInvoice } from "../lib/invoiceProfil";
+import { nomorReferensi, nomorTransaksi, kunciInvoice } from "../lib/invoiceNomor";
 import {
   PageHeader,
   Card,
@@ -83,6 +84,11 @@ export default function Biaya() {
   // terisi dari Profil penerbit; bidang per klien selalu dimulai kosong.
   const [inv, setInv] = useState(() => invoiceAwal(null, hariIni()));
 
+  // Nomor dibuat otomatis dari isi invoice selama pemakai belum mengetik sendiri.
+  // Begitu disentuh, isian pemakai menang seterusnya — nomor dari sistem lain
+  // (pembukuan, ERP) tidak boleh ditimpa oleh tebakan aplikasi ini.
+  const [nomorManual, setNomorManual] = useState(false);
+
   const [profilDraf, setProfilDraf] = useState(null);
   const [profilErr, setProfilErr] = useState("");
   const [profilNote, setProfilNote] = useState("");
@@ -92,6 +98,7 @@ export default function Biaya() {
   // kesalahan yang jauh lebih memalukan daripada kolom kosong.
   const bukaInvoice = () => {
     setInv(invoiceAwal(profil.data, hariIni()));
+    setNomorManual(false);
     setInvoiceOpen(true);
   };
 
@@ -181,10 +188,20 @@ export default function Biaya() {
       setErr("Jendela cetak diblokir browser. Izinkan popup untuk situs ini lalu coba lagi.");
       return;
     }
-    w.document.write(invoiceHtml({ hasil, inv, dari, sampai }));
+    w.document.write(invoiceHtml({ hasil, inv: invCetak, dari, sampai }));
     w.document.close();
     w.focus();
   };
+
+  // Invoice yang BENAR-BENAR dipakai: sama dengan isian form, kecuali nomor yang masih
+  // otomatis — itu diturunkan dari klien, periode, dan total, sehingga invoice yang sama
+  // selalu menghasilkan nomor yang sama walau dicetak berhari-hari kemudian.
+  const invCetak = nomorManual
+    ? inv
+    : (() => {
+        const k = kunciInvoice({ nama: inv.nama, dari, sampai, total: hasil?.total });
+        return { ...inv, referensi: nomorReferensi(k), transaksi: nomorTransaksi(k) };
+      })();
 
   const tarifAktif = tarif.data || [];
   const mu = hasil?.mataUang || "IDR";
@@ -599,8 +616,8 @@ export default function Biaya() {
           <Notice kind="info">
             Bidang di bawah mengikuti invoice Meta supaya dokumen ke klien bisa disandingkan langsung dengan invoice
             aslinya. Account ID, metode pembayaran, dan alamat penerbit sudah terisi dari <strong>Profil penerbit</strong>;
-            mengubahnya di sini hanya berlaku untuk invoice ini. Reference Number dan Transaction ID hanya ada di invoice
-            Meta — salin dari sana.
+            mengubahnya di sini hanya berlaku untuk invoice ini. Reference Number dan Transaction ID dibuat otomatis dari
+            isi invoice — timpa saja bila Anda memakai penomoran sendiri.
           </Notice>
           <div style={grid2}>
             <Input
@@ -634,13 +651,21 @@ export default function Biaya() {
             />
             <Input
               label="Reference Number"
-              value={inv.referensi}
-              onChange={(e) => setInv({ ...inv, referensi: e.target.value })}
+              value={invCetak.referensi}
+              onChange={(e) => {
+                setNomorManual(true);
+                setInv({ ...inv, referensi: e.target.value });
+              }}
+              hint={nomorManual ? "Diisi manual." : "Dibuat otomatis, ikut berubah bila klien atau total berubah."}
             />
             <Input
               label="Transaction ID"
-              value={inv.transaksi}
-              onChange={(e) => setInv({ ...inv, transaksi: e.target.value })}
+              value={invCetak.transaksi}
+              onChange={(e) => {
+                setNomorManual(true);
+                setInv({ ...inv, transaksi: e.target.value });
+              }}
+              hint={nomorManual ? "Diisi manual." : "Dibuat otomatis."}
             />
             <Input
               label="Product Type"

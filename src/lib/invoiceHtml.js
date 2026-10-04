@@ -4,10 +4,21 @@
 //
 // Tata letaknya mengikuti invoice Meta agar bisa disandingkan langsung dengan aslinya,
 // dengan dua perbedaan yang disengaja:
-//   • TANPA logo WhatsApp. Dokumen ini diterbitkan oleh pemakai aplikasi kepada kliennya,
-//     bukan oleh Meta; memasang logo Meta di atasnya akan menyesatkan soal siapa penerbitnya.
+//   • Logo WhatsApp dipasang sebagai penanda PRODUK yang ditagihkan, bukan penanda
+//     penerbit. Dokumen ini diterbitkan oleh pemakai aplikasi kepada kliennya, dan yang
+//     menjaga itu tetap jelas adalah blok alamat di kaki halaman: penerbitnya ada di sana,
+//     bukan Meta. Kalau blok itu dikosongkan, dokumen jadi sulit dibedakan dari invoice
+//     Meta yang asli — jangan biarkan kosong.
 //   • ADA tabel rincian di bawah. Invoice Meta hanya menampilkan satu angka; klien yang
 //     ditagih berhak melihat dari mana angka itu berasal.
+// Logo digambar inline, bukan ditarik dari URL: dokumen dibuka di jendela terpisah dan
+// sering disimpan jadi PDF, di mana gambar dari jaringan bisa gagal muat tanpa jejak dan
+// menyisakan kotak kosong di dokumen yang sudah terkirim ke klien.
+const LOGO_WA = `<svg width="54" height="54" viewBox="0 0 24 24" aria-label="WhatsApp">
+  <path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.4A8.5 8.5 0 1 1 21 11.5Z" fill="#25D366"/>
+  <path d="M8.9 8.6c.3-.6 1.2-.5 1.4 0l.5 1.2c.1.3 0 .6-.2.8l-.4.3c.5 1 1.2 1.7 2.2 2.2l.3-.4c.2-.2.5-.3.8-.2l1.2.5c.5.2.6 1.1 0 1.4-1.4.8-3.1.2-4.4-1.1-1.3-1.3-1.9-3-1.4-4.4Z" fill="#fff"/>
+</svg>`;
+
 export function invoiceHtml({ hasil, inv, dari, sampai }) {
   const mu = hasil.mataUang;
   const fmt = (v, d) =>
@@ -79,11 +90,18 @@ export function invoiceHtml({ hasil, inv, dari, sampai }) {
   .alamat{display:flex;justify-content:space-between;gap:48px;margin-top:64px;padding-bottom:6px;border-bottom:1px solid #dadde1;color:#8d949e;font-size:13.5px;line-height:1.72}
   .alamat .kanan{text-align:right}
   .vat{color:#8d949e;font-size:13.5px;margin-top:18px}
+  .kepala{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .kepala svg{flex-shrink:0}
   @media print{body{padding:0}}
 </style></head><body>
 
-<h1>Tax Invoice for ${esc(inv.nama)}</h1>
-${inv.accountId ? `<div class="sub">Account ID: ${esc(inv.accountId)}</div>` : ""}
+<div class="kepala">
+  <div>
+    <h1>Tax Invoice for ${esc(inv.nama)}</h1>
+    ${inv.accountId ? `<div class="sub">Account ID: ${esc(inv.accountId)}</div>` : ""}
+  </div>
+  ${LOGO_WA}
+</div>
 <hr>
 
 <div class="cols">

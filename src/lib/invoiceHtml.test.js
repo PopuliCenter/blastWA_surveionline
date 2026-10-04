@@ -88,11 +88,22 @@ describe("invoiceHtml", () => {
     expect(h).not.toContain("VAT amount will be computed");
   });
 
-  it("TIDAK memasang logo atau merek Meta — penerbitnya bukan Meta", () => {
-    const h = html().toLowerCase();
+  it("memasang logo WhatsApp sebagai penanda produk, digambar inline", () => {
+    const h = html();
+    expect(h).toContain('aria-label="WhatsApp"');
+    // Inline, bukan <img>: dokumen sering disimpan jadi PDF, dan gambar dari jaringan
+    // bisa gagal muat tanpa jejak lalu menyisakan kotak kosong di dokumen terkirim.
     expect(h).not.toContain("<img");
-    expect(h).not.toContain("whatsapp.svg");
-    // "WhatsApp Business Account" sebagai Product Type tetap boleh: itu nama produk yang dibeli.
+  });
+
+  it("penerbitnya tetap jelas — logo produk tidak boleh jadi klaim penerbit", () => {
+    // Inilah yang membedakan dokumen ini dari invoice Meta yang asli. Tanpa blok alamat
+    // penerbit, logo di kepala halaman akan terbaca sebagai "diterbitkan oleh WhatsApp".
+    const h = html();
+    expect(h).toContain("Populi Center");
+    expect(h).toContain("Tax ID (NPWP): 01.234.567.8-901.000");
+    // Tidak pernah mengaku sebagai entitas Meta.
+    expect(h).not.toContain("Meta Platforms");
   });
 
   it("meng-escape isian pemakai supaya tidak merusak dokumen", () => {

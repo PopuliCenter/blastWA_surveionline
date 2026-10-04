@@ -1,14 +1,33 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
-import { PageHeader, Card, Button, Badge, Notice, Loading, Empty, useLoader, theme } from "../lib/ui";
+import {
+  PageHeader,
+  Card,
+  Button,
+  Badge,
+  Input,
+  Select,
+  Notice,
+  Loading,
+  Empty,
+  Pagination,
+  useLoader,
+  useIsMobile,
+  theme,
+} from "../lib/ui";
 import { SurveyBuilder } from "./survey/SurveyBuilder";
 import { SurveyResponses } from "./survey/SurveyResponses";
 import { SurveyPreviewModal } from "./survey/SurveyPreviewModal";
 import { SurveyGuide } from "./survey/SurveyGuide";
 import { SurveyKuotaModal } from "./survey/SurveyKuotaModal";
 
+// Survei menumpuk per gelombang: empat bulan survei bulanan sudah jadi selusin kartu,
+// dan mencari satu di antaranya berarti memindai seluruh halaman dengan mata.
+const PER_HALAMAN = 12;
+
 export default function Surveys() {
+  const isMobile = useIsMobile();
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listSurveys(), []));
   const [modal, setModal] = useState(null);
   const [responsesFor, setResponsesFor] = useState(null);
@@ -16,7 +35,28 @@ export default function Surveys() {
   const [kuotaFor, setKuotaFor] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
-  const surveys = data || [];
+  const [cari, setCari] = useState("");
+  const [status, setStatus] = useState("");
+  const [halaman, setHalaman] = useState(1);
+  const semua = useMemo(() => data || [], [data]);
+
+  // Penyaringan di klien: jumlah survei dihitung lusinan, bukan ribuan seperti kontak,
+  // jadi memindahkannya ke server hanya menambah perjalanan tanpa menambah kecepatan.
+  const tersaring = useMemo(() => {
+    const q = cari.trim().toLowerCase();
+    return semua.filter(
+      (s) =>
+        (!status || s.status === status) &&
+        (!q || s.title.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q)),
+    );
+  }, [semua, cari, status]);
+
+  const pageCount = Math.max(1, Math.ceil(tersaring.length / PER_HALAMAN));
+  // Saringan baru bisa memendekkan hasil sampai di bawah posisi halaman sekarang;
+  // tanpa jepitan ini layar jadi kosong padahal datanya ada.
+  const curPage = Math.min(halaman, pageCount);
+  const start = (curPage - 1) * PER_HALAMAN;
+  const surveys = tersaring.slice(start, start + PER_HALAMAN);
 
   const run = async (fn) => {
     setErr("");
@@ -84,6 +124,44 @@ export default function Surveys() {
       />
       {guideOpen ? <SurveyGuide /> : null}
       <Notice>{error || err}</Notice>
+
+      {semua.length ? (
+        <Card style={{ marginBottom: 16 }} pad={14}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,190px)",
+              gap: 10,
+              alignItems: "end",
+            }}
+          >
+            <Input
+              label="Cari survei"
+              placeholder="Judul atau deskripsi"
+              value={cari}
+              onChange={(e) => {
+                setCari(e.target.value);
+                setHalaman(1);
+              }}
+            />
+            <Select
+              label="Status"
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setHalaman(1);
+              }}
+              options={[
+                { value: "", label: `Semua status (${semua.length})` },
+                { value: "active", label: "Berjalan" },
+                { value: "draft", label: "Draf" },
+                { value: "closed", label: "Ditutup" },
+              ]}
+            />
+          </div>
+        </Card>
+      ) : null}
+
       {loading ? (
         <Loading />
       ) : surveys.length ? (
@@ -155,11 +233,33 @@ export default function Surveys() {
             </Card>
           ))}
         </div>
+      ) : semua.length ? (
+        <Card>
+          <Empty
+            icon="search"
+            title="Tidak ada survei yang cocok"
+            note="Ubah kata pencarian atau pilih status lain."
+          />
+        </Card>
       ) : (
         <Card>
           <Empty icon="survey" title="Belum ada survei" note="Buat survei lalu kirim lewat Broadcast." />
         </Card>
       )}
+
+      {tersaring.length > PER_HALAMAN ? (
+        <Card pad={0} style={{ marginTop: 16 }}>
+          <Pagination
+            page={curPage}
+            pageCount={pageCount}
+            pageSize={PER_HALAMAN}
+            total={tersaring.length}
+            start={start}
+            onPage={setHalaman}
+            noun="survei"
+          />
+        </Card>
+      ) : null}
 
       {previewFor ? <SurveyPreviewModal survey={previewFor} onClose={() => setPreviewFor(null)} /> : null}
       {kuotaFor ? <SurveyKuotaModal survey={kuotaFor} onClose={() => setKuotaFor(null)} /> : null}
