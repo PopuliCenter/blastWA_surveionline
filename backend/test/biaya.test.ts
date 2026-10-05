@@ -60,6 +60,9 @@ describe("hitungBiaya", () => {
     });
     expect(r.baris).toHaveLength(2);
     expect(r.baris[0]).toEqual({
+      // `kode` menyertai label supaya penyaji bisa menamai ulang komponennya tanpa
+      // mencocokkan teks — invoice ke klien ditulis dalam bahasa Inggris.
+      kode: "marketing",
       label: "Pesan template — Marketing",
       jumlah: 1200,
       tarif: 586.33,
@@ -68,6 +71,7 @@ describe("hitungBiaya", () => {
     expect(r.serviceTerkirim).toBe(6000);
     expect(r.serviceGratis).toBe(1000);
     expect(r.serviceDitagih).toBe(5000);
+    expect(r.baris[1]!.kode).toBe("service");
     expect(r.baris[1]!.label).toBe("Pesan service (di luar jatah gratis)");
     expect(r.baris[1]!.subtotal).toBe(1783250);
     expect(r.subtotal).toBe(2486846);

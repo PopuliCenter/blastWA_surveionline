@@ -88,6 +88,24 @@ export default function Biaya() {
   // Begitu disentuh, isian pemakai menang seterusnya — nomor dari sistem lain
   // (pembukuan, ERP) tidak boleh ditimpa oleh tebakan aplikasi ini.
   const [nomorManual, setNomorManual] = useState(false);
+  // Model dokumen. Disimpan di peramban, bukan di profil penerbit: ini pilihan penyajian,
+  // bukan identitas penerbit — dan dalam praktiknya seseorang memakai model yang sama
+  // berulang kali, jadi memilihnya sekali saja sudah cukup.
+  const [rincian, setRincian] = useState(() => {
+    try {
+      return localStorage.getItem("populi.invoice.model") !== "global";
+    } catch {
+      return true;
+    }
+  });
+  const gantiModel = (v) => {
+    setRincian(v);
+    try {
+      localStorage.setItem("populi.invoice.model", v ? "rinci" : "global");
+    } catch {
+      /* mode privat — pilihannya cukup berlaku untuk sesi ini */
+    }
+  };
 
   const [profilDraf, setProfilDraf] = useState(null);
   const [profilErr, setProfilErr] = useState("");
@@ -188,7 +206,7 @@ export default function Biaya() {
       setErr("Jendela cetak diblokir browser. Izinkan popup untuk situs ini lalu coba lagi.");
       return;
     }
-    w.document.write(invoiceHtml({ hasil, inv: invCetak, dari, sampai }));
+    w.document.write(invoiceHtml({ hasil, inv: invCetak, dari, sampai, rincian }));
     w.document.close();
     w.focus();
   };
@@ -671,6 +689,20 @@ export default function Biaya() {
               label="Product Type"
               value={inv.produk}
               onChange={(e) => setInv({ ...inv, produk: e.target.value })}
+            />
+            <Select
+              label="Model dokumen"
+              value={rincian ? "rinci" : "global"}
+              onChange={(e) => gantiModel(e.target.value === "rinci")}
+              options={[
+                { value: "rinci", label: "Dengan rincian pemakaian" },
+                { value: "global", label: "Ringkas — total saja" },
+              ]}
+              hint={
+                rincian
+                  ? "Ada tabel komponen, jumlah, dan tarif di bawah."
+                  : "Hanya ringkasan, persis seperti invoice Meta."
+              }
             />
           </div>
           <Input

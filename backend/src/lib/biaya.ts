@@ -28,7 +28,11 @@ export type JumlahPesan = {
   servicePerBulan: Record<string, number>;
 };
 
-export type BarisBiaya = { label: string; jumlah: number; tarif: number; subtotal: number };
+// `kode` menyertai `label` supaya penyaji bisa menamai ulang komponennya tanpa mencocokkan
+// teks Indonesia. Invoice ke klien ditulis dalam bahasa Inggris, dan pencocokan berbasis
+// kalimat akan patah diam-diam begitu redaksi labelnya diubah di sini.
+export type KodeBiaya = "marketing" | "utility" | "authentication" | "service";
+export type BarisBiaya = { kode: KodeBiaya; label: string; jumlah: number; tarif: number; subtotal: number };
 
 export type RincianBiaya = {
   mataUang: string;
@@ -89,15 +93,20 @@ export function hitungBiaya(input: {
   const serviceDitagih = Math.max(0, serviceTerkirim - serviceGratis);
 
   const baris: BarisBiaya[] = [];
-  const tambah = (label: string, n: number, t: number): void => {
-    if (n > 0) baris.push({ label, jumlah: n, tarif: t, subtotal: bulat2(n * t) });
+  const tambah = (kode: KodeBiaya, label: string, n: number, t: number): void => {
+    if (n > 0) baris.push({ kode, label, jumlah: n, tarif: t, subtotal: bulat2(n * t) });
   };
-  tambah("Pesan template — Marketing", jumlah.marketing, tarif.marketing);
-  tambah("Pesan template — Utility", jumlah.utility, tarif.utility);
-  tambah("Pesan template — Authentication", jumlah.authentication, tarif.authentication);
+  tambah("marketing", "Pesan template — Marketing", jumlah.marketing, tarif.marketing);
+  tambah("utility", "Pesan template — Utility", jumlah.utility, tarif.utility);
+  tambah("authentication", "Pesan template — Authentication", jumlah.authentication, tarif.authentication);
   // Label menyebut jatah gratis HANYA bila memang ada yang dipotong. Dengan jatah 0,
   // "di luar jatah gratis" menyesatkan — seolah ada potongan yang tidak pernah terjadi.
-  tambah(serviceGratis > 0 ? "Pesan service (di luar jatah gratis)" : "Pesan service", serviceDitagih, tarif.service);
+  tambah(
+    "service",
+    serviceGratis > 0 ? "Pesan service (di luar jatah gratis)" : "Pesan service",
+    serviceDitagih,
+    tarif.service,
+  );
 
   const subtotal = bulat2(baris.reduce((a, b) => a + b.subtotal, 0));
   // Margin dihitung dari subtotal biaya Meta, dan ditampilkan sebagai baris TERPISAH —

@@ -6,7 +6,7 @@ import { invoiceHtml } from "./invoiceHtml";
 // dikenakan atas dasar pengenaan pajak 11/12 nilai.
 const hasil = {
   mataUang: "IDR",
-  baris: [{ label: "Pesan template — Marketing", jumlah: 515, tarif: 586.33, subtotal: 301960 }],
+  baris: [{ kode: "marketing", label: "Pesan template — Marketing", jumlah: 515, tarif: 586.33, subtotal: 301960 }],
   serviceTerkirim: 0,
   serviceGratis: 0,
   serviceDitagih: 0,
@@ -120,8 +120,13 @@ describe("invoiceHtml", () => {
 
   it("menyertakan tabel rincian — invoice Meta hanya satu angka, klien perlu asalnya", () => {
     const h = html();
-    expect(h).toContain("Rincian pemakaian 2026-10-01 s.d. 2026-10-03");
-    expect(h).toContain("Pesan template — Marketing");
+    expect(h).toContain("Usage details 2026-10-01 to 2026-10-03");
+    // Nama komponen diambil dari KODE-nya, bukan dari label Indonesia milik layar Biaya.
+    expect(h).toContain("Template message — Marketing");
+    expect(h).not.toContain("Pesan template");
+    expect(h).toContain("Component");
+    expect(h).toContain("Quantity");
+    expect(h).toContain("Rate");
     expect(h).toContain("IDR586.33"); // tarif satuan tetap 2 desimal
     expect(h).toContain("515");
   });
@@ -135,5 +140,31 @@ describe("invoiceHtml", () => {
       sampai: "2026-10-03",
     });
     expect(h).toContain("Margin (20%)");
+  });
+});
+
+describe("invoiceHtml — model ringkas", () => {
+  const ringkas = () => invoiceHtml({ hasil, inv, dari: "2026-10-01", sampai: "2026-10-03", rincian: false });
+
+  it("menghilangkan seluruh tabel rincian", () => {
+    const h = ringkas();
+    expect(h).not.toContain("<table");
+    expect(h).not.toContain("Usage details");
+    expect(h).not.toContain("Template message");
+  });
+
+  it("tetap memuat ringkasan, identitas penerbit, dan catatan pajak", () => {
+    // Yang dibuang hanya rinciannya. Angka yang ditagih, siapa yang menagih, dan dasar
+    // pengenaan pajaknya tetap harus ada — tanpa itu dokumennya bukan invoice.
+    const h = ringkas();
+    expect(h).toContain("Tax Invoice for Populi Center");
+    expect(h).toContain("Subtotal:");
+    expect(h).toContain("Tax (12%)");
+    expect(h).toContain("Tax ID (NPWP): 01.234.567.8-901.000");
+    expect(h).toContain("VAT amount will be computed");
+  });
+
+  it("bawaannya tetap model berincian", () => {
+    expect(invoiceHtml({ hasil, inv, dari: "2026-10-01", sampai: "2026-10-03" })).toContain("<table");
   });
 });

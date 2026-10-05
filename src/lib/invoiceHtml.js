@@ -19,7 +19,23 @@ const LOGO_WA = `<svg width="54" height="54" viewBox="0 0 24 24" aria-label="Wha
   <path d="M8.9 8.6c.3-.6 1.2-.5 1.4 0l.5 1.2c.1.3 0 .6-.2.8l-.4.3c.5 1 1.2 1.7 2.2 2.2l.3-.4c.2-.2.5-.3.8-.2l1.2.5c.5.2.6 1.1 0 1.4-1.4.8-3.1.2-4.4-1.1-1.3-1.3-1.9-3-1.4-4.4Z" fill="#fff"/>
 </svg>`;
 
-export function invoiceHtml({ hasil, inv, dari, sampai }) {
+// Nama komponen dalam bahasa Inggris, dipetakan dari KODE-nya. Label Indonesia dari
+// backend dipakai di layar Biaya; invoice yang keluar ke klien memakai nama di bawah,
+// dan pemetaan lewat kode membuat redaksi label di backend bebas berubah tanpa
+// diam-diam merusak dokumen tagihan.
+const NAMA_KOMPONEN = {
+  marketing: "Template message — Marketing",
+  utility: "Template message — Utility",
+  authentication: "Template message — Authentication",
+  service: "Service message",
+};
+
+// `rincian` memilih model dokumen:
+//   true  — ada tabel pemakaian di bawah, supaya klien bisa melihat dari mana angkanya.
+//   false — hanya ringkasan seperti invoice Meta apa adanya.
+// Keduanya disediakan karena keduanya sah: sebagian klien menagih balik dan butuh
+// rinciannya, sebagian lain hanya mengarsipkan satu angka.
+export function invoiceHtml({ hasil, inv, dari, sampai, rincian = true }) {
   const mu = hasil.mataUang;
   const fmt = (v, d) =>
     `${mu}${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
@@ -53,7 +69,7 @@ export function invoiceHtml({ hasil, inv, dari, sampai }) {
 
   const baris = hasil.baris
     .map(
-      (b) => `<tr><td>${esc(b.label)}</td><td class="r">${b.jumlah.toLocaleString("en-US")}</td>
+      (b) => `<tr><td>${esc(NAMA_KOMPONEN[b.kode] || b.label)}</td><td class="r">${b.jumlah.toLocaleString("en-US")}</td>
         <td class="r">${nt(b.tarif)}</td><td class="r">${n(b.subtotal)}</td></tr>`,
     )
     .join("");
@@ -129,19 +145,23 @@ export function invoiceHtml({ hasil, inv, dari, sampai }) {
   </div>
 </div>
 
-<hr>
+${
+  rincian
+    ? `<hr>
 
-<h2>Rincian pemakaian ${esc(dari)} s.d. ${esc(sampai)}</h2>
+<h2>Usage details ${esc(dari)} to ${esc(sampai)}</h2>
 <table>
-  <thead><tr><th>Komponen</th><th class="r">Jumlah</th><th class="r">Tarif</th><th class="r">Subtotal</th></tr></thead>
+  <thead><tr><th>Component</th><th class="r">Quantity</th><th class="r">Rate</th><th class="r">Subtotal</th></tr></thead>
   <tbody>
-    ${baris || `<tr><td colspan="4">Tidak ada komponen berbayar pada periode ini.</td></tr>`}
+    ${baris || `<tr><td colspan="4">No billable components in this period.</td></tr>`}
     <tr><td colspan="3" class="r">Subtotal</td><td class="r">${n(hasil.subtotal)}</td></tr>
     ${hasil.marginPersen > 0 ? `<tr><td colspan="3" class="r">Margin ${hasil.marginPersen}%</td><td class="r">${n(hasil.margin)}</td></tr>` : ""}
     ${hasil.pajakPersen > 0 ? `<tr><td colspan="3" class="r">Tax (${hasil.pajakPersen}%)${bintang}</td><td class="r">${n(hasil.pajak)}</td></tr>` : ""}
     <tr class="tot"><td colspan="3" class="r">Total</td><td class="r">${n(hasil.total)}</td></tr>
   </tbody>
-</table>
+</table>`
+    : ""
+}
 
 <div class="alamat">
   <div class="kiri">${barisAlamat(inv.penerbit)}</div>
