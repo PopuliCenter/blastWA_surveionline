@@ -12,6 +12,7 @@ import {
   Loading,
   Empty,
   useLoader,
+  useIsMobile,
   theme,
   Icon,
 } from "../lib/ui";
@@ -25,7 +26,88 @@ const TYPE_LABEL = {
   boolean: "Ya/Tidak",
   image: "Gambar",
 };
-const PALETTE = [theme.primary, theme.green, theme.purple, theme.yellow, theme.red, "#0891b2", "#db2777", "#65a30d"];
+// Distribusi digambar dengan SATU warna, bukan palet berputar. Warna yang berganti tiap
+// baris tidak membawa informasi apa pun di sini — labelnya sudah menempel di tiap bar, dan
+// peringkatnya sudah disampaikan panjang bar beserta urutannya. Yang ditambahkannya hanya
+// pekerjaan bagi mata: mencari pola pada warna yang sebenarnya acak.
+
+// Daftar distribusi yang bisa panjang sekali. Pertanyaan provinsi punya 38 kategori, dan
+// pada survei dengan 27 pertanyaan satu halaman laporan jadi berkilo-kilo piksel — ekornya
+// yang panjang justru bagian yang paling sedikit memberi informasi.
+//
+// Yang disembunyikan DISEBUTKAN jumlahnya: berapa kategori dan berapa responden. Ringkasan
+// yang menyembunyikan tanpa mengaku membuat pembaca menyimpulkan dari data yang tidak utuh
+// tanpa tahu bahwa ia tidak utuh.
+const BATAS_AWAL = 8;
+
+function Distribusi({ data, total, batas = BATAS_AWAL }) {
+  const isMobile = useIsMobile();
+  const [semua, setSemua] = useState(false);
+  if (!data.length) return null;
+
+  const tampil = semua ? data : data.slice(0, batas);
+  const sisa = data.length - tampil.length;
+  const sisaJumlah = semua ? 0 : data.slice(batas).reduce((a, b) => a + b[1], 0);
+  const sisaPersen = total ? Math.round((sisaJumlah / total) * 100) : 0;
+
+  // Dua kolom hanya saat daftarnya memang panjang DAN sedang dibuka penuh; di bawah itu
+  // satu kolom lebih mudah dibaca karena mata tidak perlu berpindah-pindah lajur.
+  const duaKolom = semua && !isMobile && tampil.length > 12;
+
+  return (
+    <div style={{ maxWidth: duaKolom ? "100%" : 560 }}>
+      <div
+        style={{
+          display: duaKolom ? "grid" : "block",
+          gridTemplateColumns: duaKolom ? "minmax(0,1fr) minmax(0,1fr)" : undefined,
+          columnGap: 26,
+        }}
+      >
+        {tampil.map(([v, c]) => (
+          <BarRow key={v} label={v} count={c} total={total} />
+        ))}
+      </div>
+
+      {sisa > 0 ? (
+        <button
+          onClick={() => setSemua(true)}
+          style={{
+            border: `1px dashed ${theme.border}`,
+            background: "transparent",
+            color: theme.textMuted,
+            borderRadius: 9,
+            padding: "7px 11px",
+            fontSize: 12.5,
+            cursor: "pointer",
+            width: "100%",
+            textAlign: "left",
+            marginTop: 2,
+          }}
+        >
+          <strong style={{ color: theme.text }}>{sisa} kategori lainnya</strong> — {sisaJumlah} responden ({sisaPersen}
+          %). Klik untuk menampilkan.
+        </button>
+      ) : null}
+
+      {semua && data.length > batas ? (
+        <button
+          onClick={() => setSemua(false)}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: theme.primary,
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: "pointer",
+            padding: "7px 0 0",
+          }}
+        >
+          Ringkas kembali
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 function tally(values) {
   const m = new Map();
@@ -260,11 +342,7 @@ export default function Reports() {
                 }
               >
                 {demo && demoTally.length ? (
-                  <div style={{ maxWidth: 560 }}>
-                    {demoTally.map(([val, cnt], i) => (
-                      <BarRow key={val} label={val} count={cnt} total={total} color={PALETTE[i % PALETTE.length]} />
-                    ))}
-                  </div>
+                  <Distribusi data={demoTally} total={total} />
                 ) : (
                   <div style={{ color: theme.textMuted, fontSize: 13 }}>
                     {attrKeys.length
@@ -397,25 +475,15 @@ function QuestionBreakdown({ q, values, total }) {
           <Stat label="Min" value={min} />
           <Stat label="Maks" value={max} />
         </div>
-        <div style={{ maxWidth: 560 }}>
-          {dist
-            .sort((a, b) => Number(a[0]) - Number(b[0]))
-            .map(([v, c], i) => (
-              <BarRow key={v} label={v} count={c} total={total} color={PALETTE[i % PALETTE.length]} />
-            ))}
-        </div>
+        {/* Rating diurutkan menurut NILAInya, bukan menurut jumlah: 1..5 yang melompat-lompat
+            tidak bisa dibaca sebagai sebaran. Skalanya pendek, jadi tak perlu diringkas. */}
+        <Distribusi data={[...dist].sort((a, b) => Number(a[0]) - Number(b[0]))} total={total} batas={99} />
       </div>
     );
   }
   if (q.type === "choice" || q.type === "boolean") {
     const dist = tally(values);
-    return (
-      <div style={{ maxWidth: 560 }}>
-        {dist.map(([v, c], i) => (
-          <BarRow key={v} label={v} count={c} total={total} color={PALETTE[i % PALETTE.length]} />
-        ))}
-      </div>
-    );
+    return <Distribusi data={dist} total={total} />;
   }
   // text / image: tampilkan beberapa contoh
   return (
