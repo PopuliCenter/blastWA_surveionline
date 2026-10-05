@@ -11,12 +11,22 @@
 //     Meta yang asli — jangan biarkan kosong.
 //   • ADA tabel rincian di bawah. Invoice Meta hanya menampilkan satu angka; klien yang
 //     ditagih berhak melihat dari mana angka itu berasal.
-// Logo digambar inline, bukan ditarik dari URL: dokumen dibuka di jendela terpisah dan
-// sering disimpan jadi PDF, di mana gambar dari jaringan bisa gagal muat tanpa jejak dan
-// menyisakan kotak kosong di dokumen yang sudah terkirim ke klien.
-const LOGO_WA = `<svg width="54" height="54" viewBox="0 0 24 24" aria-label="WhatsApp">
-  <path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.4A8.5 8.5 0 1 1 21 11.5Z" fill="#25D366"/>
-  <path d="M8.9 8.6c.3-.6 1.2-.5 1.4 0l.5 1.2c.1.3 0 .6-.2.8l-.4.3c.5 1 1.2 1.7 2.2 2.2l.3-.4c.2-.2.5-.3.8-.2l1.2.5c.5.2.6 1.1 0 1.4-1.4.8-3.1.2-4.4-1.1-1.3-1.3-1.9-3-1.4-4.4Z" fill="#fff"/>
+// Logo digambar inline sebagai VEKTOR, bukan ditarik dari URL dan bukan PNG yang
+// ditempelkan sebagai data URI. Dua alasannya:
+//   • dokumen dibuka di jendela terpisah dan sering disimpan jadi PDF, di mana gambar dari
+//     jaringan bisa gagal muat tanpa jejak dan menyisakan kotak kosong di dokumen yang
+//     sudah terkirim ke klien;
+//   • vektor tetap tajam saat dokumennya dicetak, sementara bitmap 54px akan pecah — dan
+//     invoice justru lebih sering dicetak daripada dibaca di layar.
+const LOGO_WA = `<svg width="54" height="54" viewBox="0 0 24 24" aria-label="WhatsApp" role="img">
+  <defs>
+    <linearGradient id="wa" x1="12" y1="1.5" x2="12" y2="22.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5BF07A"/>
+      <stop offset="1" stop-color="#20B954"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#wa)" d="M12.04 1.5C6.23 1.5 1.51 6.22 1.51 12.03c0 1.86.49 3.68 1.42 5.28L1.42 22.5l5.33-1.4a10.5 10.5 0 0 0 5.29 1.42h.01c5.8 0 10.53-4.72 10.53-10.53 0-2.81-1.1-5.46-3.09-7.45a10.46 10.46 0 0 0-7.45-3.04z"/>
+  <path fill="#fff" transform="translate(12 12) scale(1.12) translate(-12 -12)" d="M17.3 14.33c-.29-.15-1.72-.85-1.99-.95-.27-.1-.46-.14-.65.15-.2.29-.75.94-.92 1.14-.17.19-.34.22-.63.07-.29-.14-1.23-.45-2.34-1.44-.86-.77-1.45-1.72-1.62-2.01-.17-.29-.02-.45.13-.59.13-.13.29-.34.44-.51.14-.17.19-.29.29-.48.1-.2.05-.37-.02-.51-.07-.15-.65-1.58-.9-2.16-.24-.57-.48-.49-.65-.5h-.56c-.19 0-.51.07-.77.36-.27.29-1.02.99-1.02 2.42s1.04 2.81 1.19 3.01c.15.19 2.05 3.13 4.97 4.39.69.3 1.23.48 1.66.61.7.22 1.33.19 1.83.12.56-.08 1.72-.7 1.96-1.38.24-.68.24-1.26.17-1.38-.07-.12-.27-.19-.56-.34z"/>
 </svg>`;
 
 // Nama komponen dalam bahasa Inggris, dipetakan dari KODE-nya. Label Indonesia dari
