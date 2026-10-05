@@ -80,7 +80,7 @@ export function WaPreview({ tpl }) {
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted, marginBottom: 8 }}>Pratinjau WhatsApp</div>
-      <div style={{ background: "#ECE5DD", borderRadius: 12, padding: 14, minHeight: 120 }}>
+      <div style={{ background: "#ECE5DD", borderRadius: 12, padding: 14, minHeight: 120, color: "#111b21" }}>
         <div
           style={{
             background: "#fff",

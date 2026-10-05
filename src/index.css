@@ -41,6 +41,13 @@
   --green-line: rgba(22, 163, 74, 0.14);
   --yellow-line: rgba(217, 119, 6, 0.14);
 
+  /* Gelembung percakapan. Halaman Chat adalah antarmuka OPERATOR, bukan simulasi layar
+     responden, jadi warnanya ikut tema. Sebelum ini latarnya dikunci terang sementara
+     warna teksnya mengikuti tema — di mode gelap hasilnya teks terang di atas blok terang,
+     dan isi pesannya hilang sama sekali. */
+  --bubble-bot: #e2f0ff;
+  --bubble-out: #dcf8c6;
+
   --ring: rgba(37, 99, 235, 0.16);
   --overlay: rgba(15, 23, 42, 0.45);
   --scrollbar: #cbd5e1;
@@ -81,6 +88,9 @@
   --green-line: rgba(74, 222, 128, 0.2);
   --yellow-line: rgba(251, 191, 36, 0.2);
 
+  --bubble-bot: #17293f;
+  --bubble-out: #16321f;
+
   --ring: rgba(96, 165, 250, 0.3);
   --overlay: rgba(2, 6, 16, 0.66);
   --scrollbar: #334155;
@@ -120,6 +130,9 @@
     --red-line: rgba(248, 113, 113, 0.28);
     --green-line: rgba(74, 222, 128, 0.2);
     --yellow-line: rgba(251, 191, 36, 0.2);
+
+    --bubble-bot: #17293f;
+    --bubble-out: #16321f;
 
     --ring: rgba(96, 165, 250, 0.3);
     --overlay: rgba(2, 6, 16, 0.66);

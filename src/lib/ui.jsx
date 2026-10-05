@@ -35,6 +35,8 @@ export const theme = {
   redLine: "var(--red-line)",
   greenLine: "var(--green-line)",
   yellowLine: "var(--yellow-line)",
+  bubbleBot: "var(--bubble-bot)",
+  bubbleOut: "var(--bubble-out)",
   overlay: "var(--overlay)",
   shadowFloat: "var(--shadow-float)",
 };

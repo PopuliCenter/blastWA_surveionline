@@ -145,6 +145,11 @@ export function SurveyPreviewModal({ survey, onClose }) {
           height: 360,
           overflowY: "auto",
           background: "#ECE5DD",
+          // Warna teks DIKUNCI, bukan diwarisi. Area ini sengaja tetap terang karena
+          // mensimulasikan layar WhatsApp responden; tanpa penguncian ini anak-anaknya
+          // mewarisi warna teks tema, dan di mode gelap isi gelembung putih jadi tak
+          // terbaca sama sekali.
+          color: "#111b21",
           margin: "0 -20px",
           padding: "14px 16px",
           display: "flex",
@@ -217,11 +222,14 @@ export function SurveyPreviewModal({ survey, onClose }) {
               style={{
                 flex: 1,
                 padding: "9px 14px",
-                border: `1.5px solid ${theme.border}`,
+                // Hardcode, bukan token tema: kolom ini berada DI DALAM simulasi yang
+                // tetap terang, jadi border dan teks tema akan tampak salah tempat.
+                border: "1.5px solid #d6dbd9",
                 borderRadius: 22,
                 fontSize: 13.5,
                 outline: "none",
                 background: "#fff",
+                color: "#111b21",
               }}
             />
             <button

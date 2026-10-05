@@ -192,8 +192,8 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
                       ? theme.redSoft
                       : m.direction === "out"
                         ? m.isBot
-                          ? "#e2f0ff"
-                          : "#dcf8c6"
+                          ? theme.bubbleBot
+                          : theme.bubbleOut
                         : theme.surface,
                   color: theme.text,
                   border:
