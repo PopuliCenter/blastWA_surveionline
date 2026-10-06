@@ -55,6 +55,28 @@ export function invalidateEnsuredTabs(): void {
   ensured.clear();
 }
 
+// Indeks kolom (0-based) → huruf A1. Bijektif, jadi benar melewati Z: 26 → AA.
+// Survei 27 pertanyaan sudah melampaui kolom Z, dan pemetaan naif akan menulis judul
+// ke tempat yang salah persis pada survei terbesar.
+export function kolomA1(i: number): string {
+  let s = "";
+  for (let x = i + 1; x > 0; x = Math.floor((x - 1) / 26)) s = String.fromCharCode(65 + ((x - 1) % 26)) + s;
+  return s;
+}
+
+// Judul kolom yang perlu DITAMBAHKAN di kanan, atau null bila tidak boleh menyentuh apa pun.
+//
+// Hanya menambah, tidak pernah menimpa: kalau header yang ada bukan awalan persis dari
+// header yang diharapkan, berarti tabnya sudah berbeda bentuk (pertanyaan diubah, kolom
+// disusun ulang tim) — dan menulis judul baru di atasnya akan memberi nama salah pada data
+// lama. Kolom tanpa judul jauh lebih tidak berbahaya daripada kolom dengan judul keliru.
+export function judulYangKurang(ada: string[], diharapkan: string[]): { mulai: number; nilai: string[] } | null {
+  if (!ada.length) return null; // tab kosong — biarkan; baris pertama akan mengisinya sendiri
+  if (ada.length >= diharapkan.length) return null;
+  for (let i = 0; i < ada.length; i++) if ((ada[i] ?? "").trim() !== diharapkan[i]) return null;
+  return { mulai: ada.length, nilai: diharapkan.slice(ada.length) };
+}
+
 export async function ensureTab(
   sa: ServiceAccount,
   spreadsheetId: string,
@@ -74,6 +96,29 @@ export async function ensureTab(
     await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, "A1")}?valueInputOption=RAW`, {
       values: [header],
     });
+    ensured.add(key);
+    return;
+  }
+
+  // Tab lama: kolom yang ditambahkan belakangan (asesmen durasi) belum punya judul di
+  // sana. Judulnya ditambahkan di kanan — tanpa itu kolomnya terisi tapi tak bernama, dan
+  // pembaca spreadsheet tidak punya cara menebak isinya.
+  try {
+    const r = await call<{ values?: string[][] }>(
+      sa,
+      "GET",
+      `/${spreadsheetId}/values/${rangeOf(tab, "1:1")}`,
+    );
+    const kurang = judulYangKurang(r.values?.[0] ?? [], header);
+    if (kurang) {
+      const sel = `${kolomA1(kurang.mulai)}1`;
+      await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, sel)}?valueInputOption=RAW`, {
+        values: [kurang.nilai],
+      });
+    }
+  } catch {
+    // Gagal melengkapi judul TIDAK boleh menggagalkan penulisan barisnya: datanya jauh
+    // lebih penting daripada labelnya, dan baris yang hilang tidak bisa dipulihkan.
   }
   ensured.add(key);
 }
