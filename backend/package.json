@@ -19,6 +19,8 @@
     "backfill:provinsi:dev": "tsx src/scripts/backfill-provinsi-respons.ts",
     "bersihkan:tersaring": "node dist/scripts/bersihkan-jawaban-tersaring.js",
     "lengkapi:sheets": "node dist/scripts/lengkapi-sheets-durasi.js",
+    "audit:mutu": "node dist/scripts/audit-mutu-data.js",
+    "audit:mutu:dev": "tsx src/scripts/audit-mutu-data.ts",
     "lengkapi:sheets:dev": "tsx src/scripts/lengkapi-sheets-durasi.ts",
     "bersihkan:tersaring:dev": "tsx src/scripts/bersihkan-jawaban-tersaring.ts",
     "purge:orphan-messages": "node dist/scripts/purge-orphan-messages.js",
