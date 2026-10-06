@@ -10,6 +10,8 @@ import {
   AMBANG_DURASI,
   durasiMenit,
   asesmenDurasi,
+  durasiDariSheet,
+  parseWaktuSheet,
 } from "../src/lib/sheetRows.js";
 import { judulYangKurang, kolomA1 } from "../src/services/sheetPush.js";
 
@@ -173,5 +175,33 @@ describe("judul kolom yang kurang", () => {
     expect(kolomA1(27)).toBe("AB");
     expect(kolomA1(51)).toBe("AZ");
     expect(kolomA1(52)).toBe("BA");
+  });
+});
+
+describe("durasi dari kolom spreadsheet", () => {
+  it("menghitung selisih dari format yang ditulis fmtJakarta", () => {
+    expect(durasiDariSheet("2026-10-01 11:35", "2026-10-01 11:49")).toBe(14);
+    expect(durasiDariSheet("2026-10-01 23:55", "2026-10-02 00:10")).toBe(15);
+  });
+
+  it("cocok dengan yang dihitung dari objek Date", () => {
+    // Kolomnya ditulis fmtJakarta, jadi membacanya kembali harus menghasilkan menit yang
+    // sama — kalau tidak, baris lama dan baris baru akan dinilai dengan ukuran berbeda.
+    const a = new Date("2026-10-01T04:35:00Z"); // 11:35 Jakarta
+    const b = new Date("2026-10-01T04:49:00Z"); // 11:49 Jakarta
+    expect(durasiDariSheet(fmtJakarta(a), fmtJakarta(b))).toBe(durasiMenit(a, b));
+  });
+
+  it("sel kosong, rusak, atau terbalik tidak dinilai", () => {
+    expect(durasiDariSheet("", "2026-10-01 11:49")).toBeNull();
+    expect(durasiDariSheet("2026-10-01 11:35", "")).toBeNull();
+    expect(durasiDariSheet("bukan tanggal", "2026-10-01 11:49")).toBeNull();
+    expect(durasiDariSheet("2026-10-01 12:00", "2026-10-01 11:00")).toBeNull();
+  });
+
+  it("menit pecahan dipertahankan agar asesmennya sama dengan jalur normal", () => {
+    expect(parseWaktuSheet("2026-10-01 11:35")).toBe(Date.UTC(2026, 9, 1, 11, 35));
+    expect(asesmenDurasi(durasiDariSheet("2026-10-01 11:35", "2026-10-01 11:36"))).toBe("Terlalu cepat");
+    expect(asesmenDurasi(durasiDariSheet("2026-10-01 11:35", "2026-10-01 11:40"))).toBe("Normal");
   });
 });

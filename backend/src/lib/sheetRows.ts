@@ -127,3 +127,27 @@ export function extractSpreadsheetId(input: string): string {
   const m = t.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return m?.[1] ?? t;
 }
+
+// ===== Melengkapi tab yang sudah berisi data =====
+//
+// Durasi baris lama dihitung dari kolom "Mulai" dan "Selesai" DI SPREADSHEET ITU SENDIRI,
+// bukan dicocokkan kembali ke basis data. Mencocokkannya butuh kunci unik yang tidak ada:
+// satu nomor bisa mengisi lebih dari sekali, dan urutan baris bisa sudah diubah tim yang
+// menyortir tabelnya. Menghitung dari kolom di baris yang sama tidak mungkin salah-pasang —
+// nilainya selalu milik baris itu.
+
+// Format tulisan fmtJakarta: "YYYY-MM-DD HH:MM", keduanya waktu Jakarta. Karena kedua
+// kolom sezona, selisihnya benar tanpa perlu konversi apa pun.
+export function parseWaktuSheet(v: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec((v || "").trim());
+  if (!m) return null;
+  const [, y, bl, d, h, mi] = m;
+  return Date.UTC(Number(y), Number(bl) - 1, Number(d), Number(h), Number(mi));
+}
+
+export function durasiDariSheet(mulai: string, selesai: string): number | null {
+  const a = parseWaktuSheet(mulai);
+  const b = parseWaktuSheet(selesai);
+  if (a === null || b === null || b < a) return null;
+  return (b - a) / 60000;
+}

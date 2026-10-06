@@ -18,6 +18,8 @@
     "backfill:provinsi": "node dist/scripts/backfill-provinsi-respons.js",
     "backfill:provinsi:dev": "tsx src/scripts/backfill-provinsi-respons.ts",
     "bersihkan:tersaring": "node dist/scripts/bersihkan-jawaban-tersaring.js",
+    "lengkapi:sheets": "node dist/scripts/lengkapi-sheets-durasi.js",
+    "lengkapi:sheets:dev": "tsx src/scripts/lengkapi-sheets-durasi.ts",
     "bersihkan:tersaring:dev": "tsx src/scripts/bersihkan-jawaban-tersaring.ts",
     "purge:orphan-messages": "node dist/scripts/purge-orphan-messages.js",
     "purge:orphan-messages:dev": "tsx src/scripts/purge-orphan-messages.ts",

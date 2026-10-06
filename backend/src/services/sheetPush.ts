@@ -123,6 +123,23 @@ export async function ensureTab(
   ensured.add(key);
 }
 
+// Baca & tulis rentang sembarang. Dipakai skrip pelengkap kolom; alur sinkron normal
+// hanya pernah menambah baris di bawah, jadi keduanya sengaja tidak dipakai di sana.
+export async function readRange(sa: ServiceAccount, spreadsheetId: string, tab: string, a1: string): Promise<string[][]> {
+  const r = await call<{ values?: string[][] }>(sa, "GET", `/${spreadsheetId}/values/${rangeOf(tab, a1)}`);
+  return r.values ?? [];
+}
+
+export async function writeRange(
+  sa: ServiceAccount,
+  spreadsheetId: string,
+  tab: string,
+  a1: string,
+  values: (string | number)[][],
+): Promise<void> {
+  await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, a1)}?valueInputOption=RAW`, { values });
+}
+
 export async function appendRow(
   sa: ServiceAccount,
   spreadsheetId: string,
