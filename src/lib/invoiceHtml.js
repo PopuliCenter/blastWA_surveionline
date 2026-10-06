@@ -77,10 +77,22 @@ export function invoiceHtml({ hasil, inv, dari, sampai, rincian = true }) {
   const blok = (label, isi) =>
     isi ? `<div class="blk"><div class="lbl">${esc(label)}</div><div class="val">${esc(isi)}</div></div>` : "";
 
+  // Margin TIDAK pernah muncul di invoice. Ia perhitungan internal — berapa imbalan jasa
+  // yang diambil di atas biaya Meta — dan mencetaknya ke dokumen tagihan sama saja dengan
+  // memberitahukan markup kepada klien yang ditagih.
+  //
+  // Menghapus barisnya saja tidak cukup: tanpa margin, Subtotal + Tax tidak lagi sama
+  // dengan Total, dan angka yang tidak menjumlah akan dipertanyakan — justru menarik
+  // perhatian ke hal yang ingin disembunyikan. Jadi margin DILEBURKAN ke harga: tarif dan
+  // subtotal tiap komponen dinaikkan sebesar margin, sehingga yang tercetak adalah harga
+  // JUAL per pesan, dan seluruh kolom menjumlah dengan benar.
+  const f = 1 + (hasil.marginPersen > 0 ? hasil.marginPersen / 100 : 0);
+  const subtotalTagih = hasil.subtotal + (hasil.margin || 0);
+
   const baris = hasil.baris
     .map(
       (b) => `<tr><td>${esc(NAMA_KOMPONEN[b.kode] || b.label)}</td><td class="r">${b.jumlah.toLocaleString("en-US")}</td>
-        <td class="r">${nt(b.tarif)}</td><td class="r">${n(b.subtotal)}</td></tr>`,
+        <td class="r">${nt(b.tarif * f)}</td><td class="r">${n(b.subtotal * f)}</td></tr>`,
     )
     .join("");
 
@@ -93,7 +105,11 @@ export function invoiceHtml({ hasil, inv, dari, sampai, rincian = true }) {
 <title>Tax Invoice — ${esc(inv.nama)}</title>
 <style>
   *{box-sizing:border-box}
-  body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1c1e21;margin:0;padding:48px 56px;max-width:900px}
+  /* Dokumen tagihan SELALU putih. Tanpa menyatakannya, latar belakang mengikuti
+     color-scheme peramban: pada perangkat bermode gelap, teks #1c1e21 berakhir di atas
+     latar gelap dan invoicenya nyaris tak terbaca di layar sebelum dicetak. */
+  html{color-scheme:light}
+  body{font:14px/1.5 Arial,Helvetica,sans-serif;color:#1c1e21;background:#fff;margin:0;padding:48px 56px;max-width:900px}
   h1{font-size:21px;font-weight:400;margin:0 0 3px}
   .sub{color:#65676b;font-size:13px}
   hr{border:none;border-top:1px solid #dadde1;margin:26px 0}
@@ -147,8 +163,7 @@ export function invoiceHtml({ hasil, inv, dari, sampai, rincian = true }) {
     ${inv.status ? `<div class="status">${esc(inv.status)}</div>` : ""}
     <div class="total">${n(hasil.total)}</div>
     <div class="sum">
-      Subtotal: ${n(hasil.subtotal)}<br>
-      ${hasil.marginPersen > 0 ? `Margin (${hasil.marginPersen}%): ${n(hasil.margin)}<br>` : ""}
+      Subtotal: ${n(subtotalTagih)}<br>
       ${hasil.pajakPersen > 0 ? `Tax (${hasil.pajakPersen}%): ${n(hasil.pajak)}${bintang}` : ""}
     </div>
     ${inv.catatan ? `<div class="note">${esc(inv.catatan)}</div>` : ""}
@@ -164,8 +179,7 @@ ${
   <thead><tr><th>Component</th><th class="r">Quantity</th><th class="r">Rate</th><th class="r">Subtotal</th></tr></thead>
   <tbody>
     ${baris || `<tr><td colspan="4">No billable components in this period.</td></tr>`}
-    <tr><td colspan="3" class="r">Subtotal</td><td class="r">${n(hasil.subtotal)}</td></tr>
-    ${hasil.marginPersen > 0 ? `<tr><td colspan="3" class="r">Margin ${hasil.marginPersen}%</td><td class="r">${n(hasil.margin)}</td></tr>` : ""}
+    <tr><td colspan="3" class="r">Subtotal</td><td class="r">${n(subtotalTagih)}</td></tr>
     ${hasil.pajakPersen > 0 ? `<tr><td colspan="3" class="r">Tax (${hasil.pajakPersen}%)${bintang}</td><td class="r">${n(hasil.pajak)}</td></tr>` : ""}
     <tr class="tot"><td colspan="3" class="r">Total</td><td class="r">${n(hasil.total)}</td></tr>
   </tbody>

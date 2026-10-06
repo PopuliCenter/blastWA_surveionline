@@ -131,15 +131,34 @@ describe("invoiceHtml", () => {
     expect(h).toContain("515");
   });
 
-  it("menampilkan baris margin hanya bila ada", () => {
-    expect(html()).not.toContain("Margin");
-    const h = invoiceHtml({
-      hasil: { ...hasil, marginPersen: 20, margin: 60345.2, total: 395261.2 },
-      inv,
-      dari: "2026-10-01",
-      sampai: "2026-10-03",
-    });
-    expect(h).toContain("Margin (20%)");
+  it("TIDAK pernah mencetak margin — itu perhitungan internal, bukan untuk klien", () => {
+    // Mencetak markup ke dokumen tagihan sama saja dengan memberitahukannya kepada pihak
+    // yang ditagih. Diperiksa pada kedua model dokumen.
+    const dgn = { ...hasil, marginPersen: 90, margin: 271553.4, total: 639659.4 };
+    for (const rincian of [true, false]) {
+      const h = invoiceHtml({ hasil: dgn, inv, dari: "2026-10-01", sampai: "2026-10-03", rincian });
+      expect(h).not.toContain("Margin");
+      expect(h).not.toContain("90%");
+      expect(h).not.toContain("271,553");
+    }
+  });
+
+  it("angkanya tetap menjumlah setelah margin dileburkan ke harga", () => {
+    // Inilah sebabnya margin tidak cukup sekadar dihapus: Subtotal + Tax harus tetap sama
+    // dengan Total, kalau tidak justru angka yang ganjil itu yang menarik perhatian.
+    const dgn = { ...hasil, marginPersen: 90, margin: 271553.4, total: 639659.4 };
+    const h = invoiceHtml({ hasil: dgn, inv, dari: "2026-10-01", sampai: "2026-10-03" });
+    // Subtotal tertagih = 301.726 + 271.553,4 = 573.279,4 → IDR573,279
+    expect(h).toContain("IDR573,279");
+    // Tarif yang tercetak adalah harga JUAL: 586,33 × 1,9 = 1.114,027
+    expect(h).toContain("IDR1,114.027");
+    expect(h).toContain("IDR639,659"); // total, apa adanya dari perhitungan
+  });
+
+  it("tanpa margin, tarif dan subtotal tidak berubah sama sekali", () => {
+    const h = html();
+    expect(h).toContain("IDR586.33");
+    expect(h).toContain("IDR301,726");
   });
 });
 
