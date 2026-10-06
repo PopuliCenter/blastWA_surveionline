@@ -1,5 +1,5 @@
 import { prisma } from "../db.js";
-import { periksaKuota, type HasilKuota } from "../lib/kuota.js";
+import { periksaKuota, semuaSurveiPenuh, type HasilKuota } from "../lib/kuota.js";
 import { kodeProvinsiDari, PROVINSI } from "../lib/wilayah.js";
 
 // Pengambilan angka kuota dari database. Aturannya sendiri ada di lib/kuota.ts.
@@ -75,6 +75,39 @@ export function pesanKuotaPenuh(hasil: HasilKuota, kodeProvinsi: string | null):
     return `Terima kasih atas kesediaan Anda. Kuota responden untuk wilayah ${nama ?? "Anda"} pada survei ini sudah terpenuhi, jadi kami tidak dapat menerima jawaban baru. 🙏`;
   }
   return "Terima kasih atas kesediaan Anda. Kuota responden survei ini sudah terpenuhi, jadi kami tidak dapat menerima jawaban baru. 🙏";
+}
+
+// Keadaan kuota seluruh survei yang BERJALAN. Dipakai Agen AI untuk berhenti membalas
+// ketika tak ada lagi responden yang bisa diterima.
+//
+// Dibaca langsung tiap kali dibutuhkan, tanpa cache: dua query ringan, dan hanya berjalan
+// pada pesan bebas yang tidak tertangani aturan Auto Reply. Cache akan menukar beban yang
+// nyaris nol dengan kemungkinan Agen AI menolak membalas berdasarkan angka basi — tepat
+// setelah operator menaikkan target karena ingin melanjutkan.
+export async function statusKuotaSurveiAktif(): Promise<{
+  semuaPenuh: boolean;
+  survei: { id: string; judul: string; target: number | null; terisi: number }[];
+}> {
+  const aktif = await prisma.survey.findMany({
+    where: { status: "active" },
+    select: { id: true, title: true, targetResponden: true },
+  });
+  if (!aktif.length) return { semuaPenuh: false, survei: [] };
+
+  const hitung = await prisma.surveyResponse.groupBy({
+    by: ["surveyId"],
+    where: { surveyId: { in: aktif.map((s) => s.id) }, ...DIHITUNG_KE_KUOTA },
+    _count: { _all: true },
+  });
+  const terisiPer = new Map(hitung.map((h) => [h.surveyId, h._count._all]));
+
+  const survei = aktif.map((s) => ({
+    id: s.id,
+    judul: s.title,
+    target: s.targetResponden ?? null,
+    terisi: terisiPer.get(s.id) ?? 0,
+  }));
+  return { semuaPenuh: semuaSurveiPenuh(survei), survei };
 }
 
 // Stempel provinsi pada respons. Dipanggil saat provinsi diketahui — dari atribut kontak

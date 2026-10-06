@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { periksaKuota, sisaKuota, persenKuota } from "../src/lib/kuota.js";
+import { periksaKuota, sisaKuota, persenKuota, semuaSurveiPenuh } from "../src/lib/kuota.js";
 import { provinsiDariAtribut } from "../src/services/kuotaSurvei.js";
 import { kodeProvinsiDari } from "../src/lib/wilayah.js";
 import { disaringKeluar, saringJawaban, indeksPenyaringan, jalurPertanyaan } from "../src/lib/surveyLogic.js";
@@ -339,5 +339,42 @@ describe("saringJawaban — pertanyaan yang dilompati percabangan maju", () => {
     ]);
     expect(r.batas).toBe(0);
     expect(r.diterima.map((a) => a.questionId)).toEqual(["consent"]);
+  });
+});
+
+describe("semuaSurveiPenuh — pemicu Agen AI berhenti membalas", () => {
+  it("penuh hanya bila SEMUA survei berjalan sudah mencapai targetnya", () => {
+    expect(semuaSurveiPenuh([{ target: 1200, terisi: 1200 }])).toBe(true);
+    expect(semuaSurveiPenuh([{ target: 1200, terisi: 1350 }])).toBe(true);
+    expect(semuaSurveiPenuh([{ target: 1200, terisi: 1199 }])).toBe(false);
+    // Satu survei yang masih butuh responden sudah cukup untuk membuat Agen AI berguna.
+    expect(
+      semuaSurveiPenuh([
+        { target: 1200, terisi: 1200 },
+        { target: 500, terisi: 10 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("survei tanpa target tidak pernah dianggap penuh", () => {
+    // Batas yang tidak disetel berarti tak terbatas, bukan nol. Memperlakukannya sebagai
+    // penuh akan mematikan Agen AI pada survei yang justru paling membutuhkannya.
+    expect(semuaSurveiPenuh([{ target: null, terisi: 99999 }])).toBe(false);
+    expect(
+      semuaSurveiPenuh([
+        { target: 10, terisi: 10 },
+        { target: null, terisi: 0 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("tanpa survei berjalan, Agen AI TIDAK dimatikan", () => {
+    // Agen AI bisa dipakai untuk keperluan di luar survei. Mematikannya karena kebetulan
+    // tidak ada survei aktif akan menghentikan sesuatu yang tidak diminta berhenti.
+    expect(semuaSurveiPenuh([])).toBe(false);
+  });
+
+  it("target nol berarti memang tidak menerima siapa pun", () => {
+    expect(semuaSurveiPenuh([{ target: 0, terisi: 0 }])).toBe(true);
   });
 });

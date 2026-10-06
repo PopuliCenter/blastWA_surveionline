@@ -161,10 +161,31 @@ export default function AiAgent() {
       <PageHeader
         title="Agen AI"
         subtitle="Chatbot otomatis untuk membalas pesan masuk — pilih provider AI mana pun."
-        actions={<Badge tone={data.enabled ? "green" : "default"}>{data.enabled ? "aktif" : "nonaktif"}</Badge>}
+        actions={
+          <Badge tone={!data.enabled ? "default" : data.kuotaPenuh ? "yellow" : "green"}>
+            {!data.enabled ? "nonaktif" : data.kuotaPenuh ? "jeda — kuota penuh" : "aktif"}
+          </Badge>
+        }
       />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
+
+      {/* Agen yang "aktif" di layar tapi tidak pernah membalas adalah kebohongan kecil yang
+          mahal: operator akan mengira integrasinya rusak dan mencari sebab yang tidak ada.
+          Jadi keadaan sebenarnya dinyatakan, lengkap dengan apa yang harus dilakukan untuk
+          mengubahnya. */}
+      {data.enabled && data.kuotaPenuh ? (
+        <div style={{ marginBottom: 16 }}>
+          <Notice kind="warning">
+            Agen AI sedang <strong>tidak membalas</strong> karena kuota seluruh survei yang berjalan sudah terpenuhi
+            {data.surveiAktif?.length
+              ? ` (${data.surveiAktif.map((s) => `${s.judul}: ${s.terisi}/${s.target}`).join(", ")})`
+              : ""}
+            . Tiap balasan adalah pesan berbayar yang tidak lagi membawa responden baru. Jalan sendiri lagi begitu
+            target dinaikkan, survei baru dijalankan, atau survei yang ada ditutup.
+          </Notice>
+        </div>
+      ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 16 }}>
         <Card title="Konfigurasi">
@@ -273,9 +294,9 @@ export default function AiAgent() {
                       dibiarkan terbaca sebagai lampu hijau. */}
                   {testResult.enabled === false ? (
                     <div style={{ marginBottom: 6 }}>
-                      <strong>Provider sehat, tetapi Agen AI NONAKTIF.</strong> Sambungan ke model
-                      berhasil, namun selama saklar di atas mati, pesan WhatsApp tidak akan dibalas
-                      AI sama sekali. Nyalakan lalu simpan.
+                      <strong>Provider sehat, tetapi Agen AI NONAKTIF.</strong> Sambungan ke model berhasil, namun
+                      selama saklar di atas mati, pesan WhatsApp tidak akan dibalas AI sama sekali. Nyalakan lalu
+                      simpan.
                     </div>
                   ) : null}
                   <strong>Berhasil</strong> ({testResult.ms} ms, model {testResult.model}):
@@ -329,12 +350,17 @@ export default function AiAgent() {
               background: data.hasApiKey ? theme.greenSoft : theme.yellowSoft,
               borderRadius: 9,
               fontSize: 12.5,
-              color: data.hasApiKey ? theme.green : theme.yellow,
+              color: data.hasApiKey && !data.kuotaPenuh ? theme.green : theme.yellow,
             }}
           >
-            {data.hasApiKey
-              ? "✓ API key terpasang — AI siap menjawab."
-              : "⚠ Belum ada API key. AI tidak menjawab sampai key diisi."}
+            {/* "Siap menjawab" tidak boleh tetap tercetak saat agennya sedang jeda —
+                dua pernyataan yang saling bertentangan di satu layar membuat pembacanya
+                berhenti memercayai keduanya. */}
+            {data.hasApiKey && data.kuotaPenuh
+              ? "✓ API key terpasang, tetapi AI sedang jeda — kuota survei penuh."
+              : data.hasApiKey
+                ? "✓ API key terpasang — AI siap menjawab."
+                : "⚠ Belum ada API key. AI tidak menjawab sampai key diisi."}
           </div>
         </Card>
       </div>

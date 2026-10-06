@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clampAiSettings } from "../lib/aiLimits.js";
 import { prisma } from "../db.js";
+import { statusKuotaSurveiAktif } from "../services/kuotaSurvei.js";
 import { encryptJson, decryptJson } from "../lib/crypto.js";
 import { generateReply } from "../lib/ai.js";
 import { env } from "../env.js";
@@ -40,8 +41,16 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
 
   // Ambil konfigurasi (TANPA membocorkan API key)
   app.get("/api/ai-agent", async () => {
-    const cfg = await prisma.aiConfig.findUnique({ where: { id: "default" } });
+    const [cfg, kuota] = await Promise.all([
+      prisma.aiConfig.findUnique({ where: { id: "default" } }),
+      statusKuotaSurveiAktif(),
+    ]);
     return {
+      // Keadaan NYATA, bukan sekadar nilai konfigurasi. Agen yang "Aktif" di layar tapi
+      // tidak pernah membalas adalah kebohongan kecil yang mahal: operator akan mengira
+      // integrasinya rusak dan menghabiskan waktu mencari sebab yang tidak ada.
+      kuotaPenuh: kuota.semuaPenuh,
+      surveiAktif: kuota.survei,
       enabled: cfg?.enabled ?? DEFAULTS.enabled,
       provider: cfg?.provider ?? DEFAULTS.provider,
       model: cfg?.model ?? DEFAULTS.model,

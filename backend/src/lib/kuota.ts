@@ -45,3 +45,20 @@ export function persenKuota(target: number | null, terisi: number): number | nul
   if (typeof target !== "number" || target <= 0) return null;
   return Math.min(100, Math.round((terisi / target) * 100));
 }
+
+// ===== Apakah seluruh survei yang berjalan sudah penuh? =====
+//
+// Dipakai untuk menghentikan Agen AI saat tak ada lagi responden yang bisa diterima. Tiap
+// balasan AI adalah pesan service berbayar; begitu kuota penuh, balasan itu tidak lagi
+// membawa satu pun responden baru — hanya tagihan.
+//
+// Survei TANPA target tidak pernah dianggap penuh: batas yang tidak disetel berarti tak
+// terbatas, bukan nol. Dan bila tak ada survei yang berjalan sama sekali, hasilnya juga
+// false — Agen AI bisa saja dipakai untuk keperluan di luar survei, dan mematikannya
+// karena tidak ada survei akan menghentikan sesuatu yang tidak diminta berhenti.
+export type SurveiKuotaRingkas = { target: number | null; terisi: number };
+
+export function semuaSurveiPenuh(daftar: readonly SurveiKuotaRingkas[]): boolean {
+  if (!daftar.length) return false;
+  return daftar.every((s) => s.target !== null && s.target >= 0 && s.terisi >= s.target);
+}

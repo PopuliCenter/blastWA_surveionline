@@ -5,6 +5,7 @@ import { generateReply, type AiMessage } from "../lib/ai.js";
 import { decideAiReply, AI_QUOTA_WINDOW_MS, AI_QUOTA_REACHED_REPLY } from "../lib/aiLimits.js";
 import { logError } from "../lib/errorLog.js";
 import { buildContactFacts } from "../lib/aiContext.js";
+import { statusKuotaSurveiAktif } from "./kuotaSurvei.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
 // Urutan: aturan Auto Reply (cocok kata kunci) → Agen AI (bila aktif).
@@ -33,6 +34,20 @@ export async function findAutoResponse(contactId: string, text: string): Promise
   // 2) Agen AI
   const ai = await prisma.aiConfig.findUnique({ where: { id: "default" } });
   if (!ai?.enabled) return null;
+
+  // Berhenti membalas begitu seluruh survei yang berjalan penuh kuotanya. Tiap balasan AI
+  // adalah pesan service berbayar, dan setelah kuota penuh balasan itu tidak lagi membawa
+  // satu pun responden baru — hanya tagihan yang terus berjalan selama orang masih menulis.
+  //
+  // Yang dimatikan HANYA jalur AI. Aturan Auto Reply di atas tetap berjalan: jumlahnya
+  // terbatas, isinya ditulis operator, dan justru di situlah pesan "survei sudah ditutup"
+  // semestinya berada.
+  //
+  // Konfigurasi di basis data TIDAK diubah. Mematikan enabled akan membuat Agen AI tetap
+  // mati setelah target dinaikkan atau survei baru dibuka — bot yang diam karena keadaan
+  // yang sudah lewat, dan tidak ada yang memberi tahu. Ini pulih sendiri; layar Agen AI
+  // yang menyatakan keadaannya.
+  if ((await statusKuotaSurveiAktif()).semuaPenuh) return null;
 
   const apiKey = ai.apiKey ? safeDecrypt(ai.apiKey) : env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
