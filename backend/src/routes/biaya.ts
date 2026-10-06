@@ -32,6 +32,9 @@ const tarifInput = z.object({
 
 export async function biayaRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
+  // Tarif, margin, dan invoice ke klien. Superadmin saja: angka di sini menentukan apa
+  // yang ditagihkan, dan marginnya bukan sesuatu yang perlu dilihat setiap operator.
+  app.addHook("onRequest", app.requireSuperadmin);
 
   // ===== Kartu tarif (diisi manual, berversi) =====
 

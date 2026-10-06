@@ -20,6 +20,9 @@ export async function baileysRoutes(app: FastifyInstance): Promise<void> {
   // --- Endpoint UI (butuh login admin). ---
   await app.register(async (r) => {
     r.addHook("onRequest", app.authenticate);
+    // Bagian dari halaman Akun WhatsApp: memindai QR berarti menautkan nomor WhatsApp
+    // sungguhan ke aplikasi ini. Sama terbatasnya dengan kredensial vendor lain.
+    r.addHook("onRequest", app.requireSuperadmin);
 
     // Status koneksi + QR (data URL) bila sedang menunggu scan.
     r.get("/api/baileys/status", async () => baileysGateway.getState());

@@ -15,7 +15,8 @@ export async function sheetRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   // Konfigurasi operasional — viewer tidak boleh baca maupun tulis (halamannya juga
   // disembunyikan di UI; ini penjaga sisi server-nya).
-  app.addHook("onRequest", app.requireOperator);
+  // Kunci service account Google dan tujuan ekspor data responden. Superadmin saja.
+  app.addHook("onRequest", app.requireSuperadmin);
 
   // Status ringkas. Kunci tidak pernah dibocorkan; email service account justru
   // DITAMPILKAN karena user membutuhkannya — spreadsheet harus di-share ke email itu.

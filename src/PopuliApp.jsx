@@ -16,6 +16,7 @@ import {
   pasangTema,
 } from "./lib/ui";
 import { LegalModal } from "./lib/legal";
+import { canSeePage } from "./lib/izinHalaman";
 import ComingSoon from "./pages/ComingSoon"; // kecil & dipakai beberapa menu → biarkan statis
 
 // Halaman berat dimuat saat dibuka saja (code-splitting) → bundle awal ringan di HP.
@@ -75,19 +76,12 @@ const NAV = [
     group: "Sistem",
     items: [
       { id: "webhook", label: "Webhook", icon: "webhook" },
-      { id: "log", label: "Log Galat", icon: "alert", superadmin: true },
-      { id: "admin", label: "Admin", icon: "admin", superadmin: true },
+      { id: "log", label: "Log Galat", icon: "alert" },
+      { id: "admin", label: "Admin", icon: "admin" },
     ],
   },
 ];
 
-// Halaman yang boleh dibuka peran "viewer" — DAFTAR-IZIN, bukan daftar-larangan:
-// menu baru otomatis tertutup untuk viewer sampai sengaja dimasukkan ke sini.
-// Backend sudah menolak semua metode pengubah data untuk viewer (requireWriter),
-// jadi ini lapis kedua: menghilangkan menu & tombol yang memang tak akan berhasil,
-// supaya tak ada yang mengklik lalu kebingungan dapat galat.
-export const VIEWER_PAGES = new Set(["dashboard", "contacts", "chat", "reports"]);
-export const canSeePage = (role, id) => role !== "viewer" || VIEWER_PAGES.has(id);
 
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -277,7 +271,7 @@ function Sidebar({
       <nav style={{ flex: 1 }}>
         {NAV.map((sec) => {
           const items = sec.items.filter(
-            (it) => (!it.superadmin || currentUser.role === "superadmin") && canSeePage(currentUser.role, it.id),
+            (it) => canSeePage(currentUser.role, it.id),
           );
           if (!items.length) return null;
           return (

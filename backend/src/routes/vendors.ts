@@ -9,7 +9,8 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   // Konfigurasi operasional — viewer tidak boleh baca maupun tulis (halamannya juga
   // disembunyikan di UI; ini penjaga sisi server-nya).
-  app.addHook("onRequest", app.requireOperator);
+  // Kredensial vendor WhatsApp — hal paling berharga di aplikasi ini. Superadmin saja.
+  app.addHook("onRequest", app.requireSuperadmin);
 
   // Status semua vendor (terkonfigurasi atau belum) — TANPA membocorkan kredensial
   app.get("/api/vendors", async () => {

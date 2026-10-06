@@ -7,6 +7,7 @@ declare module "fastify" {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireWriter: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireOperator: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireSuperadmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -46,6 +47,17 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
   // operasional (kredensial vendor, Agen AI, Google Sheets) — halamannya memang
   // disembunyikan dari viewer di UI, dan tanpa penjaga ini isinya masih bisa diambil
   // langsung lewat API memakai token viewer.
+  // Pengaturan yang memegang kunci atau uang: kredensial vendor WhatsApp, integrasi Google
+  // Sheets, serta tarif dan invoice. Dibatasi superadmin.
+  //
+  // Menyembunyikan menunya saja TIDAK cukup — endpoint-nya tetap bisa dipanggil langsung
+  // dengan token admin yang sah, dan kredensial Meta adalah hal paling berharga di aplikasi
+  // ini. Penjaga di server inilah pembatas sebenarnya; yang di UI hanya agar tak ada yang
+  // mengklik lalu kebingungan dapat galat.
+  app.decorate("requireSuperadmin", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (req.user?.role !== "superadmin") reply.code(403).send({ error: "forbidden" });
+  });
+
   app.decorate("requireOperator", async (req: FastifyRequest, reply: FastifyReply) => {
     if (req.user?.role === "viewer") reply.code(403).send({ error: "forbidden" });
   });
