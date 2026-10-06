@@ -13,6 +13,7 @@ import {
   Loading,
   Toggle,
   useLoader,
+  fmtDate,
   useIsMobile,
   theme,
   Icon,
@@ -156,33 +157,50 @@ export default function AiAgent() {
     );
   const set = (k, v) => setF({ ...f, [k]: v });
 
+  // Dimatikan SISTEM, bukan oleh orang: togglenya mati dan ada stempel waktunya.
+  const dimatikanSistem = !data.enabled && Boolean(data.offOtomatisPada);
+  const daftarSurvei = (data.surveiAktif || [])
+    .map((s) => `${s.judul}: ${s.terisi}/${s.target ?? "tanpa batas"}`)
+    .join(", ");
+
   return (
     <div>
       <PageHeader
         title="Agen AI"
         subtitle="Chatbot otomatis untuk membalas pesan masuk — pilih provider AI mana pun."
         actions={
-          <Badge tone={!data.enabled ? "default" : data.kuotaPenuh ? "yellow" : "green"}>
-            {!data.enabled ? "nonaktif" : data.kuotaPenuh ? "jeda — kuota penuh" : "aktif"}
+          <Badge tone={dimatikanSistem ? "yellow" : !data.enabled ? "default" : data.kuotaPenuh ? "yellow" : "green"}>
+            {dimatikanSistem
+              ? "mati otomatis — kuota penuh"
+              : !data.enabled
+                ? "nonaktif"
+                : data.kuotaPenuh
+                  ? "aktif — kuota penuh"
+                  : "aktif"}
           </Badge>
         }
       />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
 
-      {/* Agen yang "aktif" di layar tapi tidak pernah membalas adalah kebohongan kecil yang
-          mahal: operator akan mengira integrasinya rusak dan mencari sebab yang tidak ada.
-          Jadi keadaan sebenarnya dinyatakan, lengkap dengan apa yang harus dilakukan untuk
-          mengubahnya. */}
-      {data.enabled && data.kuotaPenuh ? (
+      {/* Operator yang menemukan agennya mati tanpa penjelasan akan mengira ada orang lain
+          yang mematikan — lalu menyalakannya tanpa tahu bahwa tagihan jalan lagi tanpa
+          membawa responden baru. Sebabnya dinyatakan, lengkap dengan angkanya. */}
+      {dimatikanSistem ? (
         <div style={{ marginBottom: 16 }}>
           <Notice kind="warning">
-            Agen AI sedang <strong>tidak membalas</strong> karena kuota seluruh survei yang berjalan sudah terpenuhi
-            {data.surveiAktif?.length
-              ? ` (${data.surveiAktif.map((s) => `${s.judul}: ${s.terisi}/${s.target}`).join(", ")})`
-              : ""}
-            . Tiap balasan adalah pesan berbayar yang tidak lagi membawa responden baru. Jalan sendiri lagi begitu
-            target dinaikkan, survei baru dijalankan, atau survei yang ada ditutup.
+            Agen AI <strong>dimatikan otomatis</strong> pada {fmtDate(data.offOtomatisPada)} karena kuota seluruh survei
+            yang berjalan sudah terpenuhi{daftarSurvei ? ` (${daftarSurvei})` : ""}. Tiap balasan adalah pesan berbayar
+            yang tidak lagi membawa responden baru. Nyalakan kembali di bawah bila masih dibutuhkan — sekali dinyalakan,
+            ia tidak akan dimatikan lagi sampai kuota kembali longgar.
+          </Notice>
+        </div>
+      ) : data.enabled && data.kuotaPenuh ? (
+        <div style={{ marginBottom: 16 }}>
+          <Notice kind="warning">
+            Kuota seluruh survei yang berjalan sudah terpenuhi{daftarSurvei ? ` (${daftarSurvei})` : ""}, tetapi Agen AI
+            Anda <strong>nyalakan sendiri</strong> dan tetap menjawab. Tiap balasan adalah pesan berbayar yang tidak
+            membawa responden baru.
           </Notice>
         </div>
       ) : null}
@@ -356,8 +374,8 @@ export default function AiAgent() {
             {/* "Siap menjawab" tidak boleh tetap tercetak saat agennya sedang jeda —
                 dua pernyataan yang saling bertentangan di satu layar membuat pembacanya
                 berhenti memercayai keduanya. */}
-            {data.hasApiKey && data.kuotaPenuh
-              ? "✓ API key terpasang, tetapi AI sedang jeda — kuota survei penuh."
+            {data.hasApiKey && dimatikanSistem
+              ? "✓ API key terpasang, tetapi agennya dimatikan otomatis — kuota survei penuh."
               : data.hasApiKey
                 ? "✓ API key terpasang — AI siap menjawab."
                 : "⚠ Belum ada API key. AI tidak menjawab sampai key diisi."}

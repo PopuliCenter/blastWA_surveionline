@@ -301,6 +301,20 @@ model AiConfig {
   maxTokens        Int      @default(300) // panjang maksimal satu balasan AI
   historyLimit     Int      @default(6) // jumlah pesan terakhir yang dikirim sebagai konteks
   maxRepliesPerDay Int      @default(5) // kuota balasan AI per kontak per 24 jam; 0 = tanpa batas
+
+  // Mati otomatis saat kuota seluruh survei terpenuhi. Tiap balasan AI adalah pesan
+  // berbayar, dan setelah kuota penuh ia tidak lagi membawa responden baru.
+  //
+  // offOtomatisPada: kapan sistem yang mematikannya. Dipakai layar Agen AI untuk
+  // menjelaskan sebabnya — tanpa itu operator akan mengira ada orang lain yang mematikan.
+  // Dikosongkan begitu agennya aktif kembali dengan kuota yang sudah longgar.
+  offOtomatisPada DateTime?
+  // izinOffOtomatis: boleh tidak sistem mematikannya lagi. Disetel false begitu sistem
+  // mematikan sekali, dan TIDAK dipulihkan saat operator menyalakan manual — itulah yang
+  // membuat "nyalakan manual" benar-benar bertahan, bukan mati lagi pada pesan berikutnya.
+  // Pulih sendiri hanya ketika kuota kembali longgar, siap untuk episode berikutnya.
+  izinOffOtomatis Boolean @default(true)
+
   updatedAt        DateTime @updatedAt
 }
 

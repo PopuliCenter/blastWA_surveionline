@@ -35,19 +35,42 @@ export async function findAutoResponse(contactId: string, text: string): Promise
   const ai = await prisma.aiConfig.findUnique({ where: { id: "default" } });
   if (!ai?.enabled) return null;
 
-  // Berhenti membalas begitu seluruh survei yang berjalan penuh kuotanya. Tiap balasan AI
-  // adalah pesan service berbayar, dan setelah kuota penuh balasan itu tidak lagi membawa
-  // satu pun responden baru — hanya tagihan yang terus berjalan selama orang masih menulis.
+  // MATIKAN agen begitu seluruh survei yang berjalan penuh kuotanya. Tiap balasan AI adalah
+  // pesan service berbayar, dan setelah kuota penuh ia tidak lagi membawa satu pun responden
+  // baru — hanya tagihan yang terus berjalan selama orang masih menulis.
   //
   // Yang dimatikan HANYA jalur AI. Aturan Auto Reply di atas tetap berjalan: jumlahnya
   // terbatas, isinya ditulis operator, dan justru di situlah pesan "survei sudah ditutup"
   // semestinya berada.
   //
-  // Konfigurasi di basis data TIDAK diubah. Mematikan enabled akan membuat Agen AI tetap
-  // mati setelah target dinaikkan atau survei baru dibuka — bot yang diam karena keadaan
-  // yang sudah lewat, dan tidak ada yang memberi tahu. Ini pulih sendiri; layar Agen AI
-  // yang menyatakan keadaannya.
-  if ((await statusKuotaSurveiAktif()).semuaPenuh) return null;
+  // Dimatikan BENAR-BENAR di basis data, bukan sekadar dilewati, atas permintaan operator:
+  // agen yang bisa menyala sendiri sulit dipercaya ketika yang dipertaruhkan adalah tagihan.
+  // Konsekuensinya ditanggung dengan sadar — ia tidak akan hidup lagi tanpa ada yang
+  // menyalakannya, jadi sebabnya dicatat agar layar Agen AI bisa menjelaskannya.
+  const kuota = await statusKuotaSurveiAktif();
+  if (kuota.semuaPenuh && ai.izinOffOtomatis) {
+    await prisma.aiConfig.update({
+      where: { id: "default" },
+      data: { enabled: false, offOtomatisPada: new Date(), izinOffOtomatis: false },
+    });
+    logError("ai-agent", "Agen AI dimatikan otomatis — kuota seluruh survei terpenuhi", {
+      survei: kuota.survei.map((s) => `${s.judul}: ${s.terisi}/${s.target ?? "∞"}`),
+      catatan: "Nyalakan kembali dari layar Agen AI bila masih dibutuhkan.",
+    });
+    return null;
+  }
+  // izinOffOtomatis false DAN kuota masih penuh berarti operator sudah menyalakannya
+  // kembali setelah sistem mematikan. Itu keputusan sadar mereka — agen tetap menjawab,
+  // dan sistem tidak mematikannya lagi. Mematikan apa yang baru saja dinyalakan orang
+  // adalah aplikasi yang melawan pemakainya.
+  // Kuota longgar lagi (target dinaikkan, survei baru, atau yang lama ditutup) → sistem
+  // boleh mematikan lagi pada episode berikutnya.
+  if (!ai.izinOffOtomatis || ai.offOtomatisPada) {
+    await prisma.aiConfig.update({
+      where: { id: "default" },
+      data: { izinOffOtomatis: true, offOtomatisPada: null },
+    });
+  }
 
   const apiKey = ai.apiKey ? safeDecrypt(ai.apiKey) : env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;

@@ -51,6 +51,10 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       // integrasinya rusak dan menghabiskan waktu mencari sebab yang tidak ada.
       kuotaPenuh: kuota.semuaPenuh,
       surveiAktif: kuota.survei,
+      // Kapan SISTEM yang mematikannya. Tanpa jejak ini, operator yang menemukan agennya
+      // mati akan mengira ada orang lain yang mematikan — lalu menyalakannya tanpa tahu
+      // bahwa tagihan akan jalan lagi tanpa membawa responden baru.
+      offOtomatisPada: cfg?.offOtomatisPada ?? null,
       enabled: cfg?.enabled ?? DEFAULTS.enabled,
       provider: cfg?.provider ?? DEFAULTS.provider,
       model: cfg?.model ?? DEFAULTS.model,
@@ -88,7 +92,16 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: "Base URL harus https dan bukan alamat internal/privat." });
 
     const data: Record<string, unknown> = {};
-    if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
+    if (parsed.data.enabled !== undefined) {
+      data.enabled = parsed.data.enabled;
+      // Menyalakan manual menghapus jejak "dimatikan sistem" — keadaannya sudah lewat.
+      //
+      // izinOffOtomatis sengaja TIDAK dipulihkan di sini. Itulah yang membuat penyalaan
+      // manual benar-benar bertahan: tanpa ini, sistem akan mematikannya lagi pada pesan
+      // berikutnya dan operator melihat togglenya berbalik sendiri beberapa detik setelah
+      // ia menyalakannya. Izin itu pulih sendiri saat kuota kembali longgar.
+      if (parsed.data.enabled) data.offOtomatisPada = null;
+    }
     if (parsed.data.provider) data.provider = parsed.data.provider;
     if (parsed.data.model) data.model = parsed.data.model;
     if (parsed.data.baseUrl !== undefined) data.baseUrl = parsed.data.baseUrl || null;
