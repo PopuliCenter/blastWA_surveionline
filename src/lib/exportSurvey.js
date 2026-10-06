@@ -26,6 +26,38 @@ export function contactSourceLabel(source) {
   return CONTACT_SOURCE_LABELS[s] ?? s;
 }
 
+// ===== Asesmen durasi pengisian =====
+//
+// Lama pengisian adalah petunjuk mutu jawaban yang murah dan sudah ada datanya: respons
+// yang selesai dalam hitungan detik hampir pasti diisi asal-asalan, sedangkan yang
+// menggantung berjam-jam biasanya ditinggal lalu dilanjutkan — keduanya perlu dilihat
+// terpisah sebelum ikut dianalisis.
+//
+// AMBANGNYA menutup seluruh garis waktu tanpa celah maupun tumpang tindih. Rentang yang
+// diminta ("<2", "3-10", "11-30") menyisakan lubang di 2–3 menit; lubang itu dimasukkan ke
+// "Normal", bukan ke "Terlalu cepat", karena menaikkan batas curiga berarti menuduh lebih
+// banyak responden — dan itu keputusan metodologis, bukan keputusan pembuat berkas.
+export const AMBANG_DURASI = { cepat: 2, normal: 10, lambat: 30 };
+
+// Menit pengisian, atau null bila tak dapat dihitung: respons belum selesai, atau stempel
+// waktunya terbalik. Null SENGAJA tidak jatuh ke salah satu kategori — "tidak diketahui"
+// bukan "terlalu cepat", dan menebaknya akan mencemari justru kolom yang dibuat untuk
+// membersihkan data.
+export function durasiMenit(r) {
+  const a = r?.startedAt ? new Date(r.startedAt).getTime() : NaN;
+  const b = r?.completedAt ? new Date(r.completedAt).getTime() : NaN;
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return (b - a) / 60000;
+}
+
+export function asesmenDurasi(menit, ambang = AMBANG_DURASI) {
+  if (menit === null || menit === undefined || !Number.isFinite(menit)) return "";
+  if (menit < ambang.cepat) return "Terlalu cepat";
+  if (menit <= ambang.normal) return "Normal";
+  if (menit <= ambang.lambat) return "Lambat";
+  return "Terlalu lama";
+}
+
 // Bentuk tabel respons (MURNI — tanpa I/O, mudah diuji): header + baris.
 // Kolom = Nomor, Nama, Sumber Kontak, pembobot (urut kemunculan), lalu 1 kolom/pertanyaan.
 // Pengenal dan metadata di depan, variabel analisis di belakang, agar kolom pembobot dan
@@ -45,17 +77,23 @@ export function buildResponseRows(survey, responses, opts = {}) {
     if (opts.upper) s = s.toUpperCase();
     return s;
   };
-  const header = ["Nomor", "Nama", "Sumber Kontak", ...attrKeys, ...questions];
+  // Durasi ikut dicetak di samping asesmennya supaya labelnya bisa diperiksa, bukan
+  // dipercaya begitu saja — kolom penilaian tanpa angka asalnya tidak bisa diaudit.
+  const header = ["Nomor", "Nama", "Sumber Kontak", "Durasi (menit)", "Asesmen Durasi", ...attrKeys, ...questions];
   const rows = responses.map((r) => {
     const map = {};
     (r.answers || []).forEach((a) => {
       map[a.question] = a.value;
     });
     const attrs = r.attributes || {};
+    const menit = durasiMenit(r);
     return [
       clean(r.phone),
       clean(r.name || ""),
       clean(contactSourceLabel(r.consentSource)),
+      // Angka, bukan teks: supaya bisa langsung disortir dan dirata-ratakan di spreadsheet.
+      menit === null ? "" : Math.round(menit * 10) / 10,
+      clean(asesmenDurasi(menit)),
       ...attrKeys.map((k) => clean(attrs[k] ?? "")),
       ...questions.map((q) => clean(map[q] ?? "")),
     ];
