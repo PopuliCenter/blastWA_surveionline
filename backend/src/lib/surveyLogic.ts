@@ -1,7 +1,7 @@
 // Logika MURNI mesin survei (tanpa efek samping: tanpa DB, tanpa jaringan, tanpa env).
 // Dipisah dari services/surveyEngine.ts agar mudah diuji unit. Lihat surveyLogic.test.ts.
 import { normalizeMessage } from "./optOut.js";
-import { cariWilayah } from "./wilayah.js";
+import { cariWilayah, cariProvinsi, tingkatWilayah } from "./wilayah.js";
 import type { NormalizedInbound } from "../providers/types.js";
 
 export type QLite = { id: string; text: string; type: string; required: boolean; options: any };
@@ -259,11 +259,20 @@ export function validateAnswer(
       return { ok: true, value: picked.join(", ") };
     }
     case "wilayah": {
-      // Mode chat: responden MENGETIK wilayahnya (di Flow ia berupa dropdown bertingkat).
+      // Mode chat: responden MENGETIK wilayahnya (di Flow ia berupa dropdown).
       // Dicocokkan ke daftar resmi Kepmendagri agar hasilnya sepadan dengan tabel pembobot,
       // bukan sekadar teks bebas yang nanti harus dirapikan manual.
-      if (!text) return { ok: false, error: "Mohon tulis nama kabupaten/kota Anda." };
-      const r = cariWilayah(text);
+      //
+      // Tingkatnya mengikuti pengaturan pertanyaan: provinsi saja (bawaan) atau sampai
+      // kabupaten/kota. Pencocokannya ikut berganti — mencocokkan ke daftar 514 kabupaten
+      // padahal yang diminta provinsi akan menolak jawaban "Jawa Barat" yang justru benar.
+      const sampaiKab = tingkatWilayah(q.options) === "kabkota";
+      if (!text)
+        return {
+          ok: false,
+          error: sampaiKab ? "Mohon tulis nama kabupaten/kota Anda." : "Mohon tulis nama provinsi Anda.",
+        };
+      const r = sampaiKab ? cariWilayah(text) : cariProvinsi(text);
       if (r.ok) return { ok: true, value: r.value };
       // Ambigu → tawarkan kandidatnya. Menebak di antara wilayah bernama mirip akan
       // merusak data tanpa meninggalkan jejak.
@@ -277,7 +286,9 @@ export function validateAnswer(
         };
       return {
         ok: false,
-        error: "Wilayah belum dikenali. Mohon tulis nama kabupaten/kota, mis. Sleman atau Kota Bandung.",
+        error: sampaiKab
+          ? "Wilayah belum dikenali. Mohon tulis nama kabupaten/kota, mis. Sleman atau Kota Bandung."
+          : "Provinsi belum dikenali. Mohon tulis nama provinsi, mis. Jawa Barat atau DKI Jakarta.",
       };
     }
     case "consent":
@@ -341,7 +352,10 @@ export function formatQuestion(q: QLite): string {
       hint = "\n\nBalas tanggal, format DD-MM-YYYY (mis. 17-08-2026).";
       break;
     case "wilayah":
-      hint = "\n\nTulis nama kabupaten/kota Anda (mis. Sleman atau Kota Bandung).";
+      hint =
+        tingkatWilayah(q.options) === "kabkota"
+          ? "\n\nTulis nama kabupaten/kota Anda (mis. Sleman atau Kota Bandung)."
+          : "\n\nTulis nama provinsi Anda (mis. Jawa Barat atau DKI Jakarta).";
       break;
     case "image":
       hint = "\n\nKirim foto/gambar.";

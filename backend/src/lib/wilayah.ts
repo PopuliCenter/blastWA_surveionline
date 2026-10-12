@@ -59,6 +59,47 @@ export function readWilayahAnswer(base: string, response: Record<string, unknown
   return prov ? `${prov.nama} (${prov.kode})` : null;
 }
 
+// ===== Tingkat kedalaman =====
+//
+// Bawaannya PROVINSI saja. Itu tingkat yang hampir selalu dibutuhkan — kuota, pembobotan,
+// dan pelaporan survei nasional semuanya bekerja di tingkat provinsi — sementara menuntut
+// kabupaten/kota menambah satu langkah bagi setiap responden demi ketelitian yang jarang
+// dipakai. Di mode Flow bedanya lebih besar lagi: provinsi saja cukup SATU dropdown,
+// sedangkan sampai kabupaten/kota memerlukan 38 dropdown bersyarat.
+export type TingkatWilayah = "provinsi" | "kabkota";
+
+export function tingkatWilayah(options: unknown): TingkatWilayah {
+  return (options as { tingkat?: unknown } | null | undefined)?.tingkat === "kabkota" ? "kabkota" : "provinsi";
+}
+
+// Nilai jawaban untuk tingkat provinsi. Bentuknya sama dengan formatWilayah — nama diikuti
+// kode dalam kurung — supaya kodeProvinsiDari bisa membacanya tanpa aturan tambahan.
+export function formatProvinsi(kodeProvinsi: string): string | null {
+  const p = PROV_BY_KODE.get(kodeProvinsi);
+  return p ? `${p.nama} (${p.kode})` : null;
+}
+
+// Pencocokan teks untuk mode chat pada tingkat PROVINSI. Menyandar pada kodeProvinsiDari
+// supaya sinonim yang sudah dikenali di sana — "Jogja", "DKI", "Daerah Khusus Jakarta" —
+// berlaku sama di sini; dua daftar sinonim yang terpisah pasti berbeda isi cepat atau
+// lambat.
+export function cariProvinsi(teks: string): { ok: true; value: string } | { ok: false; kandidat: string[] } {
+  const t = teks.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!t) return { ok: false, kandidat: [] };
+
+  const kode = kodeProvinsiDari(t);
+  if (kode) return { ok: true, value: formatProvinsi(kode)! };
+
+  // Cocok sebagian, hanya bila tidak ambigu. Minimal 4 huruf agar "jaw" tidak menjaring
+  // seluruh Jawa.
+  if (t.length >= 4) {
+    const sebagian = PROVINSI.filter((p) => p.nama.toLowerCase().includes(t));
+    if (sebagian.length === 1) return { ok: true, value: formatProvinsi(sebagian[0]!.kode)! };
+    if (sebagian.length > 1) return { ok: false, kandidat: sebagian.map((p) => p.nama) };
+  }
+  return { ok: false, kandidat: [] };
+}
+
 // Pencocokan teks untuk mode chat, tempat responden MENGETIK nama wilayahnya.
 // Mengembalikan null bila tidak dikenali, dan daftar kandidat bila ambigu — menebak di
 // antara dua kabupaten bernama mirip akan merusak data tanpa jejak.

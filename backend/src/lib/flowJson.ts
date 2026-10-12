@@ -15,6 +15,7 @@ import {
   fieldProvinsi,
   fieldKabKota,
   readWilayahAnswer,
+  tingkatWilayah,
 } from "./wilayah.js";
 
 export type FlowQuestion = { id: string; text: string; type: string; required?: boolean; options?: any };
@@ -41,6 +42,9 @@ export function fieldName(qid: string): string {
 export function fieldNamesOf(q: FlowQuestion): string[] {
   const base = fieldName(q.id);
   if (q.type !== "wilayah") return [base];
+  // Tingkat provinsi: SATU field. Tingkat kabupaten/kota: provinsi plus satu dropdown per
+  // provinsi, yang berarti 39 field untuk satu pertanyaan.
+  if (tingkatWilayah(q.options) !== "kabkota") return [fieldProvinsi(base)];
   return [fieldProvinsi(base), ...PROVINSI.map((p) => fieldKabKota(base, p.kode))];
 }
 
@@ -256,6 +260,12 @@ function questionChildren(q: FlowQuestion, number: number): any[] {
       "data-source": PROVINSI.map((p) => ({ id: p.kode, title: p.nama.slice(0, 80) })),
       required,
     });
+    // Tingkat provinsi berhenti di sini: satu dropdown, tanpa satu pun If. Itu bawaannya,
+    // dan bukan sekadar lebih ringkas — rangkaian 38 If di bawah bersandar pada operator
+    // `==` di dalam kondisi Flow, yang belum pernah divalidasi terhadap Flow Builder Meta.
+    // Survei yang cukup dengan provinsi tidak perlu memikul risiko itu sama sekali.
+    if (tingkatWilayah(q.options) !== "kabkota") return out;
+
     for (const p of PROVINSI) {
       const ds = kabKotaDari(p.kode).map((k) => ({ id: k.kode, title: k.nama.slice(0, 80) }));
       if (!ds.length) continue;

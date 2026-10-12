@@ -548,9 +548,12 @@ export function Textarea({ label, error, hint, ...props }) {
     </Field>
   );
 }
-export function Select({ label, error, options, ...props }) {
+// `hint` disertakan seperti pada Input. Tanpa itu, prop hint yang diteruskan pemanggil
+// bocor ke elemen <select> sebagai atribut DOM tak dikenal: keterangannya tidak pernah
+// tampil, dan React memperingatkannya di konsol — dua gejala yang mudah terlewat.
+export function Select({ label, error, hint, options, ...props }) {
   return (
-    <Field label={label} error={error}>
+    <Field label={label} error={error} hint={hint}>
       <select {...props} style={{ ...inputStyle(error), cursor: "pointer", ...(props.style || {}) }}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>

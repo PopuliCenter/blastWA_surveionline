@@ -28,7 +28,7 @@ export const HAS_CHOICES = (t) => t === "choice" || t === "multichoice";
 export function qSummary(q) {
   // Daftarnya bawaan dari kode resmi Kepmendagri, jadi pembuat survei tak perlu (dan tak
   // bisa) mengisinya sendiri — disebutkan agar jelas tanpa harus membuka pratinjau.
-  if (q.type === "wilayah") return "38 provinsi, 514 kab/kota";
+  if (q.type === "wilayah") return q.options?.tingkat === "kabkota" ? "38 provinsi → 514 kab/kota" : "38 provinsi";
   if (q.type === "rating") return `skala ${q.options?.min ?? 1}-${q.options?.max ?? 5}`;
   if (HAS_CHOICES(q.type))
     return `${(q.options?.choices || []).length} pilihan${q.type === "multichoice" ? " (multi)" : ""}`;

@@ -35,6 +35,7 @@ export function QuestionItem({
       branches: branchMap,
       newScreen: q.options?.newScreen === true,
       screenTitle: q.options?.screenTitle ?? "",
+      tingkat: q.options?.tingkat === "kabkota" ? "kabkota" : "provinsi",
     });
     setEditing(true);
   };
@@ -62,6 +63,9 @@ export function QuestionItem({
       }
       if (branches.length) options = { ...(options || {}), branches };
     }
+    // Tingkat wilayah. Hanya ditulis bila BUKAN bawaan: options yang hanya berisi nilai
+    // bawaan menambah derau pada data tanpa mengubah perilaku apa pun.
+    if (d.type === "wilayah" && d.tingkat === "kabkota") options = { ...(options || {}), tingkat: "kabkota" };
     // Penanda seksi (mode Flow) — dipertahankan lintas edit, jangan sampai ikut terhapus.
     if (d.newScreen) options = { ...(options || {}), newScreen: true };
     if (d.screenTitle?.trim()) options = { ...(options || {}), screenTitle: d.screenTitle.trim() };
@@ -141,20 +145,41 @@ export function QuestionItem({
           </>
         ) : null}
         {d.type === "wilayah" ? (
-          <div
-            style={{
-              background: theme.primarySoft,
-              color: theme.primary,
-              borderRadius: 9,
-              padding: "10px 13px",
-              fontSize: 12.5,
-              marginBottom: 14,
-            }}
-          >
-            Pilihannya memakai daftar resmi Kepmendagri — 38 provinsi dan 514 kabupaten/kota — jadi tidak perlu diisi
-            sendiri. Daftar ini <strong>sama persis</strong> dengan yang dipakai Kuota per provinsi, sehingga jawaban
-            responden langsung terhitung ke kuota wilayahnya tanpa perlu dicocokkan manual.
-          </div>
+          <>
+            <Select
+              label="Tingkat wilayah"
+              value={d.tingkat}
+              onChange={(e) => setDk("tingkat", e.target.value)}
+              options={[
+                { value: "provinsi", label: "Provinsi saja" },
+                { value: "kabkota", label: "Sampai kabupaten/kota" },
+              ]}
+              hint={
+                d.tingkat === "kabkota"
+                  ? "Responden memilih provinsi dulu, lalu kabupaten/kota. Satu langkah lebih panjang."
+                  : "Cukup untuk kuota, pembobotan, dan pelaporan. Satu langkah bagi responden."
+              }
+            />
+            <div
+              style={{
+                background: theme.primarySoft,
+                color: theme.primary,
+                borderRadius: 9,
+                padding: "10px 13px",
+                fontSize: 12.5,
+                marginBottom: 14,
+              }}
+            >
+              Pilihannya memakai daftar resmi Kepmendagri — 38 provinsi dan 514 kabupaten/kota — jadi tidak perlu diisi
+              sendiri. Daftar ini <strong>sama persis</strong> dengan yang dipakai Kuota per provinsi, sehingga jawaban
+              responden langsung terhitung ke kuota wilayahnya tanpa perlu dicocokkan manual.
+              <div style={{ marginTop: 7 }}>
+                Mode <strong>Chatbot</strong>: responden mengetik namanya, lalu dicocokkan ke daftar — termasuk sebutan
+                sehari-hari seperti &quot;Jogja&quot; atau &quot;DKI&quot;. Mode <strong>Flow</strong>: dipilih dari
+                dropdown.
+              </div>
+            </div>
+          </>
         ) : null}
         {HAS_CHOICES(d.type) ? (
           <Textarea
@@ -226,11 +251,7 @@ export function QuestionItem({
               Mulai <strong>layar baru</strong> dari pertanyaan ini. Bila tidak ditandai, Flow tetap dipecah otomatis
               sesuai &quot;Pertanyaan per layar&quot;.
             </div>
-            <Toggle
-              checked={d.newScreen}
-              onChange={(v) => setDk("newScreen", v)}
-              label="Mulai layar baru di sini"
-            />
+            <Toggle checked={d.newScreen} onChange={(v) => setDk("newScreen", v)} label="Mulai layar baru di sini" />
             {d.newScreen ? (
               <div style={{ marginTop: 10 }}>
                 <Input
@@ -274,9 +295,7 @@ export function QuestionItem({
       <div style={{ fontSize: 13, color: theme.text, minWidth: 0 }}>
         {startsScreen ? (
           <div style={{ marginBottom: 4 }}>
-            <Badge tone="purple">
-              ⤵ layar baru{q.options?.screenTitle ? ` — ${q.options.screenTitle}` : ""}
-            </Badge>
+            <Badge tone="purple">⤵ layar baru{q.options?.screenTitle ? ` — ${q.options.screenTitle}` : ""}</Badge>
           </div>
         ) : null}
         {index + 1}. {q.text}

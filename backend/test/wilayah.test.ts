@@ -16,7 +16,15 @@ import type { NormalizedInbound } from "../src/providers/types.js";
 const ev = (text?: string): NormalizedInbound =>
   ({ vendor: "meta", kind: "message", timestamp: "2026-10-03T00:00:00Z", raw: {}, text }) as NormalizedInbound;
 
-const qWilayah: QLite = { id: "w1", text: "Kabupaten/kota domisili?", type: "wilayah", required: true, options: null };
+const qWilayah: QLite = {
+  id: "w1",
+  text: "Kabupaten/kota domisili?",
+  type: "wilayah",
+  required: true,
+  options: { tingkat: "kabkota" },
+};
+// Tanpa pengaturan tingkat, bawaannya PROVINSI.
+const qProvinsi: QLite = { id: "w2", text: "Provinsi domisili?", type: "wilayah", required: true, options: null };
 
 describe("data wilayah Kepmendagri", () => {
   it("jumlahnya cocok dengan angka resmi", () => {
@@ -125,11 +133,29 @@ describe("cariWilayah — mode chat", () => {
 });
 
 describe("validateAnswer tipe wilayah", () => {
-  it("menerima nama yang dikenali", () => {
+  it("tingkat kabupaten/kota menerima nama kabupaten", () => {
     expect(validateAnswer(qWilayah, ev("Sleman"))).toEqual({
       ok: true,
       value: "Kabupaten Sleman, DI Yogyakarta (34.04)",
     });
+  });
+
+  it("BAWAANNYA provinsi — nama provinsi diterima, nama kabupaten tidak", () => {
+    // Prioritasnya provinsi: itu tingkat yang dipakai kuota, pembobotan, dan pelaporan.
+    expect(validateAnswer(qProvinsi, ev("Jawa Barat"))).toEqual({ ok: true, value: "Jawa Barat (32)" });
+    expect(validateAnswer(qProvinsi, ev("DKI Jakarta"))).toEqual({ ok: true, value: "DKI Jakarta (31)" });
+    // Sinonim yang sudah dikenal di kodeProvinsiDari berlaku sama di sini.
+    expect(validateAnswer(qProvinsi, ev("jogja"))).toEqual({ ok: true, value: "DI Yogyakarta (34)" });
+    expect(validateAnswer(qProvinsi, ev("Sleman")).ok).toBe(false);
+  });
+
+  it("pesan tuntunannya menyebut tingkat yang benar", () => {
+    // Menyuruh menulis kabupaten padahal yang diminta provinsi membuat responden salah
+    // jawab berulang kali tanpa tahu apa yang kurang.
+    const kosongProv = validateAnswer(qProvinsi, ev(""));
+    const kosongKab = validateAnswer(qWilayah, ev(""));
+    if (!kosongProv.ok) expect(kosongProv.error).toContain("provinsi");
+    if (!kosongKab.ok) expect(kosongKab.error).toContain("kabupaten/kota");
   });
 
   it("menolak pesan kosong dan nama yang tak dikenali", () => {
@@ -146,9 +172,24 @@ describe("validateAnswer tipe wilayah", () => {
 });
 
 describe("Flow JSON untuk pertanyaan wilayah", () => {
-  const survey = { title: "Survei", questions: [{ id: "w1", text: "Domisili?", type: "wilayah", required: true }] };
+  const survey = {
+    title: "Survei",
+    questions: [{ id: "w1", text: "Domisili?", type: "wilayah", required: true, options: { tingkat: "kabkota" } }],
+  };
 
-  it("didukung Flow dan menghasilkan 39 field", () => {
+  it("tingkat provinsi: SATU field dan tanpa satu pun If", () => {
+    // Bawaannya. Rangkaian 38 If bersandar pada operator `==` di kondisi Flow yang belum
+    // pernah divalidasi terhadap Flow Builder Meta; survei yang cukup dengan provinsi
+    // tidak perlu memikul risiko itu.
+    const q = { id: "w1", text: "Domisili?", type: "wilayah", required: true };
+    expect(flowSupported(q)).toBe(true);
+    expect(fieldNamesOf(q)).toHaveLength(1);
+    const kids = (buildSurveyFlow({ title: "S", questions: [q] }) as any).screens[0].layout.children[0].children;
+    expect(kids.filter((c: any) => c.type === "If")).toHaveLength(0);
+    expect(kids.find((c: any) => c.type === "Dropdown" && c.name === fieldProvinsi(fieldName("w1")))).toBeTruthy();
+  });
+
+  it("tingkat kabupaten/kota menghasilkan 39 field", () => {
     expect(flowSupported(survey.questions[0]!)).toBe(true);
     expect(fieldNamesOf(survey.questions[0]!)).toHaveLength(39); // 1 provinsi + 38 kabupaten
   });
