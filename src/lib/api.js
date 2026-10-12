@@ -1,5 +1,6 @@
 // Klien API backend Populi WA. Ganti pemakaian localStorage di PopuliApp.jsx
 // dengan fungsi-fungsi ini (lihat docs/FRONTEND-INTEGRATION.md).
+import { pesanGalatApi } from "./pesanGalat";
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const TOKEN_KEY = "populi.token";
@@ -31,7 +32,7 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
     throw new Error("Sesi berakhir, silakan login ulang.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error?.message || data?.error || `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(pesanGalatApi(data, res.status));
   return data;
 }
 

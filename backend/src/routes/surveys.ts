@@ -5,11 +5,17 @@ import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
 import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
 
-const questionSchema = z.object({
+// Diekspor agar daftar tipenya bisa diuji terhadap daftar yang ditawarkan UI. Keduanya
+// pernah berbeda isi, dan selisihnya baru ketahuan dari pemakai yang gagal menyimpan.
+export const questionSchema = z.object({
   id: z.string().optional(), // id pertanyaan yang sudah ada (untuk edit non-destruktif)
   text: z.string().min(1),
   type: z
-    .enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image", "date", "consent"])
+    // "wilayah" WAJIB ada di sini. Tipe itu sudah ditawarkan di pemilih tipe jawaban dan
+    // sudah didukung mesin survei, tapi sempat tidak masuk daftar ini — akibatnya setiap
+    // survei yang memakainya ditolak saat disimpan, dan karena galat Zod dikirim sebagai
+    // objek, layarnya hanya menampilkan "[object Object]" tanpa menyebut sebabnya.
+    .enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image", "date", "consent", "wilayah"])
     .default("text"),
   required: z.boolean().default(true),
   // rating {min,max,minLabel?,maxLabel?} | choice/multichoice {choices:[...]} | branches:[...]
