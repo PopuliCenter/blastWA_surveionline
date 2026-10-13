@@ -34,7 +34,9 @@ export async function sheetRoutes(app: FastifyInstance): Promise<void> {
       prisma.surveyResponse.count({ where: { sheetSyncedAt: { not: null } } }),
       // Yang ditolak kuota sengaja tidak pernah didorong — tanpa pengecualian ini angka
       // "tertunda" naik dan tak pernah turun, terbaca seperti integrasi yang macet.
-      prisma.surveyResponse.count({ where: { completedAt: { not: null }, ditolakKuotaPada: null, sheetSyncedAt: null } }),
+      prisma.surveyResponse.count({
+        where: { completedAt: { not: null }, ditolakKuotaPada: null, sheetSyncedAt: null },
+      }),
     ]);
     return {
       enabled: cfg?.enabled ?? false,

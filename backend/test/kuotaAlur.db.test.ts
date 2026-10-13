@@ -69,7 +69,15 @@ describe.skipIf(!URL_UJI)("alur penolakan kuota — pesan masuk sampai balasan",
 
   const kirim = (from: string, text: string) =>
     engine.handleInboundEvents([
-      { vendor: "meta", kind: "message", from, text, messageId: idUnik(), timestamp: new Date().toISOString(), raw: {} },
+      {
+        vendor: "meta",
+        kind: "message",
+        from,
+        text,
+        messageId: idUnik(),
+        timestamp: new Date().toISOString(),
+        raw: {},
+      },
     ]);
 
   const kirimFormulir = (from: string, flowResponse: Record<string, unknown>) =>

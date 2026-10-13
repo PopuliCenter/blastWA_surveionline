@@ -26,7 +26,12 @@ describe.skipIf(!URL_UJI)("tutupRespons — pengisian bersamaan pada Postgres su
     process.env.DATABASE_URL = URL_UJI;
     const db = await import("../src/db.js");
     const k = await import("../src/services/kuotaSurvei.js");
-    m = { prisma: db.prisma, tutupRespons: k.tutupRespons, pulihkanRespons: k.pulihkanRespons, angkaKuota: k.angkaKuota };
+    m = {
+      prisma: db.prisma,
+      tutupRespons: k.tutupRespons,
+      pulihkanRespons: k.pulihkanRespons,
+      angkaKuota: k.angkaKuota,
+    };
   });
 
   afterAll(async () => {
@@ -51,7 +56,9 @@ describe.skipIf(!URL_UJI)("tutupRespons — pengisian bersamaan pada Postgres su
     const ids: string[] = [];
     for (let i = 0; i < opsi.n; i++) {
       const c = await m.prisma.contact.create({
-        data: { phone: `62899${Date.now().toString().slice(-6)}${String(i).padStart(3, "0")}${Math.floor(Math.random() * 1000)}` },
+        data: {
+          phone: `62899${Date.now().toString().slice(-6)}${String(i).padStart(3, "0")}${Math.floor(Math.random() * 1000)}`,
+        },
       });
       kontakDibuat.push(c.id);
       const r = await m.prisma.surveyResponse.create({

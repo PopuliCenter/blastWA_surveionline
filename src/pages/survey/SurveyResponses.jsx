@@ -311,9 +311,9 @@ export function SurveyResponses({ survey, onClose }) {
 
       {status === "kuota" ? (
         <Notice kind="info">
-          Responden ini datang saat kuotanya sudah penuh. Jawabannya disimpan, tetapi{" "}
-          <strong>tidak dihitung</strong> dan <strong>tidak ikut</strong> berkas Excel, CSV, maupun Google Sheets. Bila
-          kuotanya dinaikkan, yang jawabannya lengkap bisa dipulihkan dengan skrip <code>pulihkan:kuota</code>.
+          Responden ini datang saat kuotanya sudah penuh. Jawabannya disimpan, tetapi <strong>tidak dihitung</strong>{" "}
+          dan <strong>tidak ikut</strong> berkas Excel, CSV, maupun Google Sheets. Bila kuotanya dinaikkan, yang
+          jawabannya lengkap bisa dipulihkan dengan skrip <code>pulihkan:kuota</code>.
         </Notice>
       ) : null}
 
@@ -413,7 +413,9 @@ export function SurveyResponses({ survey, onClose }) {
                     {ditolakKuota(r) ? (
                       <Badge tone="red">ditolak kuota</Badge>
                     ) : (
-                      <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
+                      <Badge tone={r.completedAt ? "green" : "yellow"}>
+                        {r.completedAt ? "selesai" : "berlangsung"}
+                      </Badge>
                     )}
                     <Button
                       variant="danger"

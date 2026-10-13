@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { gandakanSurvei } from "../services/salinSurvei.js";
+import { tabBertabrakan, teksPertanyaanGanda } from "../lib/salinSurvei.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
 import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
@@ -43,6 +45,42 @@ const surveySchema = z.object({
   questions: z.array(questionSchema).default([]),
 });
 
+// Dua penjaga yang dulu tidak perlu, dan menjadi perlu sejak survei serta pertanyaan bisa
+// digandakan — menggandakan membuat judul dan teks kembar jauh lebih mudah terjadi.
+//
+//   • Judul yang berbagi tab Google Sheets dengan survei lain: baris kedua survei akan
+//     bercampur di satu tab di bawah satu header.
+//   • Teks pertanyaan kembar: ekspor dan Laporan mencocokkan jawaban lewat teks, jadi
+//     jawabannya bertumpuk di satu kolom.
+//
+// Keduanya hanya menolak yang BARU. Survei lama yang terlanjur berjudul kembar, atau yang
+// sudah punya pertanyaan bertulisan sama, tetap bisa disunting — termasuk sekadar ditutup
+// untuk menahan biaya — tanpa dipaksa mengubah instrumen di tengah pengumpulan data. Di
+// mode chat, teks yang diubah langsung terkirim ke responden yang sedang mengisi.
+export async function galatSimpanSurvei(
+  id: string | null,
+  judul: string | undefined,
+  pertanyaan: readonly { text?: string | null }[] | undefined,
+): Promise<string | null> {
+  if (judul !== undefined) {
+    const kini = id ? await prisma.survey.findUnique({ where: { id }, select: { title: true } }) : null;
+    if (!kini || kini.title !== judul) {
+      const lain = await prisma.survey.findMany({ where: id ? { id: { not: id } } : {}, select: { title: true } });
+      if (tabBertabrakan(judul, lain.map((s) => s.title)))
+        return `Judul "${judul}" sudah dipakai survei lain. Google Sheets menyimpan tiap survei di tab bernama sama dengan judulnya, jadi data kedua survei akan bercampur. Pakai judul lain.`;
+    }
+  }
+  let ganda = pertanyaan ? teksPertanyaanGanda(pertanyaan) : [];
+  if (ganda.length && id) {
+    const lama = await prisma.question.findMany({ where: { surveyId: id }, select: { text: true } });
+    const sudahKembar = new Set(teksPertanyaanGanda(lama));
+    ganda = ganda.filter((t) => !sudahKembar.has(t));
+  }
+  if (ganda.length)
+    return `Ada pertanyaan yang tulisannya sama persis: "${ganda[0]}". Jawabannya akan bertumpuk di satu kolom ekspor — bedakan tulisannya.`;
+  return null;
+}
+
 export async function surveyRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
@@ -71,6 +109,8 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     const parsed = surveySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const { questions, ...data } = parsed.data;
+    const galat = await galatSimpanSurvei(null, data.title, questions);
+    if (galat) return reply.code(400).send({ error: galat });
     const survey = await prisma.survey.create({
       data: {
         ...data,
@@ -94,6 +134,8 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     const parsed = surveySchema.partial().safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const { questions, ...data } = parsed.data;
+    const galat = await galatSimpanSurvei(id, data.title, questions);
+    if (galat) return reply.code(400).send({ error: galat });
 
     // Perbarui pertanyaan secara non-destruktif: pertanyaan lama di-update (id tetap →
     // jawaban responden tidak ikut terhapus), pertanyaan baru dibuat, yang dihapus saja yang dibuang.
@@ -118,6 +160,17 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       include: { questions: { orderBy: { order: "asc" } } },
     });
     return survey;
+  });
+
+  // Gandakan survei sebagai draf baru — pertanyaan dan pengaturannya ikut, respons tidak.
+  // Rinciannya (apa yang disalin dan apa yang sengaja dikosongkan) di services/salinSurvei.ts.
+  app.post("/api/surveys/:id/gandakan", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const baru = await gandakanSurvei(id);
+    if (!baru) return reply.code(404).send({ error: "survei tidak ditemukan" });
+    // Bentuknya disamakan dengan butir daftar GET /api/surveys, supaya layar bisa langsung
+    // membuka builder untuk salinan ini tanpa memuat ulang.
+    return reply.code(201).send({ ...baru, responses: 0, responsesDitolakKuota: 0 });
   });
 
   // Flow JSON dari survei tersimpan (untuk ditempel ke Meta Flow Builder).

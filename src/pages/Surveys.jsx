@@ -35,6 +35,9 @@ export default function Surveys() {
   const [kuotaFor, setKuotaFor] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [err, setErr] = useState("");
+  // Keterangan yang dibawa ke builder — mis. apa saja yang tidak ikut saat menggandakan.
+  const [infoBuilder, setInfoBuilder] = useState("");
+  const [menggandakan, setMenggandakan] = useState(false);
   const [cari, setCari] = useState("");
   const [status, setStatus] = useState("");
   const [halaman, setHalaman] = useState(1);
@@ -91,7 +94,28 @@ export default function Surveys() {
       if (id) await api.updateSurvey(id, draft);
       else await api.createSurvey(draft);
       setModal(null);
+      setInfoBuilder("");
     });
+  // Salinan langsung dibuka di builder: menggandakan hampir selalu diikuti menyunting,
+  // dan pemakai perlu tahu apa saja yang SENGAJA tidak ikut tersalin.
+  //
+  // Tombolnya dimatikan selama permintaan berjalan: klik ganda membuat dua salinan, dan
+  // salinan kedua menggantikan yang pertama di builder yang sudah terbuka.
+  const gandakan = (s) => {
+    if (menggandakan) return;
+    setMenggandakan(true);
+    return run(async () => {
+      const baru = await api.duplicateSurvey(s.id);
+      setInfoBuilder(
+        `Salinan dari "${s.title}" sudah dibuat sebagai draf, lengkap dengan pertanyaan dan kuotanya. ` +
+          "Respons tidak ikut tersalin. Kata pemicu dikosongkan supaya tidak berebut dengan survei aslinya" +
+          (s.mode === "flow"
+            ? ", dan Flow ID juga dikosongkan: buat Flow JSON baru dari salinan ini lalu terbitkan sebagai Flow baru di Meta."
+            : "."),
+      );
+      setModal(baru);
+    }).finally(() => setMenggandakan(false));
+  };
   const delSurvey = async (s) => {
     const withResp = s.responses ? ` beserta ${s.responses} respons yang sudah masuk` : "";
     if (
@@ -114,10 +138,15 @@ export default function Surveys() {
   if (modal !== null)
     return (
       <SurveyBuilder
+        // Satu instans per survei. Tanpa key, React memakai ulang builder yang sedang
+        // terbuka untuk survei lain — isinya masih survei pertama, tapi simpannya ke yang kedua.
+        key={modal.id || "baru"}
         survey={modal.id ? modal : null}
         error={err}
+        info={infoBuilder}
         onClose={() => {
           setErr("");
+          setInfoBuilder("");
           setModal(null);
         }}
         onSave={(d) => save(d, modal.id)}
@@ -158,6 +187,16 @@ export default function Surveys() {
       <Button variant="secondary" size="sm" icon="edit" onClick={() => setModal(s)}>
         Edit
       </Button>
+      {/* Tombol ikon saja — label "Gandakan" akan menambah lebar baris tombol dan memaksanya
+          membungkus di tampilan kotak. */}
+      <Button
+        variant="secondary"
+        size="sm"
+        icon="copy"
+        title="Gandakan survei"
+        onClick={() => gandakan(s)}
+        disabled={menggandakan}
+      />
       {/* Tanpa marginLeft:"auto" — di baris flex-wrap, margin auto menyerap seluruh sisa
           ruang sehingga tombol ini terdorong ke baris kedua padahal sebenarnya masih muat. */}
       <Button variant="danger" size="sm" icon="trash" title="Hapus survei" onClick={() => delSurvey(s)} />

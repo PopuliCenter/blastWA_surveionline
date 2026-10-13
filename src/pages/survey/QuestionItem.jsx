@@ -1,8 +1,44 @@
 import { useState } from "react";
 import { Button, Badge, Input, Textarea, Select, Toggle, theme } from "../../lib/ui";
 import { TYPE_LABEL, QTYPE_OPTIONS, HAS_CHOICES, qSummary } from "./constants";
+import { cabangTakBerlaku, indeksTujuan } from "./daftarPertanyaan";
 
-// Satu pertanyaan: mode lihat (bisa naik/turun, edit, hapus) & mode edit inline.
+// Kunci tujuan percabangan selama formulir sunting terbuka: ID pertanyaan, bukan urutannya.
+//
+// Tersimpan, percabangan menunjuk lewat INDEKS. Tapi daftar bisa berubah susunan selagi
+// formulir ini terbuka — pertanyaan lain digandakan, dihapus, atau digeser — dan indeks
+// yang dipegang formulir sejak dibuka akan menunjuk pertanyaan yang salah begitu disimpan.
+// ID tidak bergeser; diterjemahkan kembali ke indeks TERKINI saat Simpan Pertanyaan.
+const kunciTujuan = (qq, i) => qq?.id ?? `#${i}`;
+
+// Isian formulir sunting dari sebuah pertanyaan.
+function draftDari(q, allQuestions) {
+  const branchMap = {};
+  (q.options?.branches || []).forEach((b) => {
+    const g = indeksTujuan(b.goto);
+    // "end" dan -1 sama-sama mengakhiri survei. -1 hanya bisa datang dari data lama atau
+    // API — disimpan ulang sebagai "end" supaya aturan penyaringnya tidak hilang.
+    if (g === null) {
+      if (b.goto === "end" || Number(b.goto) === -1) branchMap[b.value] = "end";
+    } else if (allQuestions[g]) branchMap[b.value] = kunciTujuan(allQuestions[g], g);
+  });
+  return {
+    text: q.text || "",
+    type: q.type || "text",
+    required: q.required ?? true,
+    min: q.options?.min ?? 1,
+    max: q.options?.max ?? 5,
+    minLabel: q.options?.minLabel ?? "",
+    maxLabel: q.options?.maxLabel ?? "",
+    choices: (q.options?.choices || []).join("\n"),
+    branches: branchMap,
+    newScreen: q.options?.newScreen === true,
+    screenTitle: q.options?.screenTitle ?? "",
+    tingkat: q.options?.tingkat === "kabkota" ? "kabkota" : "provinsi",
+  };
+}
+
+// Satu pertanyaan: mode lihat (bisa naik/turun, gandakan, edit, hapus) & mode edit inline.
 export function QuestionItem({
   q,
   index,
@@ -10,33 +46,40 @@ export function QuestionItem({
   onChange,
   onDelete,
   onMove,
+  onDuplicate,
+  // Dipanggil saat formulir sunting dibuka/ditutup — builder menahan "Simpan Survei"
+  // selama masih ada formulir yang terbuka, karena isinya belum masuk daftar pertanyaan.
+  onSunting,
+  // Langsung terbuka dalam mode sunting — dipakai salinan yang baru dibuat, karena
+  // menggandakan hampir selalu diikuti mengubah sedikit isinya.
+  mulaiEdit = false,
   qtypeOptions = QTYPE_OPTIONS,
   allQuestions = [],
   flowMode = false,
 }) {
-  const [editing, setEditing] = useState(false);
-  const [d, setD] = useState(null);
+  const [editing, setEditing] = useState(mulaiEdit);
+  const [d, setD] = useState(() => (mulaiEdit ? draftDari(q, allQuestions) : null));
   const setDk = (k, v) => setD((p) => ({ ...p, [k]: v }));
 
+  const tutupSunting = () => {
+    setEditing(false);
+    onSunting?.(false);
+  };
+  // Tujuan aturan untuk jawaban `v` menurut formulir — dengan satu koreksi. Bila pertanyaan
+  // tujuannya DIHAPUS selagi formulir ini terbuka, daftar pertanyaan sudah mengalihkan
+  // aturan tersimpannya ke pertanyaan penerus (hapusPertanyaan). Ikuti pengalihan itu;
+  // kalau tidak, pilihan tampil "lanjut normal" dan aturannya hilang diam-diam saat disimpan.
+  const tujuanFormulir = (v) => {
+    const g = d?.branches?.[v];
+    if (!g || g === "end") return g || "";
+    if (allQuestions.some((qq, i) => kunciTujuan(qq, i) === g)) return g;
+    const tersimpan = indeksTujuan((q.options?.branches || []).find((b) => b.value === v)?.goto);
+    return tersimpan !== null && allQuestions[tersimpan] ? kunciTujuan(allQuestions[tersimpan], tersimpan) : "";
+  };
+
   const startEdit = () => {
-    const branchMap = {};
-    (q.options?.branches || []).forEach((b) => {
-      branchMap[b.value] = String(b.goto);
-    });
-    setD({
-      text: q.text || "",
-      type: q.type || "text",
-      required: q.required ?? true,
-      min: q.options?.min ?? 1,
-      max: q.options?.max ?? 5,
-      minLabel: q.options?.minLabel ?? "",
-      maxLabel: q.options?.maxLabel ?? "",
-      choices: (q.options?.choices || []).join("\n"),
-      branches: branchMap,
-      newScreen: q.options?.newScreen === true,
-      screenTitle: q.options?.screenTitle ?? "",
-      tingkat: q.options?.tingkat === "kabkota" ? "kabkota" : "provinsi",
-    });
+    onSunting?.(true);
+    setD(draftDari(q, allQuestions));
     setEditing(true);
   };
   const saveEdit = () => {
@@ -58,8 +101,17 @@ export function QuestionItem({
       const vals = d.type === "boolean" ? ["Ya", "Tidak"] : options?.choices || [];
       const branches = [];
       for (const v of vals) {
-        const g = d.branches?.[v];
-        if (g && g !== "") branches.push({ value: v, goto: g === "end" ? "end" : Number(g) });
+        const g = tujuanFormulir(v);
+        if (!g) continue;
+        if (g === "end") {
+          branches.push({ value: v, goto: "end" });
+          continue;
+        }
+        // Indeks TERKINI dari pertanyaan tujuan. Yang kini ada di atas pertanyaan ini (atau
+        // sudah dihapus) tidak disimpan: mesin hanya melompat maju, jadi aturan itu tidak
+        // akan pernah berlaku.
+        const idx = allQuestions.findIndex((qq, i) => kunciTujuan(qq, i) === g);
+        if (idx > index) branches.push({ value: v, goto: idx });
       }
       if (branches.length) options = { ...(options || {}), branches };
     }
@@ -70,7 +122,7 @@ export function QuestionItem({
     if (d.newScreen) options = { ...(options || {}), newScreen: true };
     if (d.screenTitle?.trim()) options = { ...(options || {}), screenTitle: d.screenTitle.trim() };
     onChange({ ...q, text: d.text.trim(), type: d.type, required: d.required, options });
-    setEditing(false);
+    tutupSunting();
   };
 
   // Nilai jawaban yang bisa dicabangkan + daftar target (pertanyaan setelahnya / Selesai).
@@ -89,7 +141,7 @@ export function QuestionItem({
       .map((qq, i) =>
         i > index
           ? {
-              value: String(i),
+              value: kunciTujuan(qq, i),
               label: `→ ${i + 1}. ${(qq.text || "").slice(0, 28)}${(qq.text || "").length > 28 ? "…" : ""}`,
             }
           : null,
@@ -235,7 +287,7 @@ export function QuestionItem({
                     Jika “{v}”
                   </span>
                   <Select
-                    value={d.branches?.[v] || ""}
+                    value={tujuanFormulir(v)}
                     onChange={(e) => setDk("branches", { ...(d.branches || {}), [v]: e.target.value })}
                     options={targetOptions}
                   />
@@ -265,7 +317,7 @@ export function QuestionItem({
           </div>
         ) : null}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+          <Button variant="ghost" size="sm" onClick={tutupSunting}>
             Batal
           </Button>
           <Button size="sm" icon="check" onClick={saveEdit} disabled={!d.text.trim()}>
@@ -277,6 +329,9 @@ export function QuestionItem({
   }
 
   const startsScreen = flowMode && q.options?.newScreen === true;
+  // Aturan yang tujuannya kini ada di atas pertanyaan ini (biasanya setelah digeser).
+  // Mesin hanya melompat maju, jadi aturan itu diabaikan — ditampilkan supaya tidak diam-diam.
+  const tidakBerlaku = cabangTakBerlaku(q, index, total);
 
   return (
     <div
@@ -288,11 +343,16 @@ export function QuestionItem({
         justifyContent: "space-between",
         gap: 10,
         alignItems: "center",
-        // Garis atas = batas layar baru di Flow
-        borderTop: startsScreen ? `2px solid ${theme.primary}` : undefined,
+        // Lima tombol ikon memakan ~200px. Di layar sempit, menaruhnya sebaris dengan teks
+        // memeras pertanyaan jadi satu-dua kata per baris — biarkan tombolnya turun ke bawah.
+        flexWrap: "wrap",
+        // Garis atas = batas layar baru di Flow. Kuncinya hanya ada bila dipakai: elemen ini
+        // dipakai ulang React dari mode sunting yang memakai `border` penuh, dan kunci
+        // borderTop yang hadir (walau undefined) memicu peringatan bentrok gaya saat beralih.
+        ...(startsScreen ? { borderTop: `2px solid ${theme.primary}` } : {}),
       }}
     >
-      <div style={{ fontSize: 13, color: theme.text, minWidth: 0 }}>
+      <div style={{ fontSize: 13, color: theme.text, minWidth: 0, flex: "1 1 220px" }}>
         {startsScreen ? (
           <div style={{ marginBottom: 4 }}>
             <Badge tone="purple">⤵ layar baru{q.options?.screenTitle ? ` — ${q.options.screenTitle}` : ""}</Badge>
@@ -306,6 +366,12 @@ export function QuestionItem({
           <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>{qSummary(q)}</span>
         ) : null}
         {!q.required ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>• opsional</span> : null}
+        {tidakBerlaku.length ? (
+          <div style={{ color: theme.red, fontSize: 11.5, marginTop: 4 }}>
+            Percabangan &ldquo;{tidakBerlaku[0].value}&rdquo; menuju pertanyaan di atasnya dan tidak akan berlaku — buka
+            Edit untuk memilih tujuan lain.
+          </div>
+        ) : null}
       </div>
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
         <Button variant="ghost" size="sm" icon="up" onClick={() => onMove(-1)} disabled={index === 0} title="Naikkan" />
@@ -317,6 +383,9 @@ export function QuestionItem({
           disabled={index === total - 1}
           title="Turunkan"
         />
+        {onDuplicate ? (
+          <Button variant="ghost" size="sm" icon="copy" onClick={onDuplicate} title="Gandakan pertanyaan" />
+        ) : null}
         <Button variant="secondary" size="sm" icon="edit" onClick={startEdit} title="Edit" />
         <Button variant="danger" size="sm" icon="trash" onClick={onDelete} title="Hapus" />
       </div>

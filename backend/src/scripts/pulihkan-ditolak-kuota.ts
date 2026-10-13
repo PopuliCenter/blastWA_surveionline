@@ -54,7 +54,9 @@ async function main(): Promise<void> {
     orderBy: { createdAt: "asc" },
   });
   if (!surveys.length) {
-    console.log(surveiId ? "Survei ini tidak punya respons yang ditolak kuota." : "Tidak ada respons yang ditolak kuota.");
+    console.log(
+      surveiId ? "Survei ini tidak punya respons yang ditolak kuota." : "Tidak ada respons yang ditolak kuota.",
+    );
     return;
   }
 
@@ -70,7 +72,9 @@ async function main(): Promise<void> {
 
     console.log(`\n${s.title}`);
     console.log(`  id survei            : ${s.id}`);
-    console.log(`  Ditolak kuota        : ${semua.length} (${global} batas global, ${semua.length - global} batas provinsi)`);
+    console.log(
+      `  Ditolak kuota        : ${semua.length} (${global} batas global, ${semua.length - global} batas provinsi)`,
+    );
     console.log(`  Jawaban lengkap      : ${lengkap.length} — bisa dipulihkan`);
     console.log(`  Dihentikan di tengah : ${semua.length - lengkap.length} — tidak bisa dipulihkan`);
 

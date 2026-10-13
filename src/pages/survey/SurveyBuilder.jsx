@@ -18,6 +18,7 @@ import {
 } from "../../lib/ui";
 import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN } from "./constants";
 import { QuestionItem } from "./QuestionItem";
+import { gandakanPertanyaan, hapusPertanyaan, geserPertanyaan, teksGanda } from "./daftarPertanyaan";
 import { FlowJsonModal } from "./FlowJsonModal";
 
 // Panel pengaturan di kolom samping.
@@ -38,7 +39,7 @@ function Panel({ title, note, children }) {
  * Pertanyaan bisa banyak dan pengaturannya bercabang, jadi butuh ruang: kolom utama
  * untuk isi survei, kolom samping untuk pengaturan, dan bilah simpan yang selalu terlihat.
  */
-export function SurveyBuilder({ survey, error, onClose, onSave }) {
+export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   const isMobile = useIsMobile();
   const [title, setTitle] = useState(survey?.title || "");
   const [description, setDescription] = useState(survey?.description || "");
@@ -61,6 +62,27 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
   // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
   const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
+  // Salinan pertanyaan yang baru dibuat — dibuka langsung dalam mode sunting.
+  const [salinanBaru, setSalinanBaru] = useState(null);
+  // Pertanyaan yang formulir suntingnya sedang terbuka. Isinya belum masuk `questions`
+  // sebelum "Simpan Pertanyaan" ditekan, jadi "Simpan Survei" di saat itu diam-diam
+  // membuang suntingannya — dan salinan tersimpan dengan teks "(salinan)" yang lalu
+  // terkirim apa adanya ke responden.
+  const [sedangDisunting, setSedangDisunting] = useState(() => new Set());
+  const tandaiSunting = (id, buka) =>
+    setSedangDisunting((s) => {
+      const n = new Set(s);
+      if (buka) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+  const nomorSalinan = useRef(0);
+  // Teks kembar yang SUDAH ada saat survei dibuka. Survei lama yang terlanjur begitu tetap
+  // boleh disimpan — termasuk sekadar ditutup — tanpa dipaksa mengubah instrumennya; yang
+  // diblokir hanya kembaran BARU. Server memakai aturan yang sama.
+  const [kembarAwal] = useState(() => new Set(teksGanda(survey?.questions || [])));
+  // Aturan percabangan yang terpaksa dilepas karena tujuannya terhapus.
+  const [cabangDilepas, setCabangDilepas] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const bannerRef = useRef(null);
@@ -135,7 +157,9 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
   const dirty = useDirty(draft);
   // Draf pertanyaan yang sudah diketik tapi belum ditambahkan ikut dihitung agar tidak hilang diam-diam.
   const leave = async () => {
-    if ((dirty() || c.text.trim()) && !(await confirmDiscard({ confirmText: "Keluar & buang" }))) return;
+    // Formulir sunting pertanyaan yang masih terbuka juga perubahan yang belum tersimpan.
+    if ((dirty() || c.text.trim() || adaSuntingan) && !(await confirmDiscard({ confirmText: "Keluar & buang" })))
+      return;
     onClose();
   };
 
@@ -173,6 +197,28 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
     ]);
     setC({ text: "", type: "text", required: true, min: 1, max: 5, minLabel: "", maxLabel: "", choices: "" });
   };
+
+  // Susunan daftar berubah → aturan percabangan ikut dipetakan ulang (lihat daftarPertanyaan.js).
+  const terapkan = ({ questions: baru, dilepas }) => {
+    setQuestions(baru);
+    if (dilepas) setCabangDilepas((n) => n + dilepas);
+  };
+  const gandakan = (i) => {
+    const id = `t${Date.now()}-${++nomorSalinan.current}`;
+    terapkan(gandakanPertanyaan(questions, i, id));
+    setSalinanBaru(id);
+    tandaiSunting(id, true);
+  };
+
+  // Teks pertanyaan kembar membuat jawabannya bertumpuk di satu kolom ekspor. Server juga
+  // menolaknya; di sini supaya ketahuan sebelum menekan Simpan.
+  const semuaKembar = teksGanda(questions);
+  const kembar = semuaKembar.filter((t) => !kembarAwal.has(t));
+  const kembarLama = semuaKembar.filter((t) => kembarAwal.has(t));
+  // Hanya yang masih ada di daftar — formulir pertanyaan yang sudah dihapus tidak dihitung.
+  const adaSuntingan = questions.some((q) => sedangDisunting.has(q.id));
+  // Teks "(salinan)" yang belum diubah tampil apa adanya ke responden.
+  const masihSalinan = questions.find((q) => /\(salinan(?: \d+)?\)$/i.test((q.text || "").trim()));
 
   const submit = async () => {
     setSaving(true);
@@ -250,13 +296,49 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
           <Button variant="secondary" onClick={leave}>
             Batal
           </Button>
-          <Button icon="check" onClick={submit} disabled={!title.trim() || saving}>
+          <Button
+            icon="check"
+            onClick={submit}
+            disabled={!title.trim() || saving || kembar.length > 0 || adaSuntingan}
+            title={adaSuntingan ? "Selesaikan dulu pertanyaan yang sedang disunting" : undefined}
+          >
             {saving ? "Menyimpan..." : "Simpan Survei"}
           </Button>
         </div>
       </div>
 
       <Notice>{error}</Notice>
+      {info ? <Notice kind="info">{info}</Notice> : null}
+      {kembar.length ? (
+        <Notice kind="warning">
+          Ada pertanyaan yang tulisannya sama persis: <strong>&ldquo;{kembar[0]}&rdquo;</strong>. Jawabannya akan
+          bertumpuk di satu kolom ekspor — ubah salah satunya sebelum menyimpan.
+        </Notice>
+      ) : null}
+      {kembarLama.length ? (
+        <Notice kind="info">
+          Survei ini sudah punya pertanyaan yang tulisannya sama persis sejak sebelumnya:{" "}
+          <strong>&ldquo;{kembarLama[0]}&rdquo;</strong>. Jawaban keduanya bertumpuk di satu kolom ekspor. Survei tetap
+          bisa disimpan; bedakan tulisannya bila datanya akan diekspor.
+        </Notice>
+      ) : null}
+      {adaSuntingan ? (
+        <Notice kind="info">
+          Ada pertanyaan yang formulir suntingnya masih terbuka. Tekan <strong>Simpan Pertanyaan</strong> atau{" "}
+          <strong>Batal</strong> di formulir itu dulu — isinya belum ikut tersimpan.
+        </Notice>
+      ) : masihSalinan ? (
+        <Notice kind="info">
+          Pertanyaan &ldquo;{masihSalinan.text}&rdquo; masih bertanda <strong>(salinan)</strong> — tulisan itu akan
+          tampil apa adanya ke responden.
+        </Notice>
+      ) : null}
+      {cabangDilepas ? (
+        <Notice kind="info">
+          {cabangDilepas} aturan percabangan menuju pertanyaan terakhir yang dihapus, jadi dikembalikan ke &ldquo;lanjut
+          normal&rdquo;. Periksa lagi percabangannya bila perlu.
+        </Notice>
+      ) : null}
 
       <div
         style={{
@@ -308,15 +390,12 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
                     qtypeOptions={qtypeOptions}
                     allQuestions={questions}
                     flowMode={mode === "flow"}
+                    mulaiEdit={q.id === salinanBaru}
+                    onSunting={(buka) => tandaiSunting(q.id, buka)}
                     onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
-                    onDelete={() => setQuestions(questions.filter((_, j) => j !== i))}
-                    onMove={(dir) => {
-                      const j = i + dir;
-                      if (j < 0 || j >= questions.length) return;
-                      const arr = [...questions];
-                      [arr[i], arr[j]] = [arr[j], arr[i]];
-                      setQuestions(arr);
-                    }}
+                    onDelete={() => terapkan(hapusPertanyaan(questions, i))}
+                    onMove={(dir) => terapkan(geserPertanyaan(questions, i, dir))}
+                    onDuplicate={() => gandakan(i)}
                   />
                 ))}
               </div>

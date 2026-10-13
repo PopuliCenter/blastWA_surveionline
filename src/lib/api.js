@@ -50,6 +50,7 @@ export const api = {
   saveKuota: (id, data) => request(`/api/surveys/${id}/kuota`, { method: "PUT", body: data }),
   createSurvey: (data) => request("/api/surveys", { method: "POST", body: data }),
   updateSurvey: (id, data) => request(`/api/surveys/${id}`, { method: "PUT", body: data }),
+  duplicateSurvey: (id) => request(`/api/surveys/${id}/gandakan`, { method: "POST" }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),
   surveyResponses: (id) => request(`/api/surveys/${id}/responses`),
   bulkDeleteResponses: (ids) => request("/api/surveys/responses/bulk-delete", { method: "POST", body: { ids } }),
