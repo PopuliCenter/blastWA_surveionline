@@ -93,7 +93,12 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       triggerKeywords: true,
       triggerEnabled: true,
       oncePerContact: true,
-      responses: { where: { contactId, completedAt: { not: null } }, select: { id: true }, take: 1 },
+      // Yang ditolak kuota ikut diambil, tapi dibedakan: "sudah mengisi" dan "ditolak
+      // karena kuota penuh" adalah dua cerita yang berbeda bagi orangnya.
+      responses: {
+        where: { contactId, completedAt: { not: null } },
+        select: { ditolakKuotaPada: true },
+      },
     },
   });
   const facts = buildContactFacts(
@@ -101,7 +106,8 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       title: s.title,
       triggers: s.triggerEnabled ? (s.triggerKeywords ?? []) : [],
       oncePerContact: s.oncePerContact,
-      completedByContact: s.responses.length > 0,
+      completedByContact: s.responses.some((r) => !r.ditolakKuotaPada),
+      ditolakKuota: s.responses.some((r) => r.ditolakKuotaPada),
     })),
   );
 

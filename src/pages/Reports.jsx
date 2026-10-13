@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { exportResponses } from "../lib/exportSurvey";
+import { exportResponses, ditolakKuota } from "../lib/exportSurvey";
 import {
   PageHeader,
   Card,
@@ -164,7 +164,10 @@ export default function Reports() {
   }, [list, sid]);
 
   const resp = useLoader(useCallback(() => (sid ? api.surveyResponses(sid) : Promise.resolve([])), [sid]));
-  const responses = resp.data || [];
+  // Yang ditolak kuota keluar dari SELURUH laporan. Distribusi, tabulasi silang, dan berkas
+  // unduhan dihitung dari daftar yang sama, jadi cukup disaring di sini sekali — dan angka
+  // di layar tidak pernah berselisih dengan isi berkasnya.
+  const responses = useMemo(() => (resp.data || []).filter((r) => !ditolakKuota(r)), [resp.data]);
 
   const perResponse = useMemo(
     () =>
@@ -252,7 +255,12 @@ export default function Reports() {
                   label="Pilih survei"
                   value={sid}
                   onChange={(e) => setSid(e.target.value)}
-                  options={list.map((s) => ({ value: s.id, label: `${s.title} (${s.responses} respons)` }))}
+                  // Jumlah yang DIHITUNG — sama dengan "Total Responden" di bawah, yang juga
+                  // mengecualikan respons yang ditolak kuota.
+                  options={list.map((s) => ({
+                    value: s.id,
+                    label: `${s.title} (${s.responses - (s.responsesDitolakKuota || 0)} respons)`,
+                  }))}
                   style={{ marginBottom: 0 }}
                 />
               </div>

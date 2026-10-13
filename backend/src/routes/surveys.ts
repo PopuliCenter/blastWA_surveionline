@@ -37,6 +37,9 @@ const surveySchema = z.object({
   privacyUrl: z.string().url().or(z.literal("")).optional().nullable(),
   bannerUrl: z.string().url().or(z.literal("")).optional().nullable(),
   closingMessage: z.string().max(2000).optional().nullable(),
+  // Wajib terdaftar di sini: z.object membuang kunci yang tak dikenal TANPA galat, jadi
+  // tanpa baris ini builder menyimpan dengan HTTP 200 dan pesannya tak pernah tersimpan.
+  pesanKuotaPenuh: z.string().max(1000).optional().nullable(),
   questions: z.array(questionSchema).default([]),
 });
 
@@ -49,7 +52,19 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { createdAt: "desc" },
       include: { questions: { orderBy: { order: "asc" } }, _count: { select: { responses: true } } },
     });
-    return surveys.map((s) => ({ ...s, responses: s._count.responses }));
+    // `responses` tetap SELURUH baris — Biaya memakainya, dan pesannya memang sudah
+    // ditagih. Yang ditolak kuota dikirim terpisah untuk layar yang menampilkan data terpakai.
+    const ditolak = await prisma.surveyResponse.groupBy({
+      by: ["surveyId"],
+      where: { surveyId: { in: surveys.map((s) => s.id) }, ditolakKuotaPada: { not: null } },
+      _count: { _all: true },
+    });
+    const ditolakPer = new Map(ditolak.map((d) => [d.surveyId, d._count._all]));
+    return surveys.map((s) => ({
+      ...s,
+      responses: s._count.responses,
+      responsesDitolakKuota: ditolakPer.get(s.id) ?? 0,
+    }));
   });
 
   app.post("/api/surveys", async (req, reply) => {
@@ -159,6 +174,11 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       attributes: r.contact.attributes ?? {},
       startedAt: r.startedAt,
       completedAt: r.completedAt,
+      // Dikirim, bukan disaring di query: operator perlu MELIHAT respons yang ditolak
+      // kuota untuk menjawab "kenapa baris Excel lebih sedikit", dan masih bisa
+      // menghapusnya. Ekspor dan analitik di klien yang mengecualikannya.
+      ditolakKuotaPada: r.ditolakKuotaPada,
+      alasanDitolakKuota: r.alasanDitolakKuota,
       answers: r.answers
         .slice()
         .sort((a, b) => (a.question.order ?? 0) - (b.question.order ?? 0))
@@ -173,7 +193,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/surveys/:id/kuota", async (req) => {
     const id = (req.params as { id: string }).id;
-    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah, penolakConsent] = await Promise.all([
+    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah, penolakConsent, ditolakKuota] = await Promise.all([
       prisma.survey.findUnique({
         where: { id },
         select: { targetResponden: true, questionProvinsiId: true },
@@ -196,7 +216,18 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       // Ditampilkan, bukan sekadar dikecualikan diam-diam: selisih antara "respons selesai"
       // dan "terhitung kuota" harus bisa dijelaskan ke klien tanpa membuka database.
       prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null }, consentDitolak: true } }),
+      // Kategori pengecualian KEDUA, dilaporkan dengan asas yang sama.
+      prisma.surveyResponse.count({ where: { surveyId: id, ditolakKuotaPada: { not: null } } }),
     ]);
+    // Dari yang ditolak, berapa yang jawabannya LENGKAP — hanya itu yang bisa dipulihkan
+    // bila kuotanya dinaikkan. Respons chat yang dihentikan begitu provinsinya ketahuan
+    // penuh berhenti di pertanyaan wilayah, jadi currentStep-nya belum sampai akhir.
+    const jmlPertanyaan = await prisma.question.count({ where: { surveyId: id } });
+    const ditolakKuotaLengkap = ditolakKuota
+      ? await prisma.surveyResponse.count({
+          where: { surveyId: id, ditolakKuotaPada: { not: null }, currentStep: { gte: jmlPertanyaan } },
+        })
+      : 0;
     const terisi = new Map(perProvinsi.map((r) => [r.kodeProvinsi ?? "", r._count._all]));
     return {
       targetResponden: survey?.targetResponden ?? null,
@@ -213,6 +244,8 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
           })) ?? null)?.text ?? null
         : null,
       penolakConsent,
+      ditolakKuota,
+      ditolakKuotaLengkap,
       // Tanpa provinsi = responden selesai yang provinsinya tidak diketahui. Ditampilkan
       // apa adanya: menyembunyikannya membuat jumlah per provinsi tampak tidak menjumlah.
       tanpaProvinsi: terisi.get("") ?? 0,

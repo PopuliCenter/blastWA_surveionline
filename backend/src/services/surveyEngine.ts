@@ -13,7 +13,15 @@ import {
 } from "../lib/optOut.js";
 import { suppressNumber, unsuppressNumber } from "../lib/optOutList.js";
 import { kodeProvinsiDari } from "../lib/wilayah.js";
-import { bolehMulaiSurvei, pesanKuotaPenuh, provinsiDariAtribut, stempelProvinsi } from "./kuotaSurvei.js";
+import {
+  bolehMulaiSurvei,
+  pesanKuotaPenuh,
+  provinsiAwal,
+  pulihkanRespons,
+  stempelProvinsi,
+  tolakKarenaKuota,
+  tutupRespons,
+} from "./kuotaSurvei.js";
 import { findAutoResponse } from "./autoResponder.js";
 import { enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
@@ -242,8 +250,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       phone,
       ev.vendor,
       ev,
-      active.survey.closingMessage,
-      active.survey.questionProvinsiId,
+      active.survey,
     );
     return;
   }
@@ -273,6 +280,10 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     // jendela 24 jam dan Auto Reply / Agen AI tak pernah kebagian. Tugas jalur blast
     // (mengubah penerima jadi responden) tuntas pada pengisian pertama; mengulang tetap
     // bisa lewat kata pemicu.
+    //
+    // Respons yang ditolak kuota SENGAJA ikut terhitung di sini: orangnya sudah dibalas
+    // bahwa kuota penuh, dan menawarinya formulir lagi pada pesan berikutnya hanya akan
+    // berujung penolakan yang sama.
     const pernahSelesai = await prisma.surveyResponse.findFirst({
       where: { surveyId: recipient.blast.survey.id, contactId: contact.id, completedAt: { not: null } },
       select: { id: true },
@@ -319,10 +330,16 @@ const ALREADY_DONE_TEXT = "Terima kasih, jawaban Anda untuk survei ini sudah kam
 
 // Survei "sekali saja": sudah pernah DISELESAIKAN kontak ini?
 // Respons yang belum selesai tidak dihitung — responden yang batal mengisi tetap boleh mengulang.
+// Respons yang ditolak kuota juga tidak: orangnya belum pernah benar-benar ikut, dan bila
+// kuotanya dinaikkan ia harus bisa mengisi — bukan dibalas "jawaban Anda sudah kami terima".
 async function alreadyCompleted(survey: { id: string; oncePerContact: boolean }, contactId: string): Promise<boolean> {
   if (!survey.oncePerContact) return false;
+  return sudahPernahDiterima(survey.id, contactId);
+}
+
+async function sudahPernahDiterima(surveyId: string, contactId: string): Promise<boolean> {
   const done = await prisma.surveyResponse.findFirst({
-    where: { surveyId: survey.id, contactId, completedAt: { not: null } },
+    where: { surveyId, contactId, completedAt: { not: null }, ditolakKuotaPada: null },
     select: { id: true },
   });
   return Boolean(done);
@@ -363,6 +380,7 @@ type SurveyLite = {
   flowId: string | null;
   flowCta: string | null;
   bannerUrl: string | null; // gambar pembuka (header pesan flow / caption di mode chat)
+  pesanKuotaPenuh: string | null; // balasan saat kuota penuh (null = teks umum bawaan)
   questions: QLite[];
 };
 
@@ -378,15 +396,16 @@ async function startSurvey(
 
   // Kuota diperiksa SEBELUM apa pun dikirim. Untuk kontak hasil impor, provinsinya sudah
   // diketahui dari atribut, sehingga penerima dari provinsi yang kuotanya penuh ditolak
-  // tanpa satu pesan survei pun terkirim. Untuk responden organik, provinsinya belum
-  // diketahui di titik ini — yang berlaku hanya batas global.
+  // tanpa satu pesan survei pun terkirim. Untuk responden organik yang baru pertama kali
+  // datang, provinsinya belum diketahui di titik ini — yang berlaku hanya batas global, dan
+  // batas provinsinya diperiksa lagi begitu ia menjawab pertanyaan wilayah.
   const kontak = await prisma.contact.findUnique({ where: { id: contactId }, select: { attributes: true } });
-  const kodeProv = provinsiDariAtribut(kontak?.attributes);
+  const kodeProv = await provinsiAwal(survey.id, contactId, kontak?.attributes);
   const kuota = await bolehMulaiSurvei(survey.id, kodeProv);
   if (!kuota.boleh) {
     // Dijawab, bukan didiamkan: kebisuan terbaca seperti nomor mati dan merusak kepercayaan
     // justru pada orang yang bersedia ikut.
-    await reply(vendor, phone, pesanKuotaPenuh(kuota, kodeProv), contactId, "survey");
+    await balasKuotaPenuh(vendor, phone, contactId, survey.id, survey.pesanKuotaPenuh);
     return;
   }
 
@@ -517,7 +536,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     if (!surveyResponse) {
       const survey = await prisma.survey.findUnique({
         where: { id: surveyId },
-        select: { id: true, oncePerContact: true },
+        select: { id: true, oncePerContact: true, pesanKuotaPenuh: true },
       });
       if (survey) {
         // Tombol formulir di template blast tetap bisa ditekan lagi kapan pun, jadi
@@ -525,18 +544,31 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
         // ulang MEMBUAT RESPONS BARU: satu orang bisa "memilih" berkali-kali dan
         // penghitung respons menggelembung diam-diam (kejadian nyata saat uji blast).
         // Tolak halus dengan pesan yang sama seperti jalur kata pemicu.
-        if (survey.oncePerContact) {
-          const done = await prisma.surveyResponse.findFirst({
-            where: { contactId, surveyId, completedAt: { not: null } },
-            select: { id: true },
-          });
-          if (done) {
-            await reply(vendor, phone, ALREADY_DONE_TEXT, contactId);
-            return;
-          }
+        if (survey.oncePerContact && (await sudahPernahDiterima(surveyId, contactId))) {
+          await reply(vendor, phone, ALREADY_DONE_TEXT, contactId);
+          return;
+        }
+        // Provinsi dari atribut impor ikut distempel, sama seperti startSurvey(). Tanpa ini,
+        // penerima blast yang formulirnya tidak memuat pertanyaan wilayah lolos dari kuota
+        // provinsinya sama sekali — padahal provinsinya sudah diketahui sejak diimpor.
+        const kontak = await prisma.contact.findUnique({ where: { id: contactId }, select: { attributes: true } });
+        const kodeProv = await provinsiAwal(surveyId, contactId, kontak?.attributes);
+        // Sudah pernah ditolak kuota di survei ini, dan kuotanya masih penuh: jangan buat
+        // respons baru. Tanpa penjaga ini setiap ketukan tombol melahirkan satu respons
+        // tertolak lengkap dengan jawabannya — angka "respons" di aplikasi menggelembung
+        // jauh di atas jumlah baris Excel, gejala yang justru membuat orang curiga datanya
+        // rusak. Orang yang BARU pertama kali mengisi tetap disimpan, lalu diputuskan
+        // tutupRespons() seperti biasa.
+        const pernahDitolak = await prisma.surveyResponse.findFirst({
+          where: { surveyId, contactId, ditolakKuotaPada: { not: null } },
+          select: { id: true },
+        });
+        if (pernahDitolak && !(await bolehMulaiSurvei(surveyId, kodeProv)).boleh) {
+          await balasKuotaPenuh(vendor, phone, contactId, surveyId, survey.pesanKuotaPenuh);
+          return;
         }
         surveyResponse = await prisma.surveyResponse.create({
-          data: { surveyId, contactId, currentStep: 0 },
+          data: { surveyId, contactId, currentStep: 0, ...(kodeProv ? { kodeProvinsi: kodeProv } : {}) },
           include: withQuestions,
         });
       }
@@ -551,7 +583,26 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     });
   }
   if (!surveyResponse) return;
-  if (surveyResponse.completedAt) return; // sudah pernah diproses
+  if (surveyResponse.completedAt) {
+    // Sudah pernah diproses. Yang ditolak kuota ditangani, bukan didiamkan — formulir yang
+    // dikirim lagi tanpa jawaban apa pun terbaca seperti jawabannya hilang.
+    if (surveyResponse.ditolakKuotaPada) {
+      // Kuotanya mungkin sudah dinaikkan sejak ia ditolak. Formulir yang ditolak di akhir
+      // sudah membawa jawaban lengkap, jadi cukup dipulihkan lewat kunci yang sama — tanpa
+      // respons baru dan tanpa menulis jawaban dua kali.
+      const lengkap = surveyResponse.currentStep >= surveyResponse.survey.questions.length;
+      const hasil = lengkap ? await pulihkanRespons(surveyResponse.id) : "masih-penuh";
+      if (hasil === "dipulihkan") {
+        await enqueueSheetSync(surveyResponse.id);
+        await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
+      } else if (hasil === "masih-penuh") {
+        await balasKuotaPenuh(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
+      }
+      // "sudah-diterima": ia sudah punya respons lain yang diterima — sama seperti respons
+      // selesai biasa yang dikirim ulang, tidak perlu dibalas.
+    }
+    return;
+  }
   const flowResp = resp as Record<string, unknown>;
   const questions = surveyResponse.survey.questions as QLite[];
 
@@ -609,17 +660,24 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     const jawab = answers.find((a) => a.questionId === idProvinsi);
     if (jawab) await stempelProvinsi(surveyResponse.id, kodeProvinsiDari(jawab.value));
   }
-  await prisma.surveyResponse.update({
-    where: { id: surveyResponse.id },
-    data: {
-      completedAt: new Date(),
-      currentStep: surveyResponse.survey.questions.length,
-      // Penolak consent tetap "selesai" tapi tidak membawa data, jadi tidak dihitung ke
-      // kuota. Ditandai di sini supaya pemeriksaan kuota — yang berjalan pada setiap pesan
-      // masuk dan setiap pengiriman blast — tidak perlu menelusuri tabel jawaban.
-      consentDitolak: disaringKeluar(questions, answers),
-    },
+
+  // Kuota diperiksa ULANG di sini. Di mode Flow seluruh jawaban — termasuk provinsi — baru
+  // tiba sekarang, jadi pemeriksaan saat formulir dikirim hanya bisa memakai batas global.
+  // Dulu respons ini langsung diterima, dan kuota Jawa Barat 2 terisi 3.
+  //
+  // Jawabannya tetap tersimpan, hanya ditandai ditolak: tidak dihitung, tidak ikut ekspor
+  // maupun Google Sheets, tetapi masih ada bila klien kelak menaikkan kuotanya.
+  const tutup = await tutupRespons(surveyResponse.id, {
+    currentStep: surveyResponse.survey.questions.length,
+    // Penolak consent tetap "selesai" tapi tidak membawa data, jadi tidak dihitung ke
+    // kuota. Ditandai di sini supaya pemeriksaan kuota — yang berjalan pada setiap pesan
+    // masuk dan setiap pengiriman blast — tidak perlu menelusuri tabel jawaban.
+    consentDitolak: disaringKeluar(questions, answers),
   });
+  if (!tutup.diterima) {
+    await kirimPesanKuota(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
+    return;
+  }
   await enqueueSheetSync(surveyResponse.id);
   await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
 }
@@ -632,14 +690,22 @@ async function advanceSurvey(
   phone: string,
   vendor: string,
   ev: NormalizedInbound,
-  closingMessage?: string | null,
-  // Pertanyaan yang ditunjuk survei sebagai sumber provinsi (selain tipe "wilayah").
-  idProvinsiSurvei?: string | null,
+  survei: {
+    id: string;
+    closingMessage: string | null;
+    pesanKuotaPenuh: string | null;
+    // Pertanyaan yang ditunjuk survei sebagai sumber provinsi (selain tipe "wilayah").
+    questionProvinsiId: string | null;
+  },
 ): Promise<void> {
   const current = questions[step];
   if (!current) {
-    await prisma.surveyResponse.update({ where: { id: responseId }, data: { completedAt: new Date() } });
-    await enqueueSheetSync(responseId);
+    // Langkahnya sudah melewati pertanyaan terakhir (survei diubah di tengah pengisian).
+    // Jalur selesai yang jarang, tapi tetap lewat pemeriksaan kuota yang sama — kalau
+    // tidak, inilah pintu belakang tempat respons di luar kuota masuk ke Google Sheets.
+    const tutup = await tutupRespons(responseId);
+    if (tutup.diterima) await enqueueSheetSync(responseId);
+    else await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
     return;
   }
 
@@ -659,8 +725,32 @@ async function advanceSurvey(
     }
     savedValue = v.value;
     await saveAnswer(responseId, current.id, savedValue);
-    if (current.type === "wilayah" || current.id === idProvinsiSurvei)
-      await stempelProvinsi(responseId, kodeProvinsiDari(savedValue));
+    if (current.type === "wilayah" || current.id === survei.questionProvinsiId) {
+      const kode = kodeProvinsiDari(savedValue);
+      await stempelProvinsi(responseId, kode);
+      // Provinsinya baru diketahui SEKARANG, jadi kuota provinsinya baru bisa diperiksa
+      // sekarang. Bila sudah penuh, sisa pertanyaan tidak dikirim — tiap pertanyaan satu
+      // pesan — dan sesinya ditutup supaya kontak tidak terkunci di survei yang takkan
+      // menerimanya. Makin awal pertanyaan wilayah, makin sedikit yang terbuang.
+      //
+      // Harganya: respons ini hanya berisi jawaban sampai pertanyaan wilayah, jadi tidak
+      // bisa dipulihkan menjadi data utuh kalau kuotanya kelak dinaikkan. Orangnya tetap
+      // bisa mengisi ulang dari awal — penolakan kuota tidak dihitung "sudah pernah mengisi".
+      //
+      // Hanya bila MASIH ADA pertanyaan sesudahnya. Bila jawaban wilayah ini mengakhiri
+      // jalurnya (pertanyaan terakhir, atau cabang "akhiri"), tidak ada pesan yang bisa
+      // dihemat — biarkan pemeriksaan terkunci di titik selesai yang memutuskan. Di sana
+      // currentStep dicatat sampai akhir, sehingga respons yang jawabannya lengkap tidak
+      // salah tergolong "dihentikan di tengah" dan tetap bisa dipulihkan.
+      const masihLanjut = Boolean(questions[nextStepWithBranch(current, step, savedValue, questions.length)]);
+      const cek = kode && masihLanjut ? await bolehMulaiSurvei(survei.id, kode) : null;
+      if (cek && !cek.boleh) {
+        // false = respons ini sudah diputuskan pesan lain yang diproses bersamaan.
+        if (await tolakKarenaKuota(responseId, cek.alasan))
+          await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
+        return;
+      }
+    }
     if (disaringKeluar([current], [{ questionId: current.id, value: savedValue }]))
       await prisma.surveyResponse.update({ where: { id: responseId }, data: { consentDitolak: true } });
   }
@@ -671,15 +761,62 @@ async function advanceSurvey(
   if (next) {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep } });
     await reply(vendor, phone, formatQuestion(next), contactId);
-  } else {
-    await prisma.surveyResponse.update({
-      where: { id: responseId },
-      data: { currentStep: questions.length, completedAt: new Date() },
-    });
-    await enqueueSheetSync(responseId);
-    await reply(vendor, phone, closingText(closingMessage), contactId);
+    return;
   }
+  // Pemeriksaan terakhir, terkunci: jatah yang tadi masih ada bisa saja sudah diambil
+  // responden lain yang selesai lebih dulu.
+  const tutup = await tutupRespons(responseId, { currentStep: questions.length });
+  if (!tutup.diterima) {
+    await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
+    return;
+  }
+  await enqueueSheetSync(responseId);
+  await reply(vendor, phone, closingText(survei.closingMessage), contactId);
 }
+
+// Balasan "kuota penuh" untuk tindakan yang BERULANG — mengetik kata pemicu lagi, atau
+// mengirim ulang formulir yang sudah diproses. Tidak dikirim dua kali berturut-turut dalam
+// 24 jam: tiap balasan memakan jatah pesan service, isinya tidak pernah berubah, dan orang
+// yang mengulang sepuluh kali cukup diberi tahu sekali. Bila sudah ada pesan LAIN
+// sesudahnya, pesan ini dikirim lagi — percakapannya sudah berpindah.
+//
+// Penolakan di titik SELESAI tidak lewat sini, melainkan kirimPesanKuota() langsung. Orang
+// yang baru mengisi formulir sampai habis harus selalu mendapat jawaban, walaupun kemarin
+// ia sudah pernah menerima kalimat yang sama.
+//
+// Kuncinya per SURVEI, bukan per kontak: teks bawaannya sama untuk semua survei, dan orang
+// yang ditolak survei A lalu pertama kali mencoba survei B tetap harus dijawab.
+async function balasKuotaPenuh(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  surveyId: string,
+  teksSurvei: string | null | undefined,
+): Promise<void> {
+  const terakhir = await prisma.message.findFirst({
+    where: { contactId, direction: "out" },
+    orderBy: { createdAt: "desc" },
+    select: { payload: true, createdAt: true },
+  });
+  const penanda = (terakhir?.payload as { kuotaSurveyId?: unknown } | null)?.kuotaSurveyId;
+  if (terakhir && penanda === surveyId && Date.now() - terakhir.createdAt.getTime() < SEHARI_MS) return;
+  await kirimPesanKuota(vendor, phone, contactId, surveyId, teksSurvei);
+}
+
+// Pesan kuota penuh, ditandai id surveinya di payload pesan — penanda itulah yang dibaca
+// balasKuotaPenuh() untuk mengenali pengulangan. Disimpan di payload supaya tidak perlu
+// kolom baru hanya untuk ini.
+async function kirimPesanKuota(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  surveyId: string,
+  teksSurvei: string | null | undefined,
+): Promise<void> {
+  await reply(vendor, phone, pesanKuotaPenuh(teksSurvei), contactId, "survey", { kuotaSurveyId: surveyId });
+}
+
+const SEHARI_MS = 24 * 60 * 60 * 1000;
 
 async function saveAnswer(responseId: string, questionId: string, value: string): Promise<void> {
   await prisma.answer.create({ data: { responseId, questionId, value } });
@@ -693,6 +830,8 @@ async function reply(
   text: string,
   contactId?: string,
   source: "survey" | "autoreply" | "ai" | "optout" = "survey",
+  // Keterangan tambahan yang ikut disimpan di payload pesan (mis. penanda pesan kuota).
+  penanda?: Record<string, string>,
 ): Promise<void> {
   if (!to) return;
   const result = await getProvider(vendor).sendText({ to, text });
@@ -703,7 +842,7 @@ async function reply(
       vendor,
       vendorMessageId: result.vendorMessageId || null,
       text,
-      payload: result.raw as object,
+      payload: penanda ? { ...((result.raw as object) ?? {}), ...penanda } : (result.raw as object),
       isBot: true,
       source,
     },

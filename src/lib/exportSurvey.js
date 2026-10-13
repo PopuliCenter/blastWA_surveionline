@@ -58,12 +58,21 @@ export function asesmenDurasi(menit, ambang = AMBANG_DURASI) {
   return "Terlalu lama";
 }
 
+// Respons yang ditolak karena kuotanya sudah penuh. Jawabannya tetap tersimpan dan tampil di
+// daftar respons, tetapi tidak dihitung — jadi tidak boleh ikut ekspor maupun analisis.
+// Satu fungsi untuk semua halaman, supaya angka di layar dan isi berkas tidak berselisih.
+export const ditolakKuota = (r) => Boolean(r?.ditolakKuotaPada);
+
 // Bentuk tabel respons (MURNI — tanpa I/O, mudah diuji): header + baris.
 // Kolom = Nomor, Nama, Sumber Kontak, pembobot (urut kemunculan), lalu 1 kolom/pertanyaan.
 // Pengenal dan metadata di depan, variabel analisis di belakang, agar kolom pembobot dan
 // jawaban tetap bersebelahan saat diolah.
 // opts.upper = HURUF KAPITAL. Spasi berlebih selalu dirapikan (cleaning ringan).
-export function buildResponseRows(survey, responses, opts = {}) {
+export function buildResponseRows(survey, semuaRespons, opts = {}) {
+  // Jaring terakhir: pemanggil sudah menyaringnya, tapi berkas yang terunduh tidak boleh
+  // bergantung pada setiap pemanggil ingat. Disaring SEBELUM kolom pembobot dikumpulkan —
+  // kalau sesudahnya, atribut milik responden yang ditolak meninggalkan kolom kosong.
+  const responses = semuaRespons.filter((r) => !ditolakKuota(r));
   const questions = (survey.questions || []).map((q) => q.text);
   const attrKeys = [];
   responses.forEach((r) =>

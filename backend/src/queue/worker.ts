@@ -84,6 +84,8 @@ async function main() {
           const kodeProv = provinsiDariAtribut(recipient.contact?.attributes);
           const kuota = await bolehMulaiSurvei(blast.surveyId, kodeProv);
           if (!kuota.boleh) {
+            // Angka dan jenis kuota BOLEH tercatat di sini: ini laporan untuk operator.
+            // Larangan menyebut wilayah dan angka berlaku untuk pesan ke RESPONDEN.
             await prisma.blastRecipient.update({
               where: { id: recipientId },
               data: {
@@ -186,6 +188,10 @@ async function main() {
         },
       });
       if (!r || !r.completedAt) return "skip-belum-selesai";
+      // Penjaga terakhir untuk respons yang ditolak kuota. Mesin survei sudah tidak
+      // mengantrekannya, tapi job dari sebelum penolakan bisa masih mengendap di antrean.
+      // sheetSyncedAt sengaja TIDAK dicap: artinya "baris ini ada di spreadsheet".
+      if (r.ditolakKuotaPada) return "skip-ditolak-kuota";
       // Penjaga idempoten: retry BullMQ maupun job ganda tidak boleh jadi dua baris.
       if (r.sheetSyncedAt) return "skip-sudah";
 

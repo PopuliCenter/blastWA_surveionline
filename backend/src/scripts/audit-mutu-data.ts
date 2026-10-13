@@ -62,7 +62,9 @@ async function main(): Promise<void> {
 
   for (const s of surveys) {
     const responses = await prisma.surveyResponse.findMany({
-      where: { surveyId: s.id, completedAt: { not: null } },
+      // Yang ditolak kuota tidak ikut diaudit: datanya tidak dipakai, dan respons chat yang
+      // dihentikan di tengah akan membanjiri temuan "tidak lengkap" dan "terlalu cepat".
+      where: { surveyId: s.id, completedAt: { not: null }, ditolakKuotaPada: null },
       select: {
         id: true,
         startedAt: true,

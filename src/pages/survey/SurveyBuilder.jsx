@@ -16,7 +16,7 @@ import {
   theme,
   card,
 } from "../../lib/ui";
-import { QTYPE_OPTIONS, HAS_CHOICES } from "./constants";
+import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN } from "./constants";
 import { QuestionItem } from "./QuestionItem";
 import { FlowJsonModal } from "./FlowJsonModal";
 
@@ -57,6 +57,9 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
   const [privacyUrl, setPrivacyUrl] = useState(survey?.privacyUrl || "");
   const [bannerUrl, setBannerUrl] = useState(survey?.bannerUrl || "");
   const [closingMessage, setClosingMessage] = useState(survey?.closingMessage || "");
+  // Kosong = teks bawaan backend. Sengaja TIDAK diisi teks bawaan sebagai nilai awal:
+  // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
+  const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -108,6 +111,7 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
       privacyUrl,
       bannerUrl,
       closingMessage,
+      pesanKuotaPenuh,
       questions,
     }),
     [
@@ -124,6 +128,7 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
       privacyUrl,
       bannerUrl,
       closingMessage,
+      pesanKuotaPenuh,
       questions,
     ],
   );
@@ -186,6 +191,7 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
         privacyUrl: mode === "flow" ? privacyUrl.trim() || null : null,
         bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
+        pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
           text: q.text,
@@ -635,6 +641,28 @@ export function SurveyBuilder({ survey, error, onClose, onSave }) {
               onChange={(e) => setClosingMessage(e.target.value)}
               placeholder="Terima kasih, semua jawaban Anda sudah kami terima. 🙏"
               style={{ minHeight: 70 }}
+            />
+          </Panel>
+
+          <Panel
+            title="Pesan saat kuota penuh"
+            note="Dikirim bila kuota survei atau kuota provinsi responden sudah terpenuhi. Jawabannya tidak dihitung dan tidak ikut ekspor maupun Google Sheets. Kosongkan untuk teks default."
+          >
+            {/* Satu pesan untuk dua momen yang berbeda — dan responden tidak boleh tahu
+                wilayah mana yang masih dicari, kalau tidak ia cukup mengaku tinggal di sana. */}
+            <Textarea
+              value={pesanKuotaPenuh}
+              onChange={(e) => setPesanKuotaPenuh(e.target.value)}
+              placeholder={PESAN_KUOTA_PENUH_BAWAAN}
+              maxLength={1000}
+              aria-label="Pesan saat kuota penuh"
+              hint={
+                <span style={{ lineHeight: 1.5 }}>
+                  Pesan yang sama dikirim <strong>sebelum</strong> survei dimulai maupun <strong>sesudah</strong>{" "}
+                  responden selesai mengisi formulir Flow, jadi tulis kalimat yang cocok untuk keduanya. Jangan sebut
+                  nama provinsi atau angka kuota.
+                </span>
+              }
             />
           </Panel>
         </div>

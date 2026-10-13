@@ -6,6 +6,7 @@ import {
   INTERNAL_ATTRS,
   durasiMenit,
   asesmenDurasi,
+  ditolakKuota,
 } from "./exportSurvey";
 
 const survey = { title: "Survei Ekonomi 2026!", questions: [{ text: "Puas?" }, { text: "Alasan?" }] };
@@ -148,5 +149,47 @@ describe("asesmen durasi pengisian", () => {
     expect(rows[0][4]).toBe("Normal");
     expect(rows[1][4]).toBe("Terlalu lama");
     expect(rows[2][4]).toBe("Terlalu cepat");
+  });
+});
+
+describe("buildResponseRows — respons yang ditolak kuota", () => {
+  const surveiKuota = { title: "Survei Kuota", questions: [{ text: "Puas?" }] };
+  const diterima = {
+    phone: "62811",
+    name: "Diterima",
+    consentSource: "inbound",
+    attributes: { Kota: "Bandung" },
+    answers: [{ question: "Puas?", value: "Ya" }],
+  };
+  const ditolak = {
+    phone: "62822",
+    name: "Ditolak",
+    consentSource: "inbound",
+    // Atribut yang HANYA dimiliki responden yang ditolak.
+    attributes: { Kota: "Bogor", Bobot: 2 },
+    ditolakKuotaPada: "2026-10-13T04:00:00.000Z",
+    alasanDitolakKuota: "provinsi",
+    answers: [{ question: "Puas?", value: "Tidak" }],
+  };
+
+  it("tidak ikut ke berkas", () => {
+    const { rows } = buildResponseRows(surveiKuota, [diterima, ditolak]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0][0]).toBe("62811");
+  });
+
+  it("tidak meninggalkan kolom pembobot kosong milik responden yang ditolak", () => {
+    // Disaring SEBELUM kolom pembobot dikumpulkan. Kalau sesudahnya, "Bobot" tetap
+    // menjadi kolom yang isinya kosong di semua baris — terlihat seperti impor yang rusak.
+    const { header } = buildResponseRows(surveiKuota, [diterima, ditolak]);
+    expect(header).toContain("Kota");
+    expect(header).not.toContain("Bobot");
+  });
+
+  it("ditolakKuota hanya bernilai benar untuk respons yang memang ditolak", () => {
+    expect(ditolakKuota(ditolak)).toBe(true);
+    expect(ditolakKuota(diterima)).toBe(false);
+    expect(ditolakKuota({ ditolakKuotaPada: null })).toBe(false);
+    expect(ditolakKuota(undefined)).toBe(false);
   });
 });

@@ -34,3 +34,10 @@ export function qSummary(q) {
     return `${(q.options?.choices || []).length} pilihan${q.type === "multichoice" ? " (multi)" : ""}`;
   return "";
 }
+
+// Teks bawaan pesan kuota penuh — HANYA untuk placeholder di builder. Sumber aslinya
+// PESAN_KUOTA_PENUH_BAWAAN di backend/src/services/kuotaSurvei.ts; bila salah satu diubah,
+// ubah juga yang lain. Kolom yang dikosongkan tetap memakai teks dari backend, jadi selisih
+// di sini hanya membuat contoh di layar keliru, bukan pesan yang terkirim.
+export const PESAN_KUOTA_PENUH_BAWAAN =
+  "Terima kasih atas kesediaan Anda. Kuota responden survei ini sudah terpenuhi, sehingga kami tidak dapat mengikutsertakan jawaban baru. 🙏";

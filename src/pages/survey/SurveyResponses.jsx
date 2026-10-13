@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import { exportResponses } from "../../lib/exportSurvey";
+import { exportResponses, ditolakKuota } from "../../lib/exportSurvey";
 import { confirmDialog } from "../../lib/confirm";
 import {
   Button,
@@ -25,6 +25,9 @@ const STATUS_TABS = [
   { id: "all", label: "Semua" },
   { id: "done", label: "Selesai" },
   { id: "ongoing", label: "Berlangsung" },
+  // Hanya muncul bila ada isinya. Respons ini tidak ikut tab lain — dan karena ekspor
+  // mengikuti apa yang tampil, tidak pula ikut berkas — tapi tetap bisa dilihat dan dihapus.
+  { id: "kuota", label: "Ditolak kuota" },
 ];
 
 // Cocokkan kata kunci ke nama, nomor, atau nilai atribut kontak.
@@ -46,7 +49,7 @@ export function SurveyResponses({ survey, onClose }) {
   const responses = useMemo(() => data || [], [data]);
 
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all");
+  const [statusDipilih, setStatus] = useState("all");
   const [upper, setUpper] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
   const [perPage, setPerPage] = useState(PER_PAGE_OPTIONS[0]);
@@ -56,16 +59,26 @@ export function SurveyResponses({ survey, onClose }) {
   const [delErr, setDelErr] = useState("");
   const sel = useSelection();
 
-  const doneCount = useMemo(() => responses.filter((r) => r.completedAt).length, [responses]);
+  const tolakCount = useMemo(() => responses.filter(ditolakKuota).length, [responses]);
+  const doneCount = useMemo(() => responses.filter((r) => r.completedAt && !ditolakKuota(r)).length, [responses]);
+  // Tab "Ditolak kuota" hilang begitu isinya habis dihapus — jangan tinggalkan pemakai di
+  // tab yang tak lagi terlihat dengan daftar kosong.
+  const status = statusDipilih === "kuota" && !tolakCount ? "all" : statusDipilih;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return responses.filter((r) => {
+      if (status === "kuota") return ditolakKuota(r) && matches(r, needle);
+      if (ditolakKuota(r)) return false;
       if (status === "done" && !r.completedAt) return false;
       if (status === "ongoing" && r.completedAt) return false;
       return matches(r, needle);
     });
   }, [responses, q, status]);
+  // Yang ditolak kuota memang tidak pernah masuk berkas. Di tab mereka sendiri tombol
+  // ekspornya menunjukkan 0, bukan jumlah baris yang tampil, supaya tidak menjanjikan isi.
+  const untukEkspor = status === "kuota" ? [] : filtered;
+  const tabs = tolakCount ? STATUS_TABS : STATUS_TABS.filter((t) => t.id !== "kuota");
 
   const total = filtered.length;
   const pageCount = Math.max(1, Math.ceil(total / perPage));
@@ -199,17 +212,17 @@ export function SurveyResponses({ survey, onClose }) {
             variant="secondary"
             size="sm"
             icon="download"
-            onClick={() => exportResponses(survey, filtered, "xlsx", { upper })}
-            disabled={!filtered.length}
+            onClick={() => exportResponses(survey, untukEkspor, "xlsx", { upper })}
+            disabled={!untukEkspor.length}
           >
-            Excel ({filtered.length})
+            Excel ({untukEkspor.length})
           </Button>
           <Button
             variant="secondary"
             size="sm"
             icon="download"
-            onClick={() => exportResponses(survey, filtered, "csv", { upper })}
-            disabled={!filtered.length}
+            onClick={() => exportResponses(survey, untukEkspor, "csv", { upper })}
+            disabled={!untukEkspor.length}
           >
             CSV
           </Button>
@@ -223,7 +236,9 @@ export function SurveyResponses({ survey, onClose }) {
           items={[
             { label: "Responden", value: responses.length, tone: "blue" },
             { label: "Selesai", value: doneCount, tone: "green" },
-            { label: "Berlangsung", value: responses.length - doneCount, tone: "yellow" },
+            { label: "Berlangsung", value: responses.length - doneCount - tolakCount, tone: "yellow" },
+            // Hanya bila ada — supaya ketiga angka di atas tetap menjumlah ke "Responden".
+            ...(tolakCount ? [{ label: "Ditolak kuota", value: tolakCount, tone: "red" }] : []),
             { label: "Pertanyaan", value: survey.questions?.length ?? 0, tone: "purple" },
           ]}
         />
@@ -264,7 +279,7 @@ export function SurveyResponses({ survey, onClose }) {
           />
         </div>
         <div style={{ display: "inline-flex", gap: 4, background: theme.surfaceAlt, padding: 4, borderRadius: 11 }}>
-          {STATUS_TABS.map((t) => {
+          {tabs.map((t) => {
             const on = status === t.id;
             return (
               <button
@@ -294,6 +309,14 @@ export function SurveyResponses({ survey, onClose }) {
         ) : null}
       </div>
 
+      {status === "kuota" ? (
+        <Notice kind="info">
+          Responden ini datang saat kuotanya sudah penuh. Jawabannya disimpan, tetapi{" "}
+          <strong>tidak dihitung</strong> dan <strong>tidak ikut</strong> berkas Excel, CSV, maupun Google Sheets. Bila
+          kuotanya dinaikkan, yang jawabannya lengkap bisa dipulihkan dengan skrip <code>pulihkan:kuota</code>.
+        </Notice>
+      ) : null}
+
       <BulkBar
         count={sel.size}
         total={filtered.length}
@@ -313,11 +336,21 @@ export function SurveyResponses({ survey, onClose }) {
         </div>
       ) : !filtered.length ? (
         <div style={{ ...card, padding: 18 }}>
-          <Empty
-            icon="survey"
-            title="Tidak ada yang cocok"
-            note={`Tidak ada responden yang cocok dengan saringan ini. Coba kata kunci lain atau pilih "Semua".`}
-          />
+          {/* Tanpa saringan apa pun tapi daftar kosong = semua isinya ditolak kuota. Jangan
+              menyuruh memilih "Semua" kepada orang yang sudah berada di tab itu. */}
+          {!menyaring && tolakCount ? (
+            <Empty
+              icon="survey"
+              title="Belum ada respons yang dihitung"
+              note={`Semua ${tolakCount} responden datang saat kuotanya sudah penuh. Lihat tab "Ditolak kuota".`}
+            />
+          ) : (
+            <Empty
+              icon="survey"
+              title="Tidak ada yang cocok"
+              note={`Tidak ada responden yang cocok dengan saringan ini. Coba kata kunci lain atau pilih "Semua".`}
+            />
+          )}
         </div>
       ) : (
         <div style={{ display: "grid", gap: 8, gridTemplateColumns: "minmax(0,1fr)" }}>
@@ -377,7 +410,11 @@ export function SurveyResponses({ survey, onClose }) {
                     </span>
                   </button>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
+                    {ditolakKuota(r) ? (
+                      <Badge tone="red">ditolak kuota</Badge>
+                    ) : (
+                      <Badge tone={r.completedAt ? "green" : "yellow"}>{r.completedAt ? "selesai" : "berlangsung"}</Badge>
+                    )}
                     <Button
                       variant="danger"
                       size="sm"

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { periksaKuota, sisaKuota, persenKuota, semuaSurveiPenuh } from "../src/lib/kuota.js";
-import { provinsiDariAtribut } from "../src/services/kuotaSurvei.js";
+import { readFileSync } from "node:fs";
+import { provinsiDariAtribut, pesanKuotaPenuh, PESAN_KUOTA_PENUH_BAWAAN } from "../src/services/kuotaSurvei.js";
+import { PROVINSI } from "../src/lib/wilayah.js";
 import { kodeProvinsiDari } from "../src/lib/wilayah.js";
 import { disaringKeluar, saringJawaban, indeksPenyaringan, jalurPertanyaan } from "../src/lib/surveyLogic.js";
 
@@ -376,5 +378,32 @@ describe("semuaSurveiPenuh — pemicu Agen AI berhenti membalas", () => {
 
   it("target nol berarti memang tidak menerima siapa pun", () => {
     expect(semuaSurveiPenuh([{ target: 0, terisi: 0 }])).toBe(true);
+  });
+});
+
+describe("pesanKuotaPenuh", () => {
+  it("memakai teks khusus survei bila diisi", () => {
+    expect(pesanKuotaPenuh("Mohon maaf, survei sudah ditutup.")).toBe("Mohon maaf, survei sudah ditutup.");
+  });
+
+  it("kembali ke teks bawaan bila kosong atau hanya spasi", () => {
+    expect(pesanKuotaPenuh(null)).toBe(PESAN_KUOTA_PENUH_BAWAAN);
+    expect(pesanKuotaPenuh(undefined)).toBe(PESAN_KUOTA_PENUH_BAWAAN);
+    expect(pesanKuotaPenuh("   ")).toBe(PESAN_KUOTA_PENUH_BAWAAN);
+  });
+
+  it("teks bawaan tidak menyebut wilayah atau angka apa pun", () => {
+    // Pesan lama berbunyi "kuota untuk wilayah Jawa Barat sudah terpenuhi" — membocorkan
+    // wilayah mana yang masih dicari, sehingga responden cukup mengaku tinggal di sana.
+    expect(PESAN_KUOTA_PENUH_BAWAAN).not.toMatch(/wilayah|provinsi|\d/i);
+    for (const p of PROVINSI) expect(PESAN_KUOTA_PENUH_BAWAAN).not.toContain(p.nama);
+  });
+
+  it("placeholder di builder sama dengan teks bawaan backend", () => {
+    // Dua salinan di dua paket. Kalau berbeda, contoh di layar tidak cocok dengan pesan
+    // yang benar-benar terkirim saat kolomnya dikosongkan.
+    const berkas = readFileSync(new URL("../../src/pages/survey/constants.js", import.meta.url), "utf8");
+    const cocok = berkas.match(/PESAN_KUOTA_PENUH_BAWAAN\s*=\s*"([^"]+)"/);
+    expect(cocok?.[1]).toBe(PESAN_KUOTA_PENUH_BAWAAN);
   });
 });

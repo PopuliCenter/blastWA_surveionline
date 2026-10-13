@@ -21,6 +21,8 @@
     "lengkapi:sheets": "node dist/scripts/lengkapi-sheets-durasi.js",
     "audit:mutu": "node dist/scripts/audit-mutu-data.js",
     "audit:mutu:dev": "tsx src/scripts/audit-mutu-data.ts",
+    "pulihkan:kuota": "node dist/scripts/pulihkan-ditolak-kuota.js",
+    "pulihkan:kuota:dev": "tsx src/scripts/pulihkan-ditolak-kuota.ts",
     "lengkapi:sheets:dev": "tsx src/scripts/lengkapi-sheets-durasi.ts",
     "bersihkan:tersaring:dev": "tsx src/scripts/bersihkan-jawaban-tersaring.ts",
     "purge:orphan-messages": "node dist/scripts/purge-orphan-messages.js",

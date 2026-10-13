@@ -80,9 +80,14 @@ services:
       - /var/log/populi-wa:/app/logs # log error terstruktur — bisa di-tail dari host
     restart: unless-stopped
     networks: [internal]
+    # Menunggu backend SEHAT, bukan sekadar postgres: backend-lah yang menjalankan
+    # `prisma migrate deploy`. Tanpa ini worker versi baru bisa menyala sebelum migrasi
+    # selesai, lalu tiap job gagal "column ... does not exist" — dan job Sheets yang
+    # menghabiskan seluruh percobaannya di jendela itu mati permanen.
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      backend: { condition: service_healthy }
 
   postgres:
     image: postgres:16-alpine

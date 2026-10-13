@@ -59,3 +59,39 @@ describe("buildContactFacts", () => {
     expect(t).not.toContain("hanya boleh diisi SEKALI");
   });
 });
+
+describe("buildContactFacts — ditolak kuota", () => {
+  // Kejadian yang dicegah: mesin survei membalas "kuota sudah terpenuhi", lalu Agen AI pada
+  // pesan berikutnya mengatakan "jawaban Anda sudah tercatat" — dua cerita bertentangan.
+  it("tidak menyebut jawabannya sudah tercatat", () => {
+    const t = buildContactFacts([survei({ ditolakKuota: true })]);
+    expect(t).toContain("kuota responden sudah terpenuhi");
+    expect(t).toContain("JANGAN katakan jawabannya sudah tercatat");
+    expect(t).not.toContain("jelaskan bahwa jawabannya SUDAH tercatat");
+    expect(t).not.toContain("SUDAH menyelesaikannya");
+  });
+
+  it("melarang menyebut wilayah dan angka kuota, sama seperti pesan penolakan", () => {
+    const t = buildContactFacts([survei({ ditolakKuota: true })]);
+    expect(t).toContain("JANGAN menyebut nama wilayah, provinsi, maupun angka kuota");
+  });
+
+  it("tidak menyuruh membalas kata pemicu lagi", () => {
+    const t = buildContactFacts([survei({ ditolakKuota: true })]);
+    expect(t).toContain("JANGAN menyuruh dia membalas kata pemicu lagi");
+    expect(t).not.toContain('membalas "isi survei"');
+  });
+
+  it("pernah diterima menang atas pernah ditolak", () => {
+    // Ditolak sekali, lalu diterima setelah kuotanya dinaikkan: dia SUDAH mengisi.
+    const t = buildContactFacts([survei({ completedByContact: true, ditolakKuota: true })]);
+    expect(t).toContain("SUDAH menyelesaikannya");
+    expect(t).not.toContain("JANGAN katakan jawabannya sudah tercatat");
+  });
+
+  it("survei lain yang belum diisi tetap ditawarkan", () => {
+    const t = buildContactFacts([survei({ ditolakKuota: true }), survei({ title: "Survei B" })]);
+    expect(t).toContain('"Survei B": pengirim BELUM mengisi');
+    expect(t).not.toContain("JANGAN menyuruh dia membalas kata pemicu lagi");
+  });
+});

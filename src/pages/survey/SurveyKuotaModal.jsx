@@ -9,6 +9,18 @@ import { Modal, Button, Input, Select, Notice, Loading, Badge, useLoader, useIsM
 // pemakai membuka seluruh editor survei.
 
 const sisa = (target, terisi) => (typeof target === "number" ? Math.max(0, target - terisi) : null);
+const angka = (n) => n.toLocaleString("id-ID");
+
+// " dari 2 · sisa 1" — atau " dari 2 · lebih 1" bila terisinya sudah melampaui target.
+// Kelebihan ditulis apa adanya, bukan disembunyikan jadi "sisa 0": angka 3 dari 2 tanpa
+// keterangan terbaca seperti data rusak. Kelebihan seperti itu berasal dari sebelum kuota
+// diperiksa ulang di titik selesai, atau dari target yang diturunkan belakangan.
+function rincianTerisi(target, terisi) {
+  if (typeof target !== "number") return " · tanpa batas";
+  return terisi > target
+    ? ` dari ${angka(target)} · lebih ${angka(terisi - target)}`
+    : ` dari ${angka(target)} · sisa ${angka(sisa(target, terisi))}`;
+}
 const persen = (target, terisi) => (target > 0 ? Math.min(100, Math.round((terisi / target) * 100)) : 0);
 
 function Bilah({ target, terisi }) {
@@ -75,6 +87,9 @@ export function SurveyKuotaModal({ survey, onClose }) {
         Begitu kuota terpenuhi, survei berhenti menerima responden baru: pemicu dibalas sopan dan blast melewati sisa
         penerimanya <strong>tanpa mengirim pesan</strong> — di situlah biayanya tertahan. Yang dihitung hanya responden
         yang <strong>selesai</strong>, jadi formulir yang dikirim tapi tidak diisi tidak memakan jatah orang lain.
+        Responden yang provinsinya baru ketahuan dari jawabannya diperiksa lagi saat itu; bila kuotanya sudah penuh, ia
+        dibalas pesan kuota penuh dan jawabannya <strong>tidak dihitung</strong> serta tidak ikut ekspor maupun Google
+        Sheets.
       </Notice>
 
       {error ? <Notice>{error}</Notice> : null}
@@ -82,7 +97,7 @@ export function SurveyKuotaModal({ survey, onClose }) {
 
       {loading ? (
         <Loading />
-      ) : (
+      ) : !d ? null /* gagal memuat — galatnya sudah tampil di Notice di atas */ : (
         <>
           <div style={{ background: theme.surfaceAlt, borderRadius: 10, padding: 14, marginBottom: 14 }}>
             <Input
@@ -94,10 +109,8 @@ export function SurveyKuotaModal({ survey, onClose }) {
               hint="Kosongkan bila tanpa batas."
             />
             <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 8 }}>
-              Terisi {d.terisiGlobal.toLocaleString("id-ID")}
-              {typeof d.targetResponden === "number"
-                ? ` dari ${d.targetResponden.toLocaleString("id-ID")} · sisa ${sisa(d.targetResponden, d.terisiGlobal).toLocaleString("id-ID")}`
-                : " · tanpa batas"}
+              Terisi {angka(d.terisiGlobal)}
+              {rincianTerisi(d.targetResponden, d.terisiGlobal)}
               {d.tanpaProvinsi > 0 ? ` · ${d.tanpaProvinsi.toLocaleString("id-ID")} tanpa data provinsi` : ""}
             </div>
             {d.penolakConsent > 0 ? (
@@ -105,6 +118,15 @@ export function SurveyKuotaModal({ survey, onClose }) {
                 {d.penolakConsent.toLocaleString("id-ID")} responden berhenti di pertanyaan penyaring — biasanya
                 persetujuan — dan <strong>tidak dihitung</strong>. Responsnya tercatat selesai karena survei memang
                 berakhir di situ, tetapi tidak berisi data.
+              </div>
+            ) : null}
+            {d.ditolakKuota > 0 ? (
+              <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
+                {angka(d.ditolakKuota)} responden <strong>ditolak</strong> karena kuotanya sudah penuh — jawabannya
+                disimpan, tetapi tidak dihitung dan tidak ikut ekspor maupun Google Sheets.{" "}
+                {d.ditolakKuotaLengkap > 0
+                  ? `${angka(d.ditolakKuotaLengkap)} di antaranya berjawaban lengkap dan bisa dipulihkan setelah target dinaikkan (skrip pulihkan:kuota); menaikkan target saja tidak memulihkannya.`
+                  : "Semuanya dihentikan di pertanyaan wilayah, jadi jawabannya tidak lengkap dan tidak bisa dipulihkan."}
               </div>
             ) : null}
             {typeof d.targetResponden === "number" ? (
@@ -120,6 +142,18 @@ export function SurveyKuotaModal({ survey, onClose }) {
               <strong>&ldquo;{(d.teksPertanyaanProvinsi || "").slice(0, 60)}&rdquo;</strong> — jawabannya diterjemahkan
               ke kode provinsi resmi, jadi kuota di bawah ikut bertambah tanpa perlu mengubah instrumen yang sedang
               berjalan.
+            </div>
+          ) : null}
+
+          {/* Satu-satunya tuas biaya untuk responden yang provinsinya belum diketahui: di mode
+              chat tiap pertanyaan satu pesan, dan penolakan baru bisa terjadi setelah pertanyaan
+              wilayah dijawab. Di mode Flow seluruh jawaban tiba sekaligus, jadi tidak berlaku.
+              Hanya untuk survei BARU — mengurutkan ulang instrumen yang tab Sheets-nya sudah berisi
+              data membuat baris baru mendarat di bawah judul kolom yang salah. */}
+          {adaKuotaProvinsi && d.sumberProvinsi && survey.mode !== "flow" ? (
+            <div style={{ fontSize: 12.5, color: theme.textMuted, margin: "0 0 10px" }}>
+              Untuk survei baru, letakkan pertanyaan wilayah di <strong>urutan awal</strong>: responden dari provinsi
+              yang sudah penuh berhenti di situ, sebelum sisa pertanyaannya terkirim.
             </div>
           ) : null}
 
@@ -172,10 +206,8 @@ export function SurveyKuotaModal({ survey, onClose }) {
                         {penuh ? <Badge tone="red">Penuh</Badge> : null}
                       </div>
                       <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 3 }}>
-                        Terisi {p.terisi.toLocaleString("id-ID")}
-                        {typeof p.target === "number"
-                          ? ` dari ${p.target.toLocaleString("id-ID")} · sisa ${sisa(p.target, p.terisi).toLocaleString("id-ID")}`
-                          : " · tanpa batas"}
+                        Terisi {angka(p.terisi)}
+                        {rincianTerisi(p.target, p.terisi)}
                       </div>
                       {typeof p.target === "number" ? <Bilah target={p.target} terisi={p.terisi} /> : null}
                     </div>

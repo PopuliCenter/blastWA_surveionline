@@ -85,6 +85,12 @@ model Survey {
   // Diisi otomatis oleh skrip backfill:provinsi, yang menilai tiap pertanyaan dari
   // jawabannya. Pertanyaan bertipe "wilayah" tidak membutuhkannya — ia selalu dikenali.
   questionProvinsiId String?
+  // Balasan untuk responden yang datang saat kuota sudah penuh. null = teks umum bawaan.
+  //
+  // Satu teks untuk SEMUA penolakan kuota, global maupun per provinsi. Pesan lama menyebut
+  // nama provinsinya — dan itu membocorkan rancangan sampel ke responden: orang jadi tahu
+  // wilayah mana yang masih dicari dan bisa mengaku tinggal di sana.
+  pesanKuotaPenuh String?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]
@@ -249,6 +255,24 @@ model SurveyResponse {
   // berjalan pada SETIAP pesan masuk dan SETIAP pengiriman blast, jadi harus murah.
   // Menelusuri jawaban tiap kali berarti subkueri ke 139 ribu baris jawaban per pemeriksaan.
   consentDitolak Boolean @default(false)
+  // Terisi = kuotanya sudah penuh ketika respons ini hendak dihitung, sehingga ditolak
+  // sistem. Bedanya dengan consentDitolak: di sana RESPONDEN yang menolak, di sini SISTEM.
+  //
+  // Terjadi pada responden yang provinsinya baru diketahui dari jawabannya — saat mulai,
+  // hanya batas global yang bisa diperiksa — atau yang selesai setelah jatah terakhir
+  // diambil orang lain. Responsnya tetap "selesai" (supaya kontaknya tidak terkunci dalam
+  // sesi yang takkan pernah diterima), tetapi tidak dihitung ke kuota dan tidak ikut ekspor
+  // maupun Google Sheets.
+  //
+  // Waktu dan alasan, bukan sekadar ya/tidak: pertanyaan pertama siapa pun yang melihat
+  // baris Excel lebih sedikit dari angka dasbor adalah "yang mana, kapan, dan kenapa".
+  //
+  // Disimpan, tidak dihapus. Respons Flow dan respons chat yang ditolak di AKHIR membawa
+  // jawaban lengkap dan bisa dipulihkan bila kuotanya dinaikkan (skrip pulihkan:kuota).
+  // Respons chat yang dihentikan di TENGAH — begitu provinsinya ketahuan penuh — hanya
+  // berisi jawaban sampai pertanyaan wilayah, jadi tidak bisa dipulihkan menjadi data utuh.
+  ditolakKuotaPada   DateTime?
+  alasanDitolakKuota String? // "global" | "provinsi"
   answers       Answer[]
 
   @@index([contactId])

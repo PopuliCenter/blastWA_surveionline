@@ -387,7 +387,9 @@ export default function Dashboard() {
             <Mini label="Respons selesai" value={s.responsesCompleted ?? 0} tone={theme.green} icon="check" />
             <Mini
               label="Penyelesaian"
-              value={`${pctOf(s.responsesCompleted, s.responses)}%`}
+              // Yang ditolak kuota keluar dari penyebut: mereka selesai lalu ditolak sistem,
+              // bukan responden yang berhenti di tengah jalan.
+              value={`${pctOf(s.responsesCompleted, (s.responses ?? 0) - (s.responsesDitolakKuota ?? 0))}%`}
               tone={theme.blue}
               icon="report"
             />

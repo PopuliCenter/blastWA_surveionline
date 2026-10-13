@@ -137,6 +137,7 @@ export default function Surveys() {
 
   const ringkasanSurvei = (s) =>
     `${s.questions.length} pertanyaan • ${s.responses} respons` +
+    (s.responsesDitolakKuota ? ` (${s.responsesDitolakKuota} ditolak kuota)` : "") +
     (s.triggerEnabled && s.triggerKeywords?.length
       ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}`
       : "");

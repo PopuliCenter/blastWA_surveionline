@@ -31,6 +31,7 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       activeSurveys,
       responses,
       responsesCompleted,
+      responsesDitolakKuota,
       contacts,
       segments,
       blastAgg,
@@ -41,7 +42,12 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       prisma.survey.count(),
       prisma.survey.count({ where: { status: "active" } }),
       prisma.surveyResponse.count(),
-      prisma.surveyResponse.count({ where: { completedAt: { not: null } } }),
+      // Yang ditolak kuota bukan respons selesai dalam arti data yang terpakai — tanpa
+      // pengecualian ini kartu dasbor melampaui target kuota dan membantah layar Kuota.
+      prisma.surveyResponse.count({ where: { completedAt: { not: null }, ditolakKuotaPada: null } }),
+      // Dilaporkan terpisah supaya persentase penyelesaian bisa mengeluarkannya dari
+      // penyebut juga: orang yang ditolak sistem bukan orang yang tidak menyelesaikan.
+      prisma.surveyResponse.count({ where: { ditolakKuotaPada: { not: null } } }),
       prisma.contact.count(),
       prisma.segment.count(),
       prisma.blast.aggregate({
@@ -62,6 +68,7 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
       activeSurveys,
       responses,
       responsesCompleted,
+      responsesDitolakKuota,
       contacts,
       segments,
       sent: blastAgg._sum.sentCount ?? 0,

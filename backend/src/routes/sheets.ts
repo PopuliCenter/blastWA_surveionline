@@ -32,7 +32,9 @@ export async function sheetRoutes(app: FastifyInstance): Promise<void> {
     }
     const [synced, pending] = await Promise.all([
       prisma.surveyResponse.count({ where: { sheetSyncedAt: { not: null } } }),
-      prisma.surveyResponse.count({ where: { completedAt: { not: null }, sheetSyncedAt: null } }),
+      // Yang ditolak kuota sengaja tidak pernah didorong — tanpa pengecualian ini angka
+      // "tertunda" naik dan tak pernah turun, terbaca seperti integrasi yang macet.
+      prisma.surveyResponse.count({ where: { completedAt: { not: null }, ditolakKuotaPada: null, sheetSyncedAt: null } }),
     ]);
     return {
       enabled: cfg?.enabled ?? false,
@@ -118,7 +120,9 @@ export async function sheetRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: "Aktifkan integrasi, isi ID spreadsheet, dan kunci service account dulu." });
     }
     const rows = await prisma.surveyResponse.findMany({
-      where: { completedAt: { not: null }, sheetSyncedAt: null },
+      // ditolakKuotaPada: null — tanpanya satu kali tekan tombol ini mendorong seluruh
+      // respons yang ditolak kuota ke spreadsheet, keluhan yang sama lewat pintu lain.
+      where: { completedAt: { not: null }, ditolakKuotaPada: null, sheetSyncedAt: null },
       orderBy: { completedAt: "asc" }, // urutan baris di sheet jadi kronologis
       select: { id: true },
     });
