@@ -91,6 +91,13 @@ model Survey {
   // nama provinsinya — dan itu membocorkan rancangan sampel ke responden: orang jadi tahu
   // wilayah mana yang masih dicari dan bisa mengaku tinggal di sana.
   pesanKuotaPenuh String?
+  // Aturan kolom "Asesmen Durasi" di ekspor dan Google Sheets. null = aturan bawaan.
+  //
+  // Per survei, karena lama pengisian yang wajar bergantung pada panjang instrumennya:
+  // tiga menit itu terburu-buru untuk 40 pertanyaan, tapi wajar untuk 8.
+  // Bentuk: { batas: [{ sampai: <menit>, label }], selebihnya: <label> }. Lihat
+  // lib/asesmenDurasi.ts.
+  aturanDurasi    Json?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]

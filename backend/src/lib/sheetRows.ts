@@ -6,7 +6,14 @@
 // bentuk di tengah jalan. Analisis lengkap (termasuk atribut pembobot) tetap lewat
 // ekspor Excel; sheet ini untuk PEMANTAUAN tim.
 
-export type SheetQuestion = { id: string; text: string };
+import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit } from "./asesmenDurasi.js";
+
+// Diekspor ulang supaya pemakai lama (skrip lengkapi-sheets-durasi) tidak perlu berubah.
+export { asesmenDurasi } from "./asesmenDurasi.js";
+
+// `type` opsional: hanya dipakai untuk mengenali pertanyaan Wilayah, yang kode resminya
+// dibuang di spreadsheet (lihat bersihkanKodeWilayah).
+export type SheetQuestion = { id: string; text: string; type?: string };
 export type SheetAnswer = { questionId: string; value: string };
 
 // Batas Google: nama tab maksimal 100 karakter; karakter [ ] * ? / \ : dilarang;
@@ -74,10 +81,7 @@ export function sheetHeader(questions: SheetQuestion[]): string[] {
 
 // ===== Asesmen durasi pengisian =====
 //
-// Ambangnya DISALIN dari src/lib/exportSurvey.js; dua berkas karena frontend dan backend
-// tidak berbagi modul. Uji di kedua sisi memakai titik batas yang sama, jadi perubahan di
-// satu tempat tanpa yang lain akan membuat salah satunya gagal.
-export const AMBANG_DURASI = { cepat: 2, normal: 10, lambat: 30 } as const;
+// Aturannya (bawaan maupun milik survei) ada di lib/asesmenDurasi.ts.
 
 // null bila tak dapat dihitung: respons belum selesai, atau stempel waktunya terbalik.
 // Tidak jatuh ke salah satu kategori — "tidak diketahui" bukan "terlalu cepat".
@@ -88,14 +92,6 @@ export function durasiMenit(startedAt: Date | null, completedAt: Date | null): n
   return (b - a) / 60000;
 }
 
-export function asesmenDurasi(menit: number | null): string {
-  if (menit === null || !Number.isFinite(menit)) return "";
-  if (menit < AMBANG_DURASI.cepat) return "Terlalu cepat";
-  if (menit <= AMBANG_DURASI.normal) return "Normal";
-  if (menit <= AMBANG_DURASI.lambat) return "Lambat";
-  return "Terlalu lama";
-}
-
 export function sheetRow(input: {
   phone: string;
   name: string | null;
@@ -104,19 +100,25 @@ export function sheetRow(input: {
   completedAt: Date | null;
   questions: SheetQuestion[];
   answers: SheetAnswer[];
+  // Survey.aturanDurasi; kosong/rusak = aturan bawaan.
+  aturanDurasi?: unknown;
 }): (string | number)[] {
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a.value]));
   const menit = durasiMenit(input.startedAt, input.completedAt);
+  const jawaban = (q: SheetQuestion): string => {
+    const v = byQuestion.get(q.id) ?? "";
+    return q.type === "wilayah" ? bersihkanKodeWilayah(v) : v;
+  };
   return [
     input.phone,
     input.name ?? "",
     sourceLabel(input.consentSource),
     fmtJakarta(input.startedAt),
     fmtJakarta(input.completedAt),
-    ...input.questions.map((q) => byQuestion.get(q.id) ?? ""),
+    ...input.questions.map(jawaban),
     // Angka, bukan teks: Sheets perlu bisa menyortir dan merata-ratakannya.
-    menit === null ? "" : Math.round(menit * 10) / 10,
-    asesmenDurasi(menit),
+    menit === null ? "" : bulatkanMenit(menit),
+    asesmenDurasi(menit, input.aturanDurasi),
   ];
 }
 

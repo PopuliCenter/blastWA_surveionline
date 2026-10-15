@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { gandakanSurvei } from "../services/salinSurvei.js";
 import { tabBertabrakan, teksPertanyaanGanda } from "../lib/salinSurvei.js";
+import { galatAturanDurasi } from "../lib/asesmenDurasi.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
 import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
@@ -25,7 +27,7 @@ export const questionSchema = z.object({
   options: z.any().optional(),
 });
 
-const surveySchema = z.object({
+export const surveySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   status: z.enum(["draft", "active", "closed"]).default("draft"),
@@ -42,8 +44,34 @@ const surveySchema = z.object({
   // Wajib terdaftar di sini: z.object membuang kunci yang tak dikenal TANPA galat, jadi
   // tanpa baris ini builder menyimpan dengan HTTP 200 dan pesannya tak pernah tersimpan.
   pesanKuotaPenuh: z.string().max(1000).optional().nullable(),
+  // null = kembali ke aturan bawaan. Diperiksa dengan aturan yang SAMA dengan yang dipakai
+  // saat membaca (lib/asesmenDurasi.ts), supaya yang lolos disimpan pasti terpakai.
+  aturanDurasi: z
+    .object({
+      batas: z.array(z.object({ sampai: z.coerce.number(), label: z.string() })),
+      selebihnya: z.string(),
+    })
+    .superRefine((a, ctx) => {
+      const e = galatAturanDurasi(a);
+      if (e) ctx.addIssue({ code: z.ZodIssueCode.custom, message: e });
+    })
+    // Spasi dirapikan di sini, sekali: ekspor Excel merapikan spasi ganda saat menulis sel,
+    // Google Sheets tidak — tanpa ini "Terlalu  cepat" tampil berbeda di keduanya.
+    .transform((a) => ({
+      batas: a.batas.map((b) => ({ sampai: b.sampai, label: b.label.trim().replace(/\s+/g, " ") })),
+      selebihnya: a.selebihnya.trim().replace(/\s+/g, " "),
+    }))
+    .optional()
+    .nullable(),
   questions: z.array(questionSchema).default([]),
 });
+
+// Kolom Json di Prisma tidak menerima null polos: "kembali ke bawaan" ditulis sebagai DbNull.
+function dataSurvei<T extends { aturanDurasi?: unknown }>(data: T) {
+  const { aturanDurasi, ...lain } = data;
+  if (aturanDurasi === undefined) return lain;
+  return { ...lain, aturanDurasi: aturanDurasi === null ? Prisma.DbNull : (aturanDurasi as Prisma.InputJsonValue) };
+}
 
 // Dua penjaga yang dulu tidak perlu, dan menjadi perlu sejak survei serta pertanyaan bisa
 // digandakan — menggandakan membuat judul dan teks kembar jauh lebih mudah terjadi.
@@ -113,7 +141,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     if (galat) return reply.code(400).send({ error: galat });
     const survey = await prisma.survey.create({
       data: {
-        ...data,
+        ...dataSurvei(data),
         questions: {
           create: questions.map((q, i) => ({
             text: q.text,
@@ -156,7 +184,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     }
     const survey = await prisma.survey.update({
       where: { id },
-      data,
+      data: dataSurvei(data),
       include: { questions: { orderBy: { order: "asc" } } },
     });
     return survey;

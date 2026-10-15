@@ -5,6 +5,7 @@ import { judulSalinan } from "../lib/salinSurvei.js";
 // Gandakan survei: instrumen dan pengaturannya disalin, datanya TIDAK.
 //
 // Yang disalin: deskripsi, mode, seluruh pertanyaan beserta pilihan dan percabangannya,
+// aturan asesmen durasi,
 // banner, kebijakan privasi, kata penutup, pesan kuota penuh, aturan sekali-isi, dan
 // target kuota (global maupun per provinsi). Kuota disalin karena ia bagian rancangan
 // sampel; hitungannya mulai dari nol karena respons tidak ikut.
@@ -58,6 +59,7 @@ export async function gandakanSurvei(id: string) {
           bannerUrl: asli.bannerUrl,
           closingMessage: asli.closingMessage,
           pesanKuotaPenuh: asli.pesanKuotaPenuh,
+          aturanDurasi: (asli.aturanDurasi ?? undefined) as Prisma.InputJsonValue | undefined,
           oncePerContact: asli.oncePerContact,
           triggerEnabled: false,
           triggerKeywords: [],

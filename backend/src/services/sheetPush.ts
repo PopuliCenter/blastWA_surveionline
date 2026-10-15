@@ -130,6 +130,41 @@ export async function readRange(sa: ServiceAccount, spreadsheetId: string, tab: 
   return r.values ?? [];
 }
 
+// Baca rentang APA ADANYA: rumus tetap berupa rumus ("=COUNTA(…)"), angka tetap angka.
+// readRange memberi nilai yang DITAMPILKAN, dan menulis balik nilai itu mengubah rumus
+// menjadi angka mati — yang ini dipakai bila hasilnya akan ditulis kembali.
+export async function readRangeMentah(
+  sa: ServiceAccount,
+  spreadsheetId: string,
+  tab: string,
+  a1: string,
+): Promise<unknown[][]> {
+  const r = await call<{ values?: unknown[][] }>(
+    sa,
+    "GET",
+    `/${spreadsheetId}/values/${rangeOf(tab, a1)}?valueRenderOption=FORMULA`,
+  );
+  return r.values ?? [];
+}
+
+// Tulis banyak sel terpisah dalam satu permintaan (values:batchUpdate). Dipakai supaya yang
+// ditulis hanya sel yang berubah — bukan kolom penuh — tanpa satu panggilan API per sel.
+export async function writeCells(
+  sa: ServiceAccount,
+  spreadsheetId: string,
+  tab: string,
+  sel: { a1: string; nilai: string | number }[],
+): Promise<void> {
+  const PER_PERMINTAAN = 500;
+  for (let i = 0; i < sel.length; i += PER_PERMINTAAN) {
+    const data = sel.slice(i, i + PER_PERMINTAAN).map((s) => ({
+      range: `'${tab.replace(/'/g, "''")}'!${s.a1}`,
+      values: [[s.nilai]],
+    }));
+    await call(sa, "POST", `/${spreadsheetId}/values:batchUpdate`, { valueInputOption: "RAW", data });
+  }
+}
+
 export async function writeRange(
   sa: ServiceAccount,
   spreadsheetId: string,

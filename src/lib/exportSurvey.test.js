@@ -113,10 +113,11 @@ describe("asesmen durasi pengisian", () => {
     expect(durasiMenit(resp(0))).toBe(0);
   });
 
-  it("memberi label sesuai ambang, termasuk tepat di batasnya", () => {
+  it("memberi label sesuai aturan bawaan, termasuk tepat di batasnya", () => {
     expect(asesmenDurasi(0.5)).toBe("Terlalu cepat");
     expect(asesmenDurasi(1.99)).toBe("Terlalu cepat");
-    expect(asesmenDurasi(2)).toBe("Normal");
+    expect(asesmenDurasi(2)).toBe("Terlalu cepat"); // "sampai 2 menit" — 2 masih termasuk
+    expect(asesmenDurasi(2.1)).toBe("Normal");
     expect(asesmenDurasi(10)).toBe("Normal");
     expect(asesmenDurasi(10.1)).toBe("Lambat");
     expect(asesmenDurasi(30)).toBe("Lambat");
@@ -191,5 +192,39 @@ describe("buildResponseRows — respons yang ditolak kuota", () => {
     expect(ditolakKuota(diterima)).toBe(false);
     expect(ditolakKuota({ ditolakKuotaPada: null })).toBe(false);
     expect(ditolakKuota(undefined)).toBe(false);
+  });
+});
+
+describe("buildResponseRows — aturan durasi survei dan kode wilayah", () => {
+  const surveiWilayah = {
+    title: "Survei Wilayah",
+    questions: [
+      { text: "Provinsi?", type: "wilayah" },
+      { text: "Jumlah anak?", type: "text" },
+    ],
+    aturanDurasi: { batas: [{ sampai: 3, label: "Terlalu cepat" }], selebihnya: "Aman" },
+  };
+  const respons = (menit) => ({
+    phone: "6281",
+    name: "Budi",
+    attributes: {},
+    startedAt: "2026-10-15T02:00:00.000Z",
+    completedAt: new Date(Date.parse("2026-10-15T02:00:00.000Z") + menit * 60000).toISOString(),
+    answers: [
+      { question: "Provinsi?", value: "Jawa Barat (32)" },
+      { question: "Jumlah anak?", value: "Dua (2)" },
+    ],
+  });
+
+  it("kode resmi wilayah dibuang, jawaban lain yang berakhiran angka dalam kurung tidak", () => {
+    const { header, rows } = buildResponseRows(surveiWilayah, [respons(5)]);
+    expect(rows[0][header.indexOf("Provinsi?")]).toBe("Jawa Barat");
+    expect(rows[0][header.indexOf("Jumlah anak?")]).toBe("Dua (2)");
+  });
+
+  it("asesmen memakai aturan milik survei", () => {
+    const { header, rows } = buildResponseRows(surveiWilayah, [respons(2.5), respons(4)]);
+    const i = header.indexOf("Asesmen Durasi");
+    expect(rows.map((r) => r[i])).toEqual(["Terlalu cepat", "Aman"]);
   });
 });

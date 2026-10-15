@@ -33,11 +33,57 @@ export function contactSourceLabel(source) {
 // menggantung berjam-jam biasanya ditinggal lalu dilanjutkan — keduanya perlu dilihat
 // terpisah sebelum ikut dianalisis.
 //
-// AMBANGNYA menutup seluruh garis waktu tanpa celah maupun tumpang tindih. Rentang yang
-// diminta ("<2", "3-10", "11-30") menyisakan lubang di 2–3 menit; lubang itu dimasukkan ke
-// "Normal", bukan ke "Terlalu cepat", karena menaikkan batas curiga berarti menuduh lebih
-// banyak responden — dan itu keputusan metodologis, bukan keputusan pembuat berkas.
-export const AMBANG_DURASI = { cepat: 2, normal: 10, lambat: 30 };
+// Aturannya bisa diatur per survei (survey.aturanDurasi):
+//   { batas: [{ sampai: 3, label: "Terlalu cepat" }, ...], selebihnya: "Aman" }
+// dibaca "sampai 3 menit → Terlalu cepat; …; selebihnya → Aman". Bentuk ini tidak mungkin
+// berlubang maupun tumpang tindih: setiap durasi jatuh ke tepat satu label.
+//
+// KEMBARAN PERSIS dari backend/src/lib/asesmenDurasi.ts — ekspor Excel dihitung di sini,
+// Google Sheets di sana. backend/test/asesmenDurasi.test.ts menguji keduanya berdampingan.
+export const ATURAN_DURASI_BAWAAN = {
+  batas: [
+    { sampai: 2, label: "Terlalu cepat" },
+    { sampai: 10, label: "Normal" },
+    { sampai: 30, label: "Lambat" },
+  ],
+  selebihnya: "Terlalu lama",
+};
+export const MAKS_BATAS_DURASI = 9;
+export const MAKS_LABEL_DURASI = 40;
+
+// Menit dibulatkan ke satu desimal — angka yang tertulis di kolom "Durasi (menit)". Label
+// diputuskan dari angka yang SAMA, supaya baris "3,0 menit" tidak berlabel berbeda-beda.
+export const bulatkanMenit = (menit) => Math.round(menit * 10) / 10;
+
+function galatLabel(label) {
+  const t = typeof label === "string" ? label.trim() : "";
+  if (!t) return "Setiap label asesmen harus diisi.";
+  if (t.length > MAKS_LABEL_DURASI) return `Label asesmen paling panjang ${MAKS_LABEL_DURASI} karakter.`;
+  // Diawali = + - @ dibaca sebagai rumus saat berkas CSV dibuka di Excel ("-Aman" tampil #NAME?).
+  if (/^[=+\-@]/.test(t)) return "Label asesmen tidak boleh diawali =, +, -, atau @.";
+  return null;
+}
+
+// Kesalahan pada aturan, atau null bila sah. Pesannya sama dengan yang dikirim server.
+export function galatAturanDurasi(a) {
+  if (!a || typeof a !== "object") return "Aturan asesmen durasi tidak terbaca.";
+  const { batas, selebihnya } = a;
+  if (!Array.isArray(batas) || !batas.length) return "Isi paling sedikit satu batas menit.";
+  if (batas.length > MAKS_BATAS_DURASI) return `Paling banyak ${MAKS_BATAS_DURASI} batas.`;
+  let sebelumnya = 0;
+  for (const b of batas) {
+    const n = Number(b?.sampai);
+    if (!Number.isFinite(n) || n <= 0) return "Setiap batas harus berupa menit lebih dari 0.";
+    if (n <= sebelumnya) return "Batas menit harus makin besar dari atas ke bawah.";
+    const e = galatLabel(b?.label);
+    if (e) return e;
+    sebelumnya = n;
+  }
+  return galatLabel(selebihnya);
+}
+
+// Aturan yang berlaku: milik survei bila sah, selain itu bawaan.
+export const aturanBerlaku = (a) => (a && !galatAturanDurasi(a) ? a : ATURAN_DURASI_BAWAAN);
 
 // Menit pengisian, atau null bila tak dapat dihitung: respons belum selesai, atau stempel
 // waktunya terbalik. Null SENGAJA tidak jatuh ke salah satu kategori — "tidak diketahui"
@@ -50,13 +96,19 @@ export function durasiMenit(r) {
   return (b - a) / 60000;
 }
 
-export function asesmenDurasi(menit, ambang = AMBANG_DURASI) {
+export function asesmenDurasi(menit, aturan) {
   if (menit === null || menit === undefined || !Number.isFinite(menit)) return "";
-  if (menit < ambang.cepat) return "Terlalu cepat";
-  if (menit <= ambang.normal) return "Normal";
-  if (menit <= ambang.lambat) return "Lambat";
-  return "Terlalu lama";
+  const a = aturanBerlaku(aturan);
+  const m = bulatkanMenit(menit);
+  for (const b of a.batas) if (m <= Number(b.sampai)) return b.label.trim();
+  return a.selebihnya.trim();
 }
+
+// Jawaban Wilayah DISIMPAN dengan kode resminya ("Jawa Barat (32)") karena kode itulah yang
+// dipakai kuota provinsi. Di berkas ekspor kode itu derau, dan mengganggu pencocokan nama
+// provinsi ke data lain. Hanya untuk pertanyaan Wilayah — jawaban teks bebas berakhiran
+// angka dalam kurung ("Anak (2)") tidak boleh ikut terpotong.
+export const bersihkanKodeWilayah = (nilai) => String(nilai).replace(/\s*\(\d{2}(?:\.\d{2})?\)\s*$/, "");
 
 // Respons yang ditolak karena kuotanya sudah penuh. Jawabannya tetap tersimpan dan tampil di
 // daftar respons, tetapi tidak dihitung — jadi tidak boleh ikut ekspor maupun analisis.
@@ -74,6 +126,7 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
   // kalau sesudahnya, atribut milik responden yang ditolak meninggalkan kolom kosong.
   const responses = semuaRespons.filter((r) => !ditolakKuota(r));
   const questions = (survey.questions || []).map((q) => q.text);
+  const wilayah = new Set((survey.questions || []).filter((q) => q.type === "wilayah").map((q) => q.text));
   const attrKeys = [];
   responses.forEach((r) =>
     Object.keys(r.attributes || {}).forEach((k) => {
@@ -101,10 +154,10 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       clean(r.name || ""),
       clean(contactSourceLabel(r.consentSource)),
       // Angka, bukan teks: supaya bisa langsung disortir dan dirata-ratakan di spreadsheet.
-      menit === null ? "" : Math.round(menit * 10) / 10,
-      clean(asesmenDurasi(menit)),
+      menit === null ? "" : bulatkanMenit(menit),
+      clean(asesmenDurasi(menit, survey.aturanDurasi)),
       ...attrKeys.map((k) => clean(attrs[k] ?? "")),
-      ...questions.map((q) => clean(map[q] ?? "")),
+      ...questions.map((q) => clean(wilayah.has(q) ? bersihkanKodeWilayah(map[q] ?? "") : (map[q] ?? ""))),
     ];
   });
   return { header, rows };

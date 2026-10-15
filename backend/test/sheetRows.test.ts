@@ -7,7 +7,6 @@ import {
   fmtJakarta,
   extractSpreadsheetId,
   MAX_TAB_CHARS,
-  AMBANG_DURASI,
   durasiMenit,
   asesmenDurasi,
   durasiDariSheet,
@@ -131,18 +130,37 @@ describe("extractSpreadsheetId", () => {
 });
 
 describe("asesmen durasi (Sheets)", () => {
-  it("ambangnya sama persis dengan ekspor Excel", () => {
-    // Logikanya ada dua kali karena frontend dan backend tidak berbagi modul. Titik batas
-    // di bawah sama dengan yang diuji di src/lib/exportSurvey.test.js — mengubah salah satu
-    // tanpa yang lain akan membuat Sheets dan berkas ekspor saling bertentangan.
-    expect(AMBANG_DURASI).toEqual({ cepat: 2, normal: 10, lambat: 30 });
+  it("aturan bawaan: sampai 2 / 10 / 30 menit, selebihnya terlalu lama", () => {
+    // Kesamaan dengan ekspor Excel diuji langsung di asesmenDurasi.test.ts.
     expect(asesmenDurasi(1.99)).toBe("Terlalu cepat");
-    expect(asesmenDurasi(2)).toBe("Normal");
+    expect(asesmenDurasi(2)).toBe("Terlalu cepat"); // "sampai 2 menit" — 2 masih termasuk
+    expect(asesmenDurasi(2.1)).toBe("Normal");
     expect(asesmenDurasi(10)).toBe("Normal");
     expect(asesmenDurasi(10.1)).toBe("Lambat");
     expect(asesmenDurasi(30)).toBe("Lambat");
     expect(asesmenDurasi(30.1)).toBe("Terlalu lama");
     expect(asesmenDurasi(2.5)).toBe("Normal"); // celah 2-3 menit
+  });
+
+  it("sheetRow memakai aturan survei dan membuang kode wilayah", () => {
+    const row = sheetRow({
+      phone: "6281",
+      name: "Budi",
+      consentSource: "inbound",
+      startedAt: new Date("2026-10-15T02:00:00Z"),
+      completedAt: new Date("2026-10-15T02:02:30Z"),
+      questions: [
+        { id: "p", text: "Provinsi?", type: "wilayah" },
+        { id: "t", text: "Jumlah anak?", type: "text" },
+      ],
+      answers: [
+        { questionId: "p", value: "Jawa Barat (32)" },
+        // Bukan pertanyaan Wilayah — angka dalam kurungnya jawaban, bukan kode.
+        { questionId: "t", value: "Dua (2)" },
+      ],
+      aturanDurasi: { batas: [{ sampai: 3, label: "Terlalu cepat" }], selebihnya: "Aman" },
+    });
+    expect(row.slice(5)).toEqual(["Jawa Barat", "Dua (2)", 2.5, "Terlalu cepat"]);
   });
 
   it("yang tak terhitung tidak dinilai", () => {

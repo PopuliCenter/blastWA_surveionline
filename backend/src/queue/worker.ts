@@ -183,7 +183,14 @@ async function main() {
         where: { id: job.data.responseId },
         include: {
           contact: { select: { phone: true, name: true, consentSource: true } },
-          survey: { select: { title: true, questions: { orderBy: { order: "asc" }, select: { id: true, text: true } } } },
+          survey: {
+            select: {
+              title: true,
+              aturanDurasi: true,
+              // type: pertanyaan Wilayah ditulis tanpa kode resminya ("Jawa Barat", bukan "Jawa Barat (32)").
+              questions: { orderBy: { order: "asc" }, select: { id: true, text: true, type: true } },
+            },
+          },
           answers: { select: { questionId: true, value: true } },
         },
       });
@@ -209,6 +216,7 @@ async function main() {
           completedAt: r.completedAt,
           questions: r.survey.questions,
           answers: r.answers,
+          aturanDurasi: r.survey.aturanDurasi,
         }),
       );
       await prisma.surveyResponse.update({ where: { id: r.id }, data: { sheetSyncedAt: new Date() } });

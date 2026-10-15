@@ -18,6 +18,8 @@ import {
 } from "../../lib/ui";
 import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN } from "./constants";
 import { QuestionItem } from "./QuestionItem";
+import { AturanDurasiEditor } from "./AturanDurasiEditor";
+import { galatAturanDurasi } from "../../lib/exportSurvey";
 import { gandakanPertanyaan, hapusPertanyaan, geserPertanyaan, teksGanda } from "./daftarPertanyaan";
 import { FlowJsonModal } from "./FlowJsonModal";
 
@@ -61,6 +63,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   // Kosong = teks bawaan backend. Sengaja TIDAK diisi teks bawaan sebagai nilai awal:
   // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
   const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
+  // null = aturan bawaan (lihat AturanDurasiEditor).
+  const [aturanDurasi, setAturanDurasi] = useState(survey?.aturanDurasi ?? null);
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
   // Salinan pertanyaan yang baru dibuat — dibuka langsung dalam mode sunting.
   const [salinanBaru, setSalinanBaru] = useState(null);
@@ -134,6 +138,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      aturanDurasi,
       questions,
     }),
     [
@@ -151,6 +156,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      aturanDurasi,
       questions,
     ],
   );
@@ -214,6 +220,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   // menolaknya; di sini supaya ketahuan sebelum menekan Simpan.
   const semuaKembar = teksGanda(questions);
   const kembar = semuaKembar.filter((t) => !kembarAwal.has(t));
+  const galatDurasi = aturanDurasi ? galatAturanDurasi(aturanDurasi) : null;
   const kembarLama = semuaKembar.filter((t) => kembarAwal.has(t));
   // Hanya yang masih ada di daftar — formulir pertanyaan yang sudah dihapus tidak dihitung.
   const adaSuntingan = questions.some((q) => sedangDisunting.has(q.id));
@@ -238,6 +245,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
         bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
         pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
+        aturanDurasi,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
           text: q.text,
@@ -299,7 +307,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
           <Button
             icon="check"
             onClick={submit}
-            disabled={!title.trim() || saving || kembar.length > 0 || adaSuntingan}
+            disabled={!title.trim() || saving || kembar.length > 0 || adaSuntingan || Boolean(galatDurasi)}
             title={adaSuntingan ? "Selesaikan dulu pertanyaan yang sedang disunting" : undefined}
           >
             {saving ? "Menyimpan..." : "Simpan Survei"}
@@ -743,6 +751,13 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
                 </span>
               }
             />
+          </Panel>
+
+          <Panel
+            title="Asesmen durasi"
+            note="Label kolom “Asesmen Durasi” di ekspor dan Google Sheets, menurut lama pengisian. Sesuaikan dengan panjang survei ini — tiga menit terburu-buru untuk 40 pertanyaan, tapi wajar untuk 8."
+          >
+            <AturanDurasiEditor nilai={aturanDurasi} onChange={setAturanDurasi} />
           </Panel>
         </div>
       </div>
