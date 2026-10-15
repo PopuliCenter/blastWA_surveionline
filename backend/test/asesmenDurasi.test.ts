@@ -3,6 +3,8 @@ import {
   asesmenDurasi,
   galatAturanDurasi,
   bersihkanKodeWilayah,
+  menitDari,
+  formatLamaPengisian,
   ATURAN_DURASI_BAWAAN,
   type AturanDurasi,
 } from "../src/lib/asesmenDurasi.js";
@@ -161,5 +163,71 @@ describe("perbaikan dari peninjauan", () => {
       batas: [{ sampai: 3, label: "Terlalu cepat" }],
       selebihnya: "Aman sekali",
     });
+  });
+});
+
+describe("satuan durasi — menit desimal", () => {
+  it("menitDari membaca koma maupun titik; kosong bukan nol", () => {
+    // Kolom angka peramban menolak "2,5" di lokal Indonesia — ini sebab batas 2 menit 30
+    // detik tidak bisa diisi. Penyunting kini kolom teks yang dibaca di sini.
+    expect(menitDari("2,5")).toBe(2.5);
+    expect(menitDari("2.5")).toBe(2.5);
+    expect(menitDari(" 3 ")).toBe(3);
+    expect(menitDari(2.5)).toBe(2.5);
+    expect(menitDari("")).toBeNaN();
+    expect(menitDari("dua")).toBeNaN();
+  });
+
+  it("formatLamaPengisian: 1,9 menit = 1 menit 54 detik, BUKAN 1 menit 90 detik", () => {
+    expect(formatLamaPengisian(1.9)).toBe("1 menit 54 detik");
+    expect(formatLamaPengisian(2.5)).toBe("2 menit 30 detik");
+    expect(formatLamaPengisian(5)).toBe("5 menit");
+    expect(formatLamaPengisian(0.5)).toBe("30 detik");
+    expect(formatLamaPengisian(0)).toBe("0 detik");
+    expect(formatLamaPengisian(65.25)).toBe("1 jam 5 menit 15 detik");
+    expect(formatLamaPengisian(null)).toBe("");
+  });
+
+  it("batas berkoma diterima validasi, dipakai asesmen, dan disimpan sebagai angka", () => {
+    const a = { batas: [{ sampai: "2,5", label: "Terlalu cepat" }], selebihnya: "Aman" };
+    expect(galatAturanDurasi(a)).toBeNull();
+    expect(asesmenDurasi(2.5, a)).toBe("Terlalu cepat");
+    expect(asesmenDurasi(2.6, a)).toBe("Aman");
+    const r = surveySchema.safeParse({ title: "S", aturanDurasi: a });
+    expect(r.success && r.data.aturanDurasi).toEqual({
+      batas: [{ sampai: 2.5, label: "Terlalu cepat" }],
+      selebihnya: "Aman",
+    });
+  });
+
+  it("frontend dan backend identik untuk batas berkoma dan format lama pengisian", () => {
+    const a = { batas: [{ sampai: "2,5", label: "X" }], selebihnya: "Y" };
+    for (let i = 0; i <= 600; i++) {
+      const m = i / 100;
+      expect(frontend.asesmenDurasi(m, a)).toBe(asesmenDurasi(m, a));
+      expect(frontend.formatLamaPengisian(m)).toBe(formatLamaPengisian(m));
+    }
+    for (const v of ["2,5", "2.5", "", " 3 ", "x"]) expect(frontend.menitDari(v)).toEqual(menitDari(v));
+  });
+});
+
+describe("isian menit:detik", () => {
+  it('"2:30" = 2,5 menit; "2,30" = 2,3 menit — dan keduanya identik di frontend', () => {
+    expect(menitDari("2:30")).toBe(2.5);
+    expect(menitDari(" 2 : 05 ")).toBeCloseTo(2 + 5 / 60);
+    expect(menitDari("0:45")).toBe(0.75);
+    expect(menitDari("2,30")).toBe(2.3);
+    expect(menitDari("2:75")).toBeNaN(); // detik tidak boleh 60 ke atas
+    expect(menitDari("2:")).toBeNaN();
+    for (const v of ["2:30", " 2 : 05 ", "0:45", "2,30", "2:75", "2:", "1:2:3"])
+      expect(frontend.menitDari(v)).toEqual(menitDari(v));
+  });
+
+  it("batas menit:detik dipakai asesmen dan disimpan sebagai angka", () => {
+    const a = { batas: [{ sampai: "2:30", label: "Terlalu cepat" }], selebihnya: "Aman" };
+    expect(asesmenDurasi(2.5, a)).toBe("Terlalu cepat");
+    expect(asesmenDurasi(2.6, a)).toBe("Aman");
+    const r = surveySchema.safeParse({ title: "S", aturanDurasi: a });
+    expect(r.success && r.data.aturanDurasi?.batas[0]?.sampai).toBe(2.5);
   });
 });

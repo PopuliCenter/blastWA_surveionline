@@ -12,7 +12,7 @@ import { startRetentionSweeper } from "../lib/retention.js";
 import { bolehMulaiSurvei, provinsiDariAtribut } from "../services/kuotaSurvei.js";
 import { decryptJson } from "../lib/crypto.js";
 import { parseServiceAccount } from "../lib/googleAuth.js";
-import { sheetTabName, sheetHeader, sheetRow } from "../lib/sheetRows.js";
+import { sheetTabName, sheetHeader, sheetRow, susunBarisSheet } from "../lib/sheetRows.js";
 import { ensureTab, appendRow } from "../services/sheetPush.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
@@ -203,21 +203,26 @@ async function main() {
       if (r.sheetSyncedAt) return "skip-sudah";
 
       const tab = sheetTabName(r.survey.title);
-      await ensureTab(sa, cfg.spreadsheetId, tab, sheetHeader(r.survey.questions));
+      const judul = sheetHeader(r.survey.questions);
+      const judulTab = await ensureTab(sa, cfg.spreadsheetId, tab, judul);
       await appendRow(
         sa,
         cfg.spreadsheetId,
         tab,
-        sheetRow({
-          phone: r.contact.phone,
-          name: r.contact.name,
-          consentSource: r.contact.consentSource,
-          startedAt: r.startedAt,
-          completedAt: r.completedAt,
-          questions: r.survey.questions,
-          answers: r.answers,
-          aturanDurasi: r.survey.aturanDurasi,
-        }),
+        susunBarisSheet(
+          judul,
+          judulTab,
+          sheetRow({
+            phone: r.contact.phone,
+            name: r.contact.name,
+            consentSource: r.contact.consentSource,
+            startedAt: r.startedAt,
+            completedAt: r.completedAt,
+            questions: r.survey.questions,
+            answers: r.answers,
+            aturanDurasi: r.survey.aturanDurasi,
+          }),
+        ),
       );
       await prisma.surveyResponse.update({ where: { id: r.id }, data: { sheetSyncedAt: new Date() } });
       return "ok";

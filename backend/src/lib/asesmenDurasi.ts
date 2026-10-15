@@ -41,6 +41,36 @@ export const MAKS_LABEL_DURASI = 40;
 // Menit pengisian dibulatkan ke satu desimal — angka yang ditulis ke kolom "Durasi (menit)".
 export const bulatkanMenit = (menit: number): number => Math.round(menit * 10) / 10;
 
+// Batas menit dari isian: angka, atau teks dengan koma ATAU titik desimal ("2,5" = "2.5").
+// Kolom angka bawaan peramban tidak mengenali koma di banyak lokal — "2,5" sampai sebagai
+// isian kosong — jadi penyunting memakai kolom teks, dan teksnya dibaca di sini.
+// Teks kosong = NaN, bukan 0 (Number("") bernilai 0 dan akan lolos sebagai batas sah).
+//
+// "2:30" juga diterima sebagai MENIT:DETIK = 2,5 menit. Orang yang bermaksud "2 menit 30
+// detik" wajar mengetik 2:30 — atau 2,30, yang berarti 2,3 menit (2 menit 18 detik); karena
+// itu penyunting selalu menuliskan arti isiannya dalam menit dan detik.
+export function menitDari(v: unknown): number {
+  if (typeof v === "number") return v;
+  const t = typeof v === "string" ? v.trim() : "";
+  const md = /^(\d+)\s*:\s*(\d{1,2})$/.exec(t);
+  if (md) return Number(md[2]) < 60 ? Number(md[1]) + Number(md[2]) / 60 : NaN;
+  const d = t.replace(",", ".");
+  return d === "" ? NaN : Number(d);
+}
+
+// "1 menit 54 detik" — durasi yang bisa dibaca tanpa menghitung. Kolom "Durasi (menit)"
+// berupa menit DESIMAL (1,9 = 1 menit 54 detik, bukan 1 menit 90 detik) supaya bisa
+// diurutkan dan dirata-ratakan; kolom ini menuliskan arti angka itu.
+export function formatLamaPengisian(menit: number | null): string {
+  if (menit === null || !Number.isFinite(menit) || menit < 0) return "";
+  const total = Math.round(menit * 60);
+  const jam = Math.floor(total / 3600);
+  const mnt = Math.floor((total % 3600) / 60);
+  const dtk = total % 60;
+  const bagian = [jam ? `${jam} jam` : "", mnt ? `${mnt} menit` : "", dtk ? `${dtk} detik` : ""].filter(Boolean);
+  return bagian.length ? bagian.join(" ") : "0 detik";
+}
+
 // Kesalahan pada aturan, atau null bila sah. Dipakai validasi simpan (server) dan saat
 // membaca nilai tersimpan: aturan yang rusak tidak boleh diam-diam menghasilkan label aneh.
 export function galatAturanDurasi(a: unknown): string | null {
@@ -50,7 +80,7 @@ export function galatAturanDurasi(a: unknown): string | null {
   if (batas.length > MAKS_BATAS_DURASI) return `Paling banyak ${MAKS_BATAS_DURASI} batas.`;
   let sebelumnya = 0;
   for (const b of batas as { sampai?: unknown; label?: unknown }[]) {
-    const n = Number(b?.sampai);
+    const n = menitDari(b?.sampai);
     if (!Number.isFinite(n) || n <= 0) return "Setiap batas harus berupa menit lebih dari 0.";
     if (n <= sebelumnya) return "Batas menit harus makin besar dari atas ke bawah.";
     const e = galatLabel(b?.label);
@@ -81,7 +111,7 @@ export function asesmenDurasi(menit: number | null, aturan?: unknown): string {
   if (menit === null || !Number.isFinite(menit)) return "";
   const a = aturanBerlaku(aturan);
   const m = bulatkanMenit(menit);
-  for (const b of a.batas) if (m <= Number(b.sampai)) return b.label.trim();
+  for (const b of a.batas) if (m <= menitDari(b.sampai)) return b.label.trim();
   return a.selebihnya.trim();
 }
 

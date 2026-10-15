@@ -18,11 +18,12 @@
 //     kolom Wilayahnya tidak disentuh. Aturan asesmen aslinya tidak diketahui, dan menimpa
 //     label "Aman" dengan label bawaan menghapus data yang benar.
 
-import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit } from "./asesmenDurasi.js";
+import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit, formatLamaPengisian } from "./asesmenDurasi.js";
 import { durasiDariSheet } from "./sheetRows.js";
 
 export const JUDUL_DURASI = "Durasi (menit)";
 export const JUDUL_ASESMEN = "Asesmen Durasi";
+export const JUDUL_LAMA = "Lama Pengisian";
 
 export type PemilikTab = { aturanDurasi: unknown; teksWilayah: readonly string[] };
 // baris: indeks baris DATA (0 = baris kedua spreadsheet); kolom: indeks 0-based.
@@ -34,7 +35,7 @@ export type RencanaTab =
       lewati?: undefined;
       judulBaru: { kolom: number; nilai: string[] } | null;
       sel: SelBaru[];
-      hitung: { durasi: number; asesmen: number; wilayah: number };
+      hitung: { durasi: number; asesmen: number; lama: number; wilayah: number };
       kolomDurasi: number;
       kolomWilayah: number[];
     };
@@ -66,14 +67,32 @@ export function rencanaRapikanTab(input: {
 
   let iDurasi = header.indexOf(JUDUL_DURASI);
   let iAsesmen = header.indexOf(JUDUL_ASESMEN);
+  let iLama = header.indexOf(JUDUL_LAMA);
   let judulBaru: { kolom: number; nilai: string[] } | null = null;
   if (iDurasi < 0 || iAsesmen < 0) {
-    // Dua kolom baru di kanan; tidak pernah menimpa kolom berjudul lain.
+    if (iLama >= 0) return { lewati: `ada kolom "${JUDUL_LAMA}" tanpa kolom "${JUDUL_DURASI}"/"${JUDUL_ASESMEN}"` };
+    // Kolom baru di kanan, urutannya sama dengan tab buatan worker. Tidak pernah menimpa
+    // kolom berjudul lain.
     iDurasi = header.length;
     iAsesmen = header.length + 1;
-    judulBaru = { kolom: iDurasi, nilai: [JUDUL_DURASI, JUDUL_ASESMEN] };
+    iLama = header.length + 2;
+    judulBaru = { kolom: iDurasi, nilai: [JUDUL_DURASI, JUDUL_ASESMEN, JUDUL_LAMA] };
   } else if (iAsesmen !== iDurasi + 1) {
     return { lewati: `kolom "${JUDUL_DURASI}" dan "${JUDUL_ASESMEN}" tidak bersebelahan` };
+  } else if (iLama < 0) {
+    // Tab dari sebelum kolom ini ada: judulnya menyusul di kanan, sama seperti yang
+    // dilakukan worker saat baris berikutnya masuk.
+    iLama = header.length;
+    judulBaru = { kolom: iLama, nilai: [JUDUL_LAMA] };
+  }
+
+  // Kolom yang akan DIBERI JUDUL baru harus benar-benar kosong. Di tab yang judulnya bukan
+  // susunan worker, nilai lama bisa sudah tertulis menurut urutan di kolom tanpa judul di
+  // kanan header — memberinya judul "Lama Pengisian" akan menamai data lain dengan keliru.
+  if (judulBaru) {
+    const { kolom, nilai } = judulBaru;
+    const terisi = baris.some((b) => nilai.some((_, n) => teks(b[kolom + n]).trim() !== ""));
+    if (terisi) return { lewati: `kolom di kanan judul (${nilai.join(", ")}) sudah berisi data tanpa judul` };
   }
 
   // Kolom Wilayah dikenali dari judulnya = teks pertanyaan Wilayah milik survei ini.
@@ -82,7 +101,7 @@ export function rencanaRapikanTab(input: {
     : [];
 
   const sel: SelBaru[] = [];
-  const hitung = { durasi: 0, asesmen: 0, wilayah: 0 };
+  const hitung = { durasi: 0, asesmen: 0, lama: 0, wilayah: 0 };
 
   baris.forEach((b, i) => {
     const sDurasi = b[iDurasi];
@@ -104,6 +123,14 @@ export function rencanaRapikanTab(input: {
           sel.push({ baris: i, kolom: iAsesmen, nilai: baru });
           hitung.asesmen++;
         }
+      }
+      // Lama Pengisian hanya diisi bila kosong: nilainya turunan langsung dari durasi, dan
+      // tidak bergantung pada aturan survei mana pun.
+      const sLama = b[iLama];
+      const lamaBaru = formatLamaPengisian(menit === null ? null : bulatkanMenit(menit));
+      if (!rumus(sLama) && teks(sLama).trim() === "" && lamaBaru) {
+        sel.push({ baris: i, kolom: iLama, nilai: lamaBaru });
+        hitung.lama++;
       }
     }
 

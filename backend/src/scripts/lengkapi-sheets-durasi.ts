@@ -73,7 +73,8 @@ async function main(): Promise<void> {
     const pemilik = p && p !== "ambigu" ? p : null;
 
     // Seluruh data tab dibaca SEKALI, apa adanya (rumus tetap rumus).
-    const baris = header.length ? await readRangeMentah(sa, id, tab, `A2:${kolomA1(header.length + 1)}`) : [];
+    // Sampai tiga kolom di kanan header: tempat kolom durasi yang mungkin perlu ditambahkan.
+    const baris = header.length ? await readRangeMentah(sa, id, tab, `A2:${kolomA1(header.length + 2)}`) : [];
     const r = rencanaRapikanTab({ header, baris, pemilik });
     if (r.lewati !== undefined) {
       console.log(`  ${tab}: dilewati — ${r.lewati}.`);
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
           : "";
     console.log(
       `  ${tab}: ${baris.length} baris → ${r.hitung.durasi} durasi diisi, ${r.hitung.asesmen} asesmen diubah, ` +
+        `${r.hitung.lama} lama pengisian diisi, ` +
         `${r.hitung.wilayah} sel Wilayah dibuang kodenya${r.judulBaru ? ", judul kolom ditambahkan" : ""}${catatan}`,
     );
     totalSel += r.sel.length;

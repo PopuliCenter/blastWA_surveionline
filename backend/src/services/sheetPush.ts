@@ -46,10 +46,14 @@ export async function readSpreadsheetMeta(
   };
 }
 
-// Tab yang sudah dipastikan ada — worker berjalan serial (concurrency 1), jadi Set
-// sederhana cukup; kalau tab dihapus orang saat proses berjalan, append gagal dan
-// retry BullMQ memaksa pemeriksaan ulang lewat ensureTab (cache di-invalidate).
-const ensured = new Set<string>();
+// Tab yang sudah dipastikan ada, beserta judul kolomnya yang SEBENARNYA — worker berjalan
+// serial (concurrency 1), jadi Map sederhana cukup; kalau tab dihapus orang saat proses
+// berjalan, append gagal dan retry BullMQ memaksa pemeriksaan ulang (cache di-invalidate).
+//
+// Disimpan sebentar saja: skrip lengkapi:sheets bisa menambah judul kolom selagi worker
+// berjalan, dan judul yang basi membuat kolom itu tidak terisi sampai worker dimulai ulang.
+const ensured = new Map<string, { header: string[]; sampai: number }>();
+const UMUR_JUDUL_MS = 10 * 60 * 1000;
 
 export function invalidateEnsuredTabs(): void {
   ensured.clear();
@@ -77,14 +81,21 @@ export function judulYangKurang(ada: string[], diharapkan: string[]): { mulai: n
   return { mulai: ada.length, nilai: diharapkan.slice(ada.length) };
 }
 
+// Mengembalikan judul kolom tab yang SEBENARNYA, supaya kolom buntut (durasi, asesmen,
+// lama pengisian) bisa ditaruh menurut JUDULNYA — lihat susunBarisSheet di lib/sheetRows.ts.
 export async function ensureTab(
   sa: ServiceAccount,
   spreadsheetId: string,
   tab: string,
   header: string[],
-): Promise<void> {
+): Promise<string[]> {
   const key = `${spreadsheetId}::${tab}`;
-  if (ensured.has(key)) return;
+  const tersimpan = ensured.get(key);
+  if (tersimpan && tersimpan.sampai > Date.now()) return tersimpan.header;
+  const simpan = (h: string[]): string[] => {
+    ensured.set(key, { header: h, sampai: Date.now() + UMUR_JUDUL_MS });
+    return h;
+  };
 
   const { tabs } = await readSpreadsheetMeta(sa, spreadsheetId);
   if (!tabs.includes(tab)) {
@@ -96,8 +107,7 @@ export async function ensureTab(
     await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, "A1")}?valueInputOption=RAW`, {
       values: [header],
     });
-    ensured.add(key);
-    return;
+    return simpan(header);
   }
 
   // Tab lama: kolom yang ditambahkan belakangan (asesmen durasi) belum punya judul di
@@ -109,18 +119,22 @@ export async function ensureTab(
       "GET",
       `/${spreadsheetId}/values/${rangeOf(tab, "1:1")}`,
     );
-    const kurang = judulYangKurang(r.values?.[0] ?? [], header);
+    const ada = (r.values?.[0] ?? []).map((v) => String(v ?? ""));
+    const kurang = judulYangKurang(ada, header);
     if (kurang) {
       const sel = `${kolomA1(kurang.mulai)}1`;
       await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, sel)}?valueInputOption=RAW`, {
         values: [kurang.nilai],
       });
+      return simpan([...ada.slice(0, kurang.mulai), ...kurang.nilai]);
     }
+    return simpan(ada);
   } catch {
     // Gagal melengkapi judul TIDAK boleh menggagalkan penulisan barisnya: datanya jauh
     // lebih penting daripada labelnya, dan baris yang hilang tidak bisa dipulihkan.
+    // Judul sebenarnya tak diketahui → anggap sesuai harapan (perilaku lama: menurut urutan).
+    return simpan(header);
   }
-  ensured.add(key);
 }
 
 // Baca & tulis rentang sembarang. Dipakai skrip pelengkap kolom; alur sinkron normal

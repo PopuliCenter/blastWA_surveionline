@@ -11,6 +11,7 @@ import {
   asesmenDurasi,
   durasiDariSheet,
   parseWaktuSheet,
+  susunBarisSheet,
 } from "../src/lib/sheetRows.js";
 import { judulYangKurang, kolomA1 } from "../src/services/sheetPush.js";
 
@@ -65,6 +66,7 @@ describe("sheetHeader & sheetRow", () => {
       // pernah ditimpa, jadi menyisipkan di tengah akan menggeser setiap baris baru.
       "Durasi (menit)",
       "Asesmen Durasi",
+      "Lama Pengisian",
     ]);
   });
 
@@ -92,6 +94,7 @@ describe("sheetHeader & sheetRow", () => {
       "Ekonomi membaik",
       5,
       "Normal",
+      "5 menit",
     ]);
     expect(row.length).toBe(sheetHeader(questions).length);
   });
@@ -106,8 +109,8 @@ describe("sheetHeader & sheetRow", () => {
       questions,
       answers: [{ questionId: "q2", value: "Saja" }],
     });
-    // Belum selesai → durasi dan asesmennya kosong, bukan ditebak.
-    expect(row).toEqual(["628999", "", "(tidak diketahui)", "2026-07-31 09:00", "", "", "Saja", "", ""]);
+    // Belum selesai → durasi, asesmen, dan lama pengisiannya kosong, bukan ditebak.
+    expect(row).toEqual(["628999", "", "(tidak diketahui)", "2026-07-31 09:00", "", "", "Saja", "", "", ""]);
   });
 });
 
@@ -160,7 +163,7 @@ describe("asesmen durasi (Sheets)", () => {
       ],
       aturanDurasi: { batas: [{ sampai: 3, label: "Terlalu cepat" }], selebihnya: "Aman" },
     });
-    expect(row.slice(5)).toEqual(["Jawa Barat", "Dua (2)", 2.5, "Terlalu cepat"]);
+    expect(row.slice(5)).toEqual(["Jawa Barat", "Dua (2)", 2.5, "Terlalu cepat", "2 menit 30 detik"]);
   });
 
   it("yang tak terhitung tidak dinilai", () => {
@@ -221,5 +224,61 @@ describe("durasi dari kolom spreadsheet", () => {
     expect(parseWaktuSheet("2026-10-01 11:35")).toBe(Date.UTC(2026, 9, 1, 11, 35));
     expect(asesmenDurasi(durasiDariSheet("2026-10-01 11:35", "2026-10-01 11:36"))).toBe("Terlalu cepat");
     expect(asesmenDurasi(durasiDariSheet("2026-10-01 11:35", "2026-10-01 11:40"))).toBe("Normal");
+  });
+});
+
+describe("kolom Lama Pengisian (Sheets)", () => {
+  it("dibaca dari angka Durasi yang sama: 1,9 → 1 menit 54 detik, walau aslinya 1 menit 53 detik", () => {
+    const row = sheetRow({
+      phone: "6281",
+      name: "Budi",
+      consentSource: "inbound",
+      startedAt: new Date("2026-10-15T02:00:00Z"),
+      completedAt: new Date("2026-10-15T02:01:53Z"),
+      questions: [],
+      answers: [],
+    });
+    expect(row.slice(-3)).toEqual([1.9, "Terlalu cepat", "1 menit 54 detik"]);
+  });
+});
+
+describe("susunBarisSheet — kolom buntut ditaruh menurut judulnya", () => {
+  const qs = [{ id: "u", text: "Umur?" }];
+  const judul = sheetHeader(qs); // ... Umur?, Durasi (menit), Asesmen Durasi, Lama Pengisian
+  const nilai = [
+    "6281",
+    "Budi",
+    "Pesan masuk",
+    "2026-10-15 09:00",
+    "2026-10-15 09:02",
+    "30",
+    1.9,
+    "Terlalu cepat",
+    "1 menit 54 detik",
+  ];
+  const awal = ["Nomor", "Nama", "Sumber Kontak", "Mulai", "Selesai", "Umur?"];
+
+  it("tab buatan worker: sama persis dengan urutan", () => {
+    expect(susunBarisSheet(judul, judul, nilai)).toEqual(nilai);
+  });
+
+  it("kolom milik tim di kanan Asesmen TIDAK diisi data otomatis", () => {
+    // Tab lama + kolom "Catatan QC" buatan tim. Menurut urutan, "1 menit 54 detik" akan
+    // mendarat di Catatan QC pada setiap baris baru — tanpa galat apa pun.
+    const aktual = [...awal, "Durasi (menit)", "Asesmen Durasi", "Catatan QC"];
+    const baris = susunBarisSheet(judul, aktual, nilai);
+    expect(baris).toEqual(nilai.slice(0, 8));
+    expect(baris[aktual.indexOf("Catatan QC")]).toBeUndefined();
+  });
+
+  it("kolom yang judulnya ditambahkan skrip lebih ke kanan diisi di tempatnya", () => {
+    const aktual = [...awal, "Durasi (menit)", "Asesmen Durasi", "Catatan QC", "Lama Pengisian"];
+    const baris = susunBarisSheet(judul, aktual, nilai);
+    expect(baris[8]).toBe(""); // Catatan QC dibiarkan kosong di baris baru
+    expect(baris[9]).toBe("1 menit 54 detik");
+  });
+
+  it("tab tanpa judul sama sekali tetap menurut urutan", () => {
+    expect(susunBarisSheet(judul, [], nilai)).toEqual(nilai);
   });
 });

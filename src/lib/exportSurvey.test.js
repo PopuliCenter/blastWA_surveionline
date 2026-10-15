@@ -40,6 +40,7 @@ describe("buildResponseRows", () => {
       "Sumber Kontak",
       "Durasi (menit)",
       "Asesmen Durasi",
+      "Lama Pengisian",
       "Kota",
       "Umur",
       "Puas?",
@@ -53,19 +54,19 @@ describe("buildResponseRows", () => {
   });
   it("baris cocok kolom; spasi dirapikan; sel kosong = ''", () => {
     // Durasi kosong: contoh ini tanpa stempel waktu, dan yang tak terhitung tidak dinilai.
-    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", "", "", "Bandung", "30", "Ya", ""]);
-    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", "", "", "Jakarta", "", "Tidak", "mahal"]);
+    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", "", "", "", "Bandung", "30", "Ya", ""]);
+    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", "", "", "", "Jakarta", "", "Tidak", "mahal"]);
   });
   it("opts.upper → HURUF KAPITAL", () => {
     const up = buildResponseRows(survey, responses, { upper: true });
-    expect(up.rows[0]).toEqual(["628123", "ANDI SUSANTO", "IMPOR", "", "", "BANDUNG", "30", "YA", ""]);
+    expect(up.rows[0]).toEqual(["628123", "ANDI SUSANTO", "IMPOR", "", "", "", "BANDUNG", "30", "YA", ""]);
   });
   it("responden tanpa consentSource tetap punya sel terisi", () => {
     // Kontak lama sebelum consentSource dipakai. Sel kosong di kolom ini akan terbaca
     // sebagai data hilang; "(tidak diketahui)" menyatakan keadaannya dengan jujur.
     // Tanpa atribut → tak ada kolom pembobot, jadi tinggal 2 kolom pertanyaan yang kosong.
     const { rows: r } = buildResponseRows(survey, [{ phone: "628777", name: "Budi", answers: [] }]);
-    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", ""]);
+    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", "", ""]);
   });
 });
 
@@ -145,7 +146,14 @@ describe("asesmen durasi pengisian", () => {
   it("kolomnya muncul di tabel ekspor dengan angka yang bisa dihitung", () => {
     const survey = { title: "S", questions: [{ text: "Q1" }] };
     const { header, rows } = buildResponseRows(survey, [resp(4.26), resp(45), resp(1)]);
-    expect(header.slice(0, 5)).toEqual(["Nomor", "Nama", "Sumber Kontak", "Durasi (menit)", "Asesmen Durasi"]);
+    expect(header.slice(0, 6)).toEqual([
+      "Nomor",
+      "Nama",
+      "Sumber Kontak",
+      "Durasi (menit)",
+      "Asesmen Durasi",
+      "Lama Pengisian",
+    ]);
     expect(rows[0][3]).toBe(4.3); // angka, bukan teks — bisa disortir & dirata-ratakan
     expect(rows[0][4]).toBe("Normal");
     expect(rows[1][4]).toBe("Terlalu lama");
@@ -226,5 +234,36 @@ describe("buildResponseRows — aturan durasi survei dan kode wilayah", () => {
     const { header, rows } = buildResponseRows(surveiWilayah, [respons(2.5), respons(4)]);
     const i = header.indexOf("Asesmen Durasi");
     expect(rows.map((r) => r[i])).toEqual(["Terlalu cepat", "Aman"]);
+  });
+});
+
+describe("kolom Lama Pengisian di ekspor", () => {
+  it("menuliskan arti menit desimal: 1,9 menit = 1 menit 54 detik", () => {
+    const r = {
+      phone: "6281",
+      name: "Budi",
+      startedAt: "2026-10-15T02:00:00.000Z",
+      // 1 menit 53 detik = 1,88 menit → tertulis 1,9. Kolom penjelasnya harus membaca 1,9
+      // sebagai 1 menit 54 detik, bukan 53 — kalau tidak ia tampak membantah angkanya.
+      completedAt: "2026-10-15T02:01:53.000Z",
+      answers: [],
+    };
+    const { header, rows } = buildResponseRows({ title: "S", questions: [] }, [r]);
+    expect(rows[0][header.indexOf("Durasi (menit)")]).toBe(1.9);
+    expect(rows[0][header.indexOf("Lama Pengisian")]).toBe("1 menit 54 detik");
+  });
+});
+
+describe("HURUF KAPITAL mencakup kolom Lama Pengisian", () => {
+  it("semua sel teks kapital, termasuk lama pengisian", () => {
+    const r = {
+      phone: "6281",
+      name: "Budi",
+      startedAt: "2026-10-15T02:00:00.000Z",
+      completedAt: "2026-10-15T02:02:30.000Z",
+      answers: [],
+    };
+    const { header, rows } = buildResponseRows({ title: "S", questions: [] }, [r], { upper: true });
+    expect(rows[0][header.indexOf("Lama Pengisian")]).toBe("2 MENIT 30 DETIK");
   });
 });

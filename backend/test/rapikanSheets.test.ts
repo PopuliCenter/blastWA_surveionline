@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { rencanaRapikanTab, JUDUL_DURASI, JUDUL_ASESMEN, type PemilikTab } from "../src/lib/rapikanSheets.js";
+import {
+  rencanaRapikanTab,
+  JUDUL_DURASI,
+  JUDUL_ASESMEN,
+  JUDUL_LAMA,
+  type PemilikTab,
+} from "../src/lib/rapikanSheets.js";
 
-// Tab seperti yang ditulis worker: identitas, pertanyaan, lalu dua kolom durasi di akhir.
+// Tab seperti yang ditulis worker: identitas, pertanyaan, lalu tiga kolom durasi di akhir.
 const HEADER = [
   "Nomor",
   "Nama",
@@ -12,8 +18,9 @@ const HEADER = [
   "Anak?",
   JUDUL_DURASI,
   JUDUL_ASESMEN,
+  JUDUL_LAMA,
 ];
-const I = { prov: 5, anak: 6, durasi: 7, asesmen: 8 };
+const I = { prov: 5, anak: 6, durasi: 7, asesmen: 8, lama: 9 };
 const PENDEK: PemilikTab = {
   aturanDurasi: { batas: [{ sampai: 3, label: "Terlalu cepat" }], selebihnya: "Aman" },
   teksWilayah: ["Provinsi?"],
@@ -25,6 +32,7 @@ const baris = (o: {
   anak?: unknown;
   durasi?: unknown;
   asesmen?: unknown;
+  lama?: unknown;
 }) => [
   "6281",
   "Budi",
@@ -35,6 +43,8 @@ const baris = (o: {
   o.anak ?? "",
   o.durasi ?? "",
   o.asesmen ?? "",
+  // Bawaannya sudah terisi, supaya uji lain fokus pada kolomnya sendiri.
+  o.lama ?? "(terisi)",
 ];
 const rencana = (b: unknown[][], pemilik: PemilikTab | null = PENDEK, header = HEADER) => {
   const r = rencanaRapikanTab({ header, baris: b, pemilik });
@@ -113,14 +123,28 @@ describe("rencanaRapikanTab — tab tanpa pemilik pasti", () => {
 });
 
 describe("rencanaRapikanTab — bentuk tab", () => {
-  it("tab tanpa kolom durasi mendapat dua kolom baru di kanan", () => {
+  it("tab tanpa kolom durasi mendapat tiga kolom baru di kanan", () => {
     const header = HEADER.slice(0, 7);
     const r = rencana([baris({}).slice(0, 7)], PENDEK, header);
-    expect(r.judulBaru).toEqual({ kolom: 7, nilai: [JUDUL_DURASI, JUDUL_ASESMEN] });
+    expect(r.judulBaru).toEqual({ kolom: 7, nilai: [JUDUL_DURASI, JUDUL_ASESMEN, JUDUL_LAMA] });
     expect(r.sel).toEqual([
       { baris: 0, kolom: 7, nilai: 5 },
       { baris: 0, kolom: 8, nilai: "Aman" },
+      { baris: 0, kolom: 9, nilai: "5 menit" },
     ]);
+  });
+
+  it("tab dari sebelum kolom Lama Pengisian ada: judulnya menyusul di kanan dan diisi dari durasi", () => {
+    // Durasi 1,9 tertulis desimal — kolom baru menuliskan artinya: 1 menit 54 detik.
+    const header = HEADER.slice(0, 9);
+    const r = rencana([baris({ durasi: 1.9, asesmen: "Terlalu cepat" }).slice(0, 9)], PENDEK, header);
+    expect(r.judulBaru).toEqual({ kolom: 9, nilai: [JUDUL_LAMA] });
+    expect(r.sel).toEqual([{ baris: 0, kolom: 9, nilai: "1 menit 54 detik" }]);
+  });
+
+  it("Lama Pengisian yang sudah terisi tidak ditimpa", () => {
+    const r = rencana([baris({ durasi: 1.9, asesmen: "Terlalu cepat", lama: "1 menit 54 detik" })]);
+    expect(r.sel).toEqual([]);
   });
 
   it("melewati tab yang bukan tab respons survei", () => {
@@ -134,6 +158,21 @@ describe("rencanaRapikanTab — bentuk tab", () => {
     expect(r.sel).toEqual([
       { baris: 0, kolom: I.durasi, nilai: 5 },
       { baris: 0, kolom: I.asesmen, nilai: "Aman" },
+      { baris: 0, kolom: I.lama, nilai: "5 menit" },
     ]);
+  });
+});
+
+describe("rencanaRapikanTab — kolom di kanan judul yang sudah berisi", () => {
+  it("tidak memberi judul baru pada kolom yang sudah berisi data tanpa judul", () => {
+    // Nilai lama yang dulu ditulis menurut urutan bisa berada di kolom tanpa judul. Menamai
+    // kolom itu "Lama Pengisian" akan memberi data lain judul yang keliru.
+    const header = HEADER.slice(0, 9);
+    const r = rencanaRapikanTab({
+      header,
+      baris: [[...baris({ durasi: 2, asesmen: "Terlalu cepat" }).slice(0, 9), "data lama"]],
+      pemilik: PENDEK,
+    });
+    expect(r).toMatchObject({ lewati: expect.stringMatching(/sudah berisi data/) });
   });
 });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { gandakanSurvei } from "../services/salinSurvei.js";
 import { tabBertabrakan, teksPertanyaanGanda } from "../lib/salinSurvei.js";
-import { galatAturanDurasi } from "../lib/asesmenDurasi.js";
+import { galatAturanDurasi, menitDari } from "../lib/asesmenDurasi.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
 import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
@@ -48,7 +48,8 @@ export const surveySchema = z.object({
   // saat membaca (lib/asesmenDurasi.ts), supaya yang lolos disimpan pasti terpakai.
   aturanDurasi: z
     .object({
-      batas: z.array(z.object({ sampai: z.coerce.number(), label: z.string() })),
+      // Angka atau teks ("2,5" maupun "2.5") — dibaca menitDari, sama dengan saat dipakai.
+      batas: z.array(z.object({ sampai: z.union([z.number(), z.string()]), label: z.string() })),
       selebihnya: z.string(),
     })
     .superRefine((a, ctx) => {
@@ -58,7 +59,7 @@ export const surveySchema = z.object({
     // Spasi dirapikan di sini, sekali: ekspor Excel merapikan spasi ganda saat menulis sel,
     // Google Sheets tidak — tanpa ini "Terlalu  cepat" tampil berbeda di keduanya.
     .transform((a) => ({
-      batas: a.batas.map((b) => ({ sampai: b.sampai, label: b.label.trim().replace(/\s+/g, " ") })),
+      batas: a.batas.map((b) => ({ sampai: menitDari(b.sampai), label: b.label.trim().replace(/\s+/g, " ") })),
       selebihnya: a.selebihnya.trim().replace(/\s+/g, " "),
     }))
     .optional()

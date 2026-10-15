@@ -55,6 +55,30 @@ export const MAKS_LABEL_DURASI = 40;
 // diputuskan dari angka yang SAMA, supaya baris "3,0 menit" tidak berlabel berbeda-beda.
 export const bulatkanMenit = (menit) => Math.round(menit * 10) / 10;
 
+// Batas menit dari isian: angka, atau teks dengan koma ATAU titik ("2,5" = "2.5"). Kolom
+// angka bawaan peramban tidak mengenali koma di banyak lokal; teks kosong = NaN, bukan 0.
+// "2:30" juga diterima sebagai MENIT:DETIK = 2,5 menit (sedangkan "2,30" = 2,3 menit).
+export function menitDari(v) {
+  if (typeof v === "number") return v;
+  const t = typeof v === "string" ? v.trim() : "";
+  const md = /^(\d+)\s*:\s*(\d{1,2})$/.exec(t);
+  if (md) return Number(md[2]) < 60 ? Number(md[1]) + Number(md[2]) / 60 : NaN;
+  const d = t.replace(",", ".");
+  return d === "" ? NaN : Number(d);
+}
+
+// "1 menit 54 detik". Kolom "Durasi (menit)" berupa menit DESIMAL — 1,9 = 1 menit 54 detik,
+// bukan 1 menit 90 detik — supaya bisa diurutkan dan dirata-ratakan; ini artinya.
+export function formatLamaPengisian(menit) {
+  if (menit === null || menit === undefined || !Number.isFinite(menit) || menit < 0) return "";
+  const total = Math.round(menit * 60);
+  const jam = Math.floor(total / 3600);
+  const mnt = Math.floor((total % 3600) / 60);
+  const dtk = total % 60;
+  const bagian = [jam ? `${jam} jam` : "", mnt ? `${mnt} menit` : "", dtk ? `${dtk} detik` : ""].filter(Boolean);
+  return bagian.length ? bagian.join(" ") : "0 detik";
+}
+
 function galatLabel(label) {
   const t = typeof label === "string" ? label.trim() : "";
   if (!t) return "Setiap label asesmen harus diisi.";
@@ -72,7 +96,7 @@ export function galatAturanDurasi(a) {
   if (batas.length > MAKS_BATAS_DURASI) return `Paling banyak ${MAKS_BATAS_DURASI} batas.`;
   let sebelumnya = 0;
   for (const b of batas) {
-    const n = Number(b?.sampai);
+    const n = menitDari(b?.sampai);
     if (!Number.isFinite(n) || n <= 0) return "Setiap batas harus berupa menit lebih dari 0.";
     if (n <= sebelumnya) return "Batas menit harus makin besar dari atas ke bawah.";
     const e = galatLabel(b?.label);
@@ -100,7 +124,7 @@ export function asesmenDurasi(menit, aturan) {
   if (menit === null || menit === undefined || !Number.isFinite(menit)) return "";
   const a = aturanBerlaku(aturan);
   const m = bulatkanMenit(menit);
-  for (const b of a.batas) if (m <= Number(b.sampai)) return b.label.trim();
+  for (const b of a.batas) if (m <= menitDari(b.sampai)) return b.label.trim();
   return a.selebihnya.trim();
 }
 
@@ -141,7 +165,17 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
   };
   // Durasi ikut dicetak di samping asesmennya supaya labelnya bisa diperiksa, bukan
   // dipercaya begitu saja — kolom penilaian tanpa angka asalnya tidak bisa diaudit.
-  const header = ["Nomor", "Nama", "Sumber Kontak", "Durasi (menit)", "Asesmen Durasi", ...attrKeys, ...questions];
+  // Urutan tiga kolom durasi sama dengan di Google Sheets, supaya mudah dicocokkan.
+  const header = [
+    "Nomor",
+    "Nama",
+    "Sumber Kontak",
+    "Durasi (menit)",
+    "Asesmen Durasi",
+    "Lama Pengisian",
+    ...attrKeys,
+    ...questions,
+  ];
   const rows = responses.map((r) => {
     const map = {};
     (r.answers || []).forEach((a) => {
@@ -156,6 +190,10 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       // Angka, bukan teks: supaya bisa langsung disortir dan dirata-ratakan di spreadsheet.
       menit === null ? "" : bulatkanMenit(menit),
       clean(asesmenDurasi(menit, survey.aturanDurasi)),
+      // "1 menit 54 detik": kolom Durasi berupa menit DESIMAL (1,9 = 1 menit 54 detik).
+      // Dari angka yang sama dengan kolom Durasi (sudah dibulatkan), supaya 1,9 terbaca
+      // 1 menit 54 detik — bukan 1 menit 53 detik dari detik aslinya.
+      clean(formatLamaPengisian(menit === null ? null : bulatkanMenit(menit))),
       ...attrKeys.map((k) => clean(attrs[k] ?? "")),
       ...questions.map((q) => clean(wilayah.has(q) ? bersihkanKodeWilayah(map[q] ?? "") : (map[q] ?? ""))),
     ];

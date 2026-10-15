@@ -6,7 +6,7 @@
 // bentuk di tengah jalan. Analisis lengkap (termasuk atribut pembobot) tetap lewat
 // ekspor Excel; sheet ini untuk PEMANTAUAN tim.
 
-import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit } from "./asesmenDurasi.js";
+import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit, formatLamaPengisian } from "./asesmenDurasi.js";
 
 // Diekspor ulang supaya pemakai lama (skrip lengkapi-sheets-durasi) tidak perlu berubah.
 export { asesmenDurasi } from "./asesmenDurasi.js";
@@ -72,8 +72,10 @@ const FIXED_HEADER = ["Nomor", "Nama", "Sumber Kontak", "Mulai", "Selesai"] as c
 // pertanyaan ketiga, dan seterusnya. Tidak ada galat, spreadsheet tetap terisi, dan
 // barisnya baru ketahuan salah setelah angkanya dianalisis.
 //
-// Di akhir, baris lama sekadar kosong di dua kolom terakhir dan tidak ada yang bergeser.
-const TRAILING_HEADER = ["Durasi (menit)", "Asesmen Durasi"] as const;
+// Di akhir, baris lama sekadar kosong di kolom-kolom terakhir dan tidak ada yang bergeser.
+// "Lama Pengisian" menyusul paling akhir karena alasan yang sama: tab yang sudah punya dua
+// kolom durasi mendapat judulnya di kanan (ensureTab → judulYangKurang), tanpa menggeser.
+export const TRAILING_HEADER = ["Durasi (menit)", "Asesmen Durasi", "Lama Pengisian"] as const;
 
 export function sheetHeader(questions: SheetQuestion[]): string[] {
   return [...FIXED_HEADER, ...questions.map((q) => q.text), ...TRAILING_HEADER];
@@ -119,7 +121,40 @@ export function sheetRow(input: {
     // Angka, bukan teks: Sheets perlu bisa menyortir dan merata-ratakannya.
     menit === null ? "" : bulatkanMenit(menit),
     asesmenDurasi(menit, input.aturanDurasi),
+    // "1 menit 54 detik" — arti angka desimal di kolom Durasi, yang sering terbaca keliru.
+    // Dari angka yang SAMA dengan kolom Durasi (sudah dibulatkan): 1,9 harus terbaca
+    // 1 menit 54 detik, bukan 1 menit 53 detik dari detik aslinya — kalau tidak, kolom
+    // penjelas justru tampak membantah angka yang dijelaskannya.
+    formatLamaPengisian(menit === null ? null : bulatkanMenit(menit)),
   ];
+}
+
+// Susun baris untuk tab yang judul kolomnya SEBENARNYA `aktual`.
+//
+// Kolom identitas dan pertanyaan tetap ditaruh menurut URUTAN — begitulah tab itu dibuat.
+// Kolom buntut (durasi, asesmen, lama pengisian) ditaruh menurut JUDULNYA: di tab lama, tim
+// bisa saja sudah menambah kolom sendiri tepat di kanan "Asesmen Durasi" — "Catatan QC"
+// misalnya — dan menulis menurut urutan akan mengisi kolom itu dengan data otomatis tanpa
+// galat apa pun. Kolom buntut yang judulnya tidak ada di tab dilewati: kolom kosong jauh
+// lebih tidak berbahaya daripada data di bawah judul yang salah.
+//
+// Tab yang judul kolomnya belum ada sama sekali (baris pertama kosong) tetap menurut urutan,
+// seperti sebelumnya.
+export function susunBarisSheet(
+  diharapkan: readonly string[],
+  aktual: readonly string[],
+  nilai: readonly (string | number)[],
+): (string | number)[] {
+  if (!aktual.length) return [...nilai];
+  const awalBuntut = diharapkan.length - TRAILING_HEADER.length;
+  const baris: (string | number)[] = nilai.slice(0, awalBuntut);
+  for (let k = awalBuntut; k < diharapkan.length; k++) {
+    const idx = aktual.findIndex((h, i) => i >= awalBuntut && h.trim() === diharapkan[k]);
+    if (idx < 0) continue;
+    while (baris.length < idx) baris.push("");
+    baris[idx] = nilai[k] ?? "";
+  }
+  return baris;
 }
 
 // Terima ID spreadsheet ATAU URL lengkapnya — orang hampir selalu menyalin URL dari

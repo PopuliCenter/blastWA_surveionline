@@ -1,5 +1,12 @@
 import { Button, Input, theme } from "../../lib/ui";
-import { ATURAN_DURASI_BAWAAN, MAKS_BATAS_DURASI, MAKS_LABEL_DURASI, galatAturanDurasi } from "../../lib/exportSurvey";
+import {
+  ATURAN_DURASI_BAWAAN,
+  MAKS_BATAS_DURASI,
+  MAKS_LABEL_DURASI,
+  galatAturanDurasi,
+  menitDari,
+  formatLamaPengisian,
+} from "../../lib/exportSurvey";
 
 // Penyunting aturan kolom "Asesmen Durasi" — dipakai builder survei.
 //
@@ -12,9 +19,22 @@ import { ATURAN_DURASI_BAWAAN, MAKS_BATAS_DURASI, MAKS_LABEL_DURASI, galatAturan
 
 const salin = (a) => ({ batas: a.batas.map((b) => ({ ...b })), selebihnya: a.selebihnya });
 const judulKolom = { fontSize: 12.5, fontWeight: 600, color: theme.text };
-// Number("") bernilai 0, jadi kolom kosong harus ditolak lebih dulu — kalau tidak, labelnya
-// berbunyi "Lebih dari  menit".
-const fmtMenit = (n) => (n !== "" && n != null && Number.isFinite(Number(n)) ? String(n).replace(".", ",") : "…");
+// Isi kolom batas: angka tersimpan ditulis dengan koma desimal ("2,5"); teks yang sedang
+// diketik dibiarkan apa adanya, supaya "2," tidak langsung berubah jadi "2" di tengah ketikan.
+//
+// Batas yang dulu diisi "2:20" tersimpan sebagai 2,333… menit; ia ditampilkan kembali sebagai
+// menit:detik, bukan pecahan panjang yang tak terbaca.
+const isiKolom = (v) => {
+  if (typeof v !== "number") return v ?? "";
+  if (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9) return String(v).replace(".", ",");
+  const detik = Math.round(v * 60);
+  return `${Math.floor(detik / 60)}:${String(detik % 60).padStart(2, "0")}`;
+};
+// Batas dibacakan dalam menit DAN detik: "2,5 menit" sering dikira 2 menit 50 detik.
+const bacaMenit = (v) => {
+  const n = menitDari(v);
+  return Number.isFinite(n) && n > 0 ? formatLamaPengisian(n) : "…";
+};
 
 export function AturanDurasiEditor({ nilai, onChange }) {
   const a = nilai || ATURAN_DURASI_BAWAAN;
@@ -34,22 +54,18 @@ export function AturanDurasiEditor({ nilai, onChange }) {
         <div />
         {a.batas.map((b, i) => (
           <div key={i} style={{ display: "contents" }}>
+            {/* Kolom TEKS, bukan type="number": kolom angka bawaan peramban tidak mengenali
+                koma desimal di banyak lokal, dan "2,5" sampai sebagai isian kosong. Teksnya
+                dibaca menitDari — koma maupun titik. */}
             <Input
-              type="number"
-              min="0.1"
-              step="0.1"
               inputMode="decimal"
               aria-label={`Batas ${i + 1}: sampai berapa menit`}
-              value={b.sampai}
-              onChange={(e) =>
-                ubah((x) => {
-                  // Disimpan sebagai angka; kolom yang dikosongkan ditolak validasi.
-                  x.batas[i].sampai = e.target.value === "" ? "" : Number(e.target.value);
-                })
-              }
+              value={isiKolom(b.sampai)}
+              onChange={(e) => ubah((x) => (x.batas[i].sampai = e.target.value))}
+              hint={bacaMenit(b.sampai)}
             />
             <Input
-              aria-label={`Label untuk durasi sampai ${fmtMenit(b.sampai)} menit`}
+              aria-label={`Label untuk durasi sampai ${bacaMenit(b.sampai)}`}
               value={b.label}
               maxLength={MAKS_LABEL_DURASI}
               onChange={(e) => ubah((x) => (x.batas[i].label = e.target.value))}
@@ -68,7 +84,7 @@ export function AturanDurasiEditor({ nilai, onChange }) {
       </div>
 
       <Input
-        label={`Lebih dari ${fmtMenit(terakhir?.sampai)} menit`}
+        label={`Lebih dari ${bacaMenit(terakhir?.sampai)}`}
         value={a.selebihnya}
         maxLength={MAKS_LABEL_DURASI}
         onChange={(e) => ubah((x) => (x.selebihnya = e.target.value))}
@@ -86,7 +102,7 @@ export function AturanDurasiEditor({ nilai, onChange }) {
             ubah((x) => {
               // Batas baru disisipkan di akhir, sedikit di atas batas terakhir, dan label
               // "selebihnya" yang lama tetap di ujung — pemakai tinggal mengganti angkanya.
-              const n = Number(terakhir?.sampai);
+              const n = menitDari(terakhir?.sampai);
               x.batas.push({ sampai: Number.isFinite(n) ? n + 10 : 10, label: "" });
             })
           }
