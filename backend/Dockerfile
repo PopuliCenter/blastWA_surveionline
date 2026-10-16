@@ -20,5 +20,7 @@ RUN npm ci --omit=dev
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY --from=build /app/dist ./dist
+# Data batas provinsi (lokasi responden → provinsi, peta sebaran). Lihat data/README.md.
+COPY data ./data
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

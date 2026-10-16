@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cleanProfileName } from "../lib/profileName.js";
+import { koordinatDari } from "../lib/lokasi.js";
 import type {
   MessagingProvider,
   NormalizedInbound,
@@ -304,6 +305,22 @@ export class MetaCloudAdapter implements MessagingProvider {
     });
   }
 
+  // Pesan dengan tombol "Kirim lokasi". Pesan service biasa: hanya bisa dikirim selama
+  // jendela 24 jam terbuka, dan tidak punya versi template. Teks maksimal 1024 karakter.
+  async sendLocationRequest(input: { to: string; text: string }): Promise<SendResult> {
+    return this.post({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: input.to,
+      type: "interactive",
+      interactive: {
+        type: "location_request_message",
+        body: { text: input.text.slice(0, 1024) },
+        action: { name: "send_location" },
+      },
+    });
+  }
+
   verifyWebhook(req: WebhookRequest): boolean | string {
     // GET challenge dari Meta
     const mode = req.query["hub.mode"];
@@ -374,6 +391,26 @@ export class MetaCloudAdapter implements MessagingProvider {
               senderName: nameOf(msg?.from),
               interactiveType: "nfm_reply",
               flowResponse,
+              messageId: msg?.id,
+              timestamp: tsFromUnix(msg?.timestamp),
+              raw: msg,
+            });
+            continue;
+          }
+
+          // Lokasi — dari tombol "Kirim lokasi" maupun lampiran; bentuk webhook-nya sama.
+          // Dulu diteruskan tanpa teks dan tanpa koordinat: di tengah survei dibalas "Mohon
+          // balas dengan teks", dan dari penerima blast justru memulai survei.
+          const loc =
+            msg?.type === "location" ? koordinatDari(msg?.location?.latitude, msg?.location?.longitude) : null;
+          if (loc) {
+            out.push({
+              vendor: this.name,
+              kind: "message",
+              from: msg?.from,
+              senderName: nameOf(msg?.from),
+              location: { latitude: loc.lat, longitude: loc.lng },
+              contextId: typeof msg?.context?.id === "string" ? msg.context.id : undefined,
               messageId: msg?.id,
               timestamp: tsFromUnix(msg?.timestamp),
               raw: msg,

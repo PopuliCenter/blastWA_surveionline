@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { exportResponses, ditolakKuota } from "../lib/exportSurvey";
+import { exportResponses, ditolakKuota, adaKolomLokasi, labelStatusLokasi } from "../lib/exportSurvey";
+import { ringkasLokasi, URUTAN_STATUS } from "../lib/petaSebaran";
+import { PetaSebaran } from "./survey/PetaSebaran";
 import { tally, distribusiWilayah, distribusiPilihanGanda, nilaiTampil } from "../lib/ringkasJawaban";
 import { TYPE_LABEL } from "./survey/constants";
 import {
@@ -13,6 +15,7 @@ import {
   Notice,
   Loading,
   Empty,
+  StatStrip,
   useLoader,
   useIsMobile,
   theme,
@@ -164,6 +167,11 @@ export default function Reports() {
         return m;
       }),
     [responses],
+  );
+
+  const lokasi = useMemo(
+    () => (survey && adaKolomLokasi(survey, responses) ? ringkasLokasi(responses) : null),
+    [survey, responses],
   );
 
   const questions = survey?.questions || [];
@@ -344,6 +352,8 @@ export default function Reports() {
                   </div>
                 )}
               </Card>
+
+              {lokasi?.diminta ? <KartuLokasi lokasi={lokasi} /> : null}
 
               {/* Ringkasan jawaban per pertanyaan */}
               <Card title="Ringkasan Jawaban per Pertanyaan" style={{ marginBottom: 16 }}>
@@ -533,6 +543,52 @@ function QuestionBreakdown({ q, values, total }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+// Pemeriksaan wilayah dari lokasi yang dibagikan: apakah responden benar-benar berada di
+// provinsi yang ia sebut, dan di mana saja mereka tersebar.
+function KartuLokasi({ lokasi }) {
+  const { diminta, dibagikan, status } = lokasi;
+  const persen = (n, dari) => (dari ? Math.round((n / dari) * 100) : 0);
+  const statusTampil = URUTAN_STATUS.filter((s) => status[s]).map((s) => [labelStatusLokasi(s), status[s]]);
+  return (
+    <Card title="Lokasi Responden" style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <StatStrip
+          items={[
+            { label: "Dimintai lokasi", value: diminta, tone: "blue" },
+            { label: `Membagikan (${persen(dibagikan, diminta)}%)`, value: dibagikan, tone: "purple" },
+            { label: "Sesuai provinsinya", value: status.sesuai, tone: "green" },
+            { label: "Beda provinsi", value: status["tidak-sesuai"], tone: "red" },
+          ]}
+        />
+      </div>
+      <div style={{ display: "grid", gap: 18 }}>
+        <div style={{ display: "grid", gap: 14 }}>
+          <SubJudul>Pemeriksaan wilayah</SubJudul>
+          <Distribusi data={statusTampil} total={diminta} />
+          <div style={{ fontSize: 11.5, color: theme.textMuted, lineHeight: 1.5, maxWidth: 560 }}>
+            Provinsi lokasi dibandingkan dengan provinsi yang disebut responden.
+            {status["tidak-sesuai"]
+              ? ' "Beda provinsi" belum tentu salah — responden bisa sedang bepergian — tapi layak diperiksa ulang (Survei → Respons → tab Beda provinsi).'
+              : ""}
+          </div>
+        </div>
+        {dibagikan ? (
+          <>
+            <div style={{ display: "grid", gap: 14 }}>
+              <SubJudul>Peta sebaran</SubJudul>
+              <PetaSebaran titik={lokasi.titik} perProvinsi={lokasi.perProvinsi} />
+            </div>
+            <div style={{ display: "grid", gap: 14 }}>
+              <SubJudul>Provinsi lokasi</SubJudul>
+              <Distribusi data={lokasi.distribusiProvinsi} total={dibagikan} />
+            </div>
+          </>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 

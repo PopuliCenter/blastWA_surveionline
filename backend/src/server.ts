@@ -7,6 +7,7 @@ import { registerAuth } from "./plugins/authPlugin.js";
 import { loadProviders } from "./providers/registry.js";
 import { authRoutes } from "./routes/auth.js";
 import { surveyRoutes } from "./routes/surveys.js";
+import { petaRoutes } from "./routes/peta.js";
 import { segmentRoutes } from "./routes/segments.js";
 import { blastRoutes } from "./routes/blasts.js";
 import { vendorRoutes } from "./routes/vendors.js";
@@ -84,6 +85,7 @@ async function main() {
   await app.register(blastRoutes);
   await app.register(vendorRoutes);
   await app.register(reportRoutes);
+  await app.register(petaRoutes);
   await app.register(userRoutes);
   await app.register(contactRoutes);
   await app.register(autoReplyRoutes);

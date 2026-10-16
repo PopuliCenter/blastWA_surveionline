@@ -3,6 +3,7 @@ import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import { handleInboundEvents } from "../services/surveyEngine.js";
 import type { WebhookRequest } from "../providers/types.js";
+import { saringLokasi } from "../lib/lokasi.js";
 
 function toWebhookRequest(req: FastifyRequest): WebhookRequest {
   return {
@@ -13,8 +14,13 @@ function toWebhookRequest(req: FastifyRequest): WebhookRequest {
   };
 }
 
+// Lokasi di payload disaring dulu (dibulatkan ±1,1 km, nama tempat & alamat dibuang): log
+// disimpan 30 hari, dan tanpa ini titik GPS mentah responden ikut tersimpan di sana meski
+// kolom lokasi di respons sudah dibulatkan.
 async function log(vendor: string, event: string, status: string, payload: unknown, note?: string) {
-  await prisma.webhookLog.create({ data: { vendor, event, status, payload: payload as object, note } }).catch(() => {});
+  await prisma.webhookLog
+    .create({ data: { vendor, event, status, payload: saringLokasi(payload) as object, note } })
+    .catch(() => {});
 }
 
 // Plafon rate-limit longgar khusus webhook — menimpa limit global 300/menit/IP.

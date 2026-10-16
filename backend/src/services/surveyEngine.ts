@@ -1,6 +1,6 @@
 import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
-import type { NormalizedInbound } from "../providers/types.js";
+import type { NormalizedInbound, SendResult } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
 import { ALLOWED_FROM, MESSAGE_ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
 import {
@@ -26,6 +26,15 @@ import { findAutoResponse } from "./autoResponder.js";
 import { enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
+import {
+  BERLAKU_PERMINTAAN_MS,
+  PESAN_MINTA_LOKASI_BAWAAN,
+  PETUNJUK_LOKASI_TANPA_TOMBOL,
+  TERIMA_KASIH_LOKASI,
+  bulatkanKoordinat,
+  saringLokasi,
+} from "../lib/lokasi.js";
+import { provinsiDariTitik } from "./petaProvinsi.js";
 import {
   validateAnswer,
   formatQuestion,
@@ -151,7 +160,9 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   const storedText =
     ev.interactiveType === "nfm_reply"
       ? "[formulir survei terkirim]"
-      : (ev.text ?? (ev.mediaType ? `[${ev.mediaType}]` : null));
+      : ev.location
+        ? "[lokasi]"
+        : (ev.text ?? (ev.mediaType ? `[${ev.mediaType}]` : null));
   await prisma.message.create({
     data: {
       contactId: contact.id,
@@ -159,7 +170,9 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       vendor: ev.vendor,
       vendorMessageId: ev.messageId,
       text: storedText,
-      payload: ev.raw as object,
+      // Lokasi di payload disaring (dibulatkan, nama tempat & alamat dibuang) — titik GPS
+      // mentah tidak boleh tersimpan di mana pun, termasuk riwayat pesan.
+      payload: saringLokasi(ev.raw) as object,
     },
   });
 
@@ -173,6 +186,27 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   if (ev.interactiveType === "nfm_reply" && ev.flowResponse) {
     await handleFlowReply(ev, contact.id, phone, ev.vendor);
     return;
+  }
+
+  // Lokasi yang dibagikan. Bila ada permintaan lokasi yang masih berlaku, ini jawabannya.
+  // Bila tidak, lokasi TIDAK BOLEH memulai apa pun: dulu pesan lokasi dari penerima blast
+  // terbaca sebagai pesan kosong yang lolos penyaring, dan survei terkirim ke orang yang
+  // hanya membagikan lokasinya. Di tengah survei chat, ia diteruskan ke bawah dan dibalas
+  // bahwa jawabannya harus berupa teks — seperti sebelumnya.
+  if (ev.location) {
+    // Hanya lewat vendor yang bisa MEMINTA lokasi (lihat kirimPenutup): nomor yang sama
+    // bisa menghubungi beberapa nomor kita, dan lokasi lewat nomor lain bukan jawaban
+    // atas permintaan itu.
+    const bisaMinta = typeof getProvider(ev.vendor).sendLocationRequest === "function";
+    if (bisaMinta && (await simpanLokasi(ev.location, ev.contextId, contact.id, phone, ev.vendor))) return;
+    // Sama dengan sesi yang dipilih langkah 1 di bawah (yang TERBARU), agar lokasi tidak
+    // pernah jatuh ke cabang formulir Flow / auto-reply sebagai pesan kosong.
+    const berjalan = await prisma.surveyResponse.findFirst({
+      where: { contactId: contact.id, completedAt: null },
+      orderBy: { startedAt: "desc" },
+      select: { survey: { select: { mode: true } } },
+    });
+    if (!berjalan || berjalan.survey.mode === "flow") return;
   }
 
   // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi.
@@ -594,7 +628,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       const hasil = lengkap ? await pulihkanRespons(surveyResponse.id) : "masih-penuh";
       if (hasil === "dipulihkan") {
         await enqueueSheetSync(surveyResponse.id);
-        await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
+        await kirimPenutup(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
       } else if (hasil === "masih-penuh") {
         await balasKuotaPenuh(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
       }
@@ -679,7 +713,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     return;
   }
   await enqueueSheetSync(surveyResponse.id);
-  await reply(vendor, phone, closingText(surveyResponse.survey.closingMessage), contactId);
+  await kirimPenutup(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
 }
 
 async function advanceSurvey(
@@ -694,6 +728,8 @@ async function advanceSurvey(
     id: string;
     closingMessage: string | null;
     pesanKuotaPenuh: string | null;
+    mintaLokasi: boolean;
+    pesanMintaLokasi: string | null;
     // Pertanyaan yang ditunjuk survei sebagai sumber provinsi (selain tipe "wilayah").
     questionProvinsiId: string | null;
   },
@@ -771,7 +807,158 @@ async function advanceSurvey(
     return;
   }
   await enqueueSheetSync(responseId);
-  await reply(vendor, phone, closingText(survei.closingMessage), contactId);
+  await kirimPenutup(vendor, phone, contactId, responseId, survei);
+}
+
+// Kata penutup — dan, bila survei meminta lokasi, permintaan lokasinya dalam pesan yang SAMA.
+//
+// Satu pesan, bukan dua: sejak Oktober 2026 pesan service ikut ditagih per pesan, dan
+// penutup + permintaan terpisah berarti dua tagihan per responden.
+//
+// HANYA vendor yang punya pesan bertombol "Kirim lokasi" (Meta). Di vendor lain responden
+// harus berbagi lewat lampiran, dan di sana janji privasinya tidak bisa ditepati: Baileys
+// adalah perangkat tertaut, jadi titik persis, nama tempat, dan lokasi langsung (live)
+// ikut tersimpan di ponsel operator; bentuk pesan lokasi Qontak tidak terdokumentasi.
+//
+// Tidak diminta dari penolak persetujuan: orang yang baru saja menyatakan tidak bersedia
+// ikut tidak semestinya diminta data pribadi lagi.
+const BATAS_BADAN_INTERAKTIF = 1024;
+
+async function kirimPenutup(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  responseId: string,
+  survei: { closingMessage: string | null; mintaLokasi: boolean; pesanMintaLokasi: string | null },
+): Promise<void> {
+  const penutup = closingText(survei.closingMessage);
+  const provider = getProvider(vendor);
+  if (!survei.mintaLokasi || typeof provider.sendLocationRequest !== "function") {
+    await reply(vendor, phone, penutup, contactId);
+    return;
+  }
+  const r = await prisma.surveyResponse.findUnique({ where: { id: responseId }, select: { consentDitolak: true } });
+  if (r?.consentDitolak) {
+    await reply(vendor, phone, penutup, contactId);
+    return;
+  }
+
+  // Dicatat SEBELUM dikirim: lokasi yang dibagikan sangat cepat tidak boleh tiba lebih dulu
+  // daripada catatan permintaannya — tanpa catatan itu ia dibuang sebagai pesan liar.
+  await prisma.surveyResponse.update({
+    where: { id: responseId },
+    data: { lokasiDimintaPada: new Date(), lokasiPesanId: null },
+  });
+
+  const minta = survei.pesanMintaLokasi?.trim() || PESAN_MINTA_LOKASI_BAWAAN;
+  // Badan pesan bertombol dibatasi Meta 1024 karakter. Penutup yang panjang dikirim sendiri
+  // lebih dulu — memotongnya justru membuang kalimat permintaan lokasinya.
+  const gabung = `${penutup}\n\n${minta}`;
+  const satuPesan = gabung.length <= BATAS_BADAN_INTERAKTIF;
+  const teks = satuPesan ? gabung : minta;
+
+  // Catatan permintaan dibatalkan bila permintaannya TIDAK PERNAH sampai ke responden —
+  // kalau tidak, ia tercatat "tidak membagikan" padahal tak pernah diminta, dan lokasi
+  // yang ia kirim untuk keperluan lain dalam 24 jam tertangkap sebagai jawaban survei.
+  // Yang menentukan "sampai" hanya hasil KIRIM. Galat menulis riwayat pesan sesudahnya
+  // tidak mengubahnya: pesan yang sudah sampai tidak boleh dikirim ulang (dua tagihan),
+  // dan catatan permintaan yang sudah sampai tidak boleh hilang.
+  let sampai = false;
+  const catatPesan = (hasil: SendResult, text: string) =>
+    prisma.message.create({
+      data: {
+        contactId,
+        direction: "out",
+        vendor,
+        vendorMessageId: hasil.vendorMessageId || null,
+        text,
+        payload: hasil.raw as object,
+        isBot: true,
+        source: "survey",
+      },
+    });
+  try {
+    if (!satuPesan) await reply(vendor, phone, penutup, contactId);
+
+    let hasil: SendResult | null = null;
+    try {
+      hasil = await provider.sendLocationRequest({ to: phone, text: teks });
+    } catch (err) {
+      logError("backend", err, { scope: "kirimPenutup", responseId });
+    }
+    if (hasil && hasil.status !== "failed") {
+      sampai = true;
+      // ID pesan permintaan disimpan: Meta menyertakannya (context.id) pada lokasi yang
+      // dikirim lewat tombol ini, jadi lokasinya bisa dicocokkan ke respons yang tepat.
+      await prisma.surveyResponse.update({
+        where: { id: responseId },
+        data: { lokasiPesanId: hasil.vendorMessageId || null },
+      });
+      await catatPesan(hasil, teks);
+      return;
+    }
+    if (hasil) {
+      logError("backend", new Error("Permintaan lokasi ditolak vendor — memakai teks biasa"), {
+        responseId,
+        vendorResponse: hasil.raw,
+      });
+    }
+
+    // Cadangan: teks biasa, lokasi dibagikan lewat lampiran.
+    const cadanganTeks = `${teks}\n\n${PETUNJUK_LOKASI_TANPA_TOMBOL}`;
+    const cadangan = await provider.sendText({ to: phone, text: cadanganTeks });
+    sampai = cadangan.status !== "failed";
+    await catatPesan(cadangan, cadanganTeks);
+  } finally {
+    if (!sampai)
+      await prisma.surveyResponse.updateMany({
+        where: { id: responseId, lokasiDiterimaPada: null },
+        data: { lokasiDimintaPada: null },
+      });
+  }
+}
+
+// Simpan lokasi yang dibagikan sebagai jawaban atas permintaan yang masih berlaku (24 jam).
+// false = tidak ada permintaan yang menunggu; lokasinya bukan untuk survei mana pun.
+//
+// Respons mana yang dijawab:
+//  1. yang pesan permintaannya dijawab (contextId — lokasi lewat tombol di pesan itu);
+//  2. selain itu, permintaan TERAKHIR kontak ini. Bukan "permintaan terakhir yang belum
+//     terjawab": dengan aturan itu lokasi yang dibagikan ulang — atau webhook yang dikirim
+//     Meta dua kali — pindah ke permintaan lebih lama yang sengaja diabaikan responden,
+//     padahal persetujuan berbagi lokasi berlaku per permintaan.
+// Permintaan yang sudah terjawab tidak ditimpa: lokasi berikutnya diabaikan.
+//
+// Provinsi dihitung dari titik ASLI, lalu yang disimpan hanya titik yang dibulatkan (±1,1 km).
+async function simpanLokasi(
+  lokasi: { latitude: number; longitude: number },
+  contextId: string | undefined,
+  contactId: string,
+  phone: string,
+  vendor: string,
+): Promise<boolean> {
+  const pilih = { id: true, lokasiDimintaPada: true, lokasiDiterimaPada: true } as const;
+  const r =
+    (contextId
+      ? await prisma.surveyResponse.findFirst({ where: { contactId, lokasiPesanId: contextId }, select: pilih })
+      : null) ??
+    (await prisma.surveyResponse.findFirst({
+      where: { contactId, lokasiDimintaPada: { not: null } },
+      orderBy: { lokasiDimintaPada: "desc" },
+      select: pilih,
+    }));
+  if (!r?.lokasiDimintaPada || r.lokasiDimintaPada.getTime() < Date.now() - BERLAKU_PERMINTAAN_MS) return false;
+  if (r.lokasiDiterimaPada) return true;
+
+  const asli = { lat: lokasi.latitude, lng: lokasi.longitude };
+  const kodeProvinsiLokasi = await provinsiDariTitik(asli);
+  const bulat = bulatkanKoordinat(asli);
+  const { count } = await prisma.surveyResponse.updateMany({
+    where: { id: r.id, lokasiDiterimaPada: null },
+    data: { lokasiDiterimaPada: new Date(), lokasiLat: bulat.lat, lokasiLng: bulat.lng, kodeProvinsiLokasi },
+  });
+  if (count) await reply(vendor, phone, TERIMA_KASIH_LOKASI, contactId);
+  return true;
 }
 
 // Balasan "kuota penuh" untuk tindakan yang BERULANG — mengetik kata pemicu lagi, atau

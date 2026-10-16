@@ -8,6 +8,8 @@ import { galatAturanDurasi, menitDari } from "../lib/asesmenDurasi.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
 import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
+import { statusLokasi } from "../lib/lokasi.js";
+import { batasTerpasang, provinsiDariTitik } from "../services/petaProvinsi.js";
 
 // Diekspor agar daftar tipenya bisa diuji terhadap daftar yang ditawarkan UI. Keduanya
 // pernah berbeda isi, dan selisihnya baru ketahuan dari pemakai yang gagal menyimpan.
@@ -44,6 +46,10 @@ export const surveySchema = z.object({
   // Wajib terdaftar di sini: z.object membuang kunci yang tak dikenal TANPA galat, jadi
   // tanpa baris ini builder menyimpan dengan HTTP 200 dan pesannya tak pernah tersimpan.
   pesanKuotaPenuh: z.string().max(1000).optional().nullable(),
+  // Minta lokasi setelah responden selesai (lihat kirimPenutup di mesin survei). Teksnya
+  // kosong = teks bawaan, yang menyebut tujuan, ketelitian, dan bahwa boleh dilewati.
+  mintaLokasi: z.boolean().default(false),
+  pesanMintaLokasi: z.string().max(900).optional().nullable(),
   // null = kembali ke aturan bawaan. Diperiksa dengan aturan yang SAMA dengan yang dipakai
   // saat membaca (lib/asesmenDurasi.ts), supaya yang lolos disimpan pasti terpakai.
   aturanDurasi: z
@@ -248,24 +254,51 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
         answers: { include: { question: { select: { text: true, order: true } } } },
       },
     });
-    return responses.map((r) => ({
-      id: r.id,
-      phone: r.contact.phone,
-      name: r.contact.name,
-      consentSource: r.contact.consentSource,
-      attributes: r.contact.attributes ?? {},
-      startedAt: r.startedAt,
-      completedAt: r.completedAt,
-      // Dikirim, bukan disaring di query: operator perlu MELIHAT respons yang ditolak
-      // kuota untuk menjawab "kenapa baris Excel lebih sedikit", dan masih bisa
-      // menghapusnya. Ekspor dan analitik di klien yang mengecualikannya.
-      ditolakKuotaPada: r.ditolakKuotaPada,
-      alasanDitolakKuota: r.alasanDitolakKuota,
-      answers: r.answers
-        .slice()
-        .sort((a, b) => (a.question.order ?? 0) - (b.question.order ?? 0))
-        .map((a) => ({ question: a.question.text, value: a.value })),
-    }));
+    // Lokasi yang masuk SEBELUM data batas provinsi dipasang tersimpan tanpa provinsi.
+    // Begitu datanya ada, provinsinya dihitung di sini dari titik yang tersimpan — tanpa
+    // menunggu skrip lengkapi:lokasi dijalankan (skrip itu yang menyimpannya permanen).
+    const terpasang = await batasTerpasang();
+    const provinsiLokasi = new Map<string, string | null>();
+    for (const r of responses) {
+      if (r.kodeProvinsiLokasi || !terpasang || !r.lokasiDiterimaPada) continue;
+      if (r.lokasiLat == null || r.lokasiLng == null) continue;
+      provinsiLokasi.set(r.id, await provinsiDariTitik({ lat: r.lokasiLat, lng: r.lokasiLng }));
+    }
+    return responses.map((r) => {
+      const kodeProvinsiLokasi = r.kodeProvinsiLokasi ?? provinsiLokasi.get(r.id) ?? null;
+      return {
+        id: r.id,
+        phone: r.contact.phone,
+        name: r.contact.name,
+        consentSource: r.contact.consentSource,
+        attributes: r.contact.attributes ?? {},
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+        // Dikirim, bukan disaring di query: operator perlu MELIHAT respons yang ditolak
+        // kuota untuk menjawab "kenapa baris Excel lebih sedikit", dan masih bisa
+        // menghapusnya. Ekspor dan analitik di klien yang mengecualikannya.
+        ditolakKuotaPada: r.ditolakKuotaPada,
+        alasanDitolakKuota: r.alasanDitolakKuota,
+        // Lokasi yang dibagikan sesudah selesai: titiknya sudah dibulatkan (±1 km) saat
+        // disimpan. statusLokasi membandingkan provinsi titik itu dengan provinsi yang
+        // DISEBUT responden — itulah pemeriksaan "benar-benar di wilayahnya".
+        statusLokasi: statusLokasi({ ...r, kodeProvinsiLokasi }, terpasang),
+        lokasi:
+          r.lokasiDiterimaPada && r.lokasiLat != null && r.lokasiLng != null
+            ? {
+                lat: r.lokasiLat,
+                lng: r.lokasiLng,
+                kodeProvinsi: kodeProvinsiLokasi,
+                provinsi: PROVINSI.find((p) => p.kode === kodeProvinsiLokasi)?.nama ?? null,
+              }
+            : null,
+        kodeProvinsi: r.kodeProvinsi,
+        answers: r.answers
+          .slice()
+          .sort((a, b) => (a.question.order ?? 0) - (b.question.order ?? 0))
+          .map((a) => ({ question: a.question.text, value: a.value })),
+      };
+    });
   });
 
   // ===== Kuota responden =====

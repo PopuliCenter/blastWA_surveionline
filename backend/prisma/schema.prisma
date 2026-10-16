@@ -98,6 +98,13 @@ model Survey {
   // Bentuk: { batas: [{ sampai: <menit>, label }], selebihnya: <label> }. Lihat
   // lib/asesmenDurasi.ts.
   aturanDurasi    Json?
+  // Minta lokasi responden SETELAH ia selesai (pesan dengan tombol "Kirim lokasi"), untuk
+  // memastikan ia benar berada di provinsi yang disebutnya dan untuk peta sebaran.
+  // Mati secara bawaan: lokasi adalah data pribadi yang butuh persetujuan tersendiri, dan
+  // tiap permintaan adalah satu pesan berbayar.
+  mintaLokasi     Boolean      @default(false)
+  // Teks permintaan lokasi khusus survei ini; null = teks bawaan (lib/lokasi.ts).
+  pesanMintaLokasi String?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]
@@ -280,6 +287,24 @@ model SurveyResponse {
   // berisi jawaban sampai pertanyaan wilayah, jadi tidak bisa dipulihkan menjadi data utuh.
   ditolakKuotaPada   DateTime?
   alasanDitolakKuota String? // "global" | "provinsi"
+  // Lokasi yang DIBAGIKAN responden atas permintaan (Survey.mintaLokasi).
+  //
+  // Disimpan DIBULATKAN ke dua desimal (±1,1 km), bukan titik GPS mentah: cukup untuk
+  // memeriksa provinsi dan menggambar peta sebaran, tapi tidak menunjuk rumah. Provinsinya
+  // dihitung dari titik ASLI sebelum dibulatkan, lalu titik aslinya dibuang.
+  //
+  // Ini lokasi yang DILAPORKAN, bukan GPS terverifikasi: layar berbagi lokasi WhatsApp
+  // punya pencarian tempat, jadi responden bisa mengirim titik mana pun.
+  lokasiDimintaPada  DateTime?
+  // ID pesan permintaan di vendor. Lokasi lewat tombol membawa ID ini (context.id), jadi
+  // bisa dicocokkan ke respons yang tepat bila kontak punya lebih dari satu permintaan.
+  lokasiPesanId      String?
+  lokasiDiterimaPada DateTime?
+  lokasiLat          Float?
+  lokasiLng          Float?
+  // Provinsi menurut lokasi (kode Kepmendagri). null = belum dibagikan, titiknya di luar
+  // batas provinsi mana pun (mis. di laut), atau data batas provinsi belum terpasang.
+  kodeProvinsiLokasi String?
   answers       Answer[]
 
   @@index([contactId])

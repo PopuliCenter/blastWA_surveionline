@@ -7,6 +7,8 @@ import {
   durasiMenit,
   asesmenDurasi,
   ditolakKuota,
+  adaKolomLokasi,
+  labelStatusLokasi,
 } from "./exportSurvey";
 
 const survey = { title: "Survei Ekonomi 2026!", questions: [{ text: "Puas?" }, { text: "Alasan?" }] };
@@ -265,5 +267,39 @@ describe("HURUF KAPITAL mencakup kolom Lama Pengisian", () => {
     };
     const { header, rows } = buildResponseRows({ title: "S", questions: [] }, [r], { upper: true });
     expect(rows[0][header.indexOf("Lama Pengisian")]).toBe("2 MENIT 30 DETIK");
+  });
+});
+
+describe("kolom lokasi di ekspor", () => {
+  const dasar = { phone: "628111", name: "A", answers: [] };
+
+  it("survei yang tidak meminta lokasi tidak mendapat kolom kosong", () => {
+    const { header } = buildResponseRows({ title: "S", questions: [] }, [{ ...dasar, statusLokasi: "tidak-diminta" }]);
+    expect(header).not.toContain("Status Lokasi");
+  });
+
+  it("provinsi lokasi dan statusnya, tanpa koordinat", () => {
+    const { header, rows } = buildResponseRows({ title: "S", questions: [], mintaLokasi: true }, [
+      {
+        ...dasar,
+        statusLokasi: "tidak-sesuai",
+        lokasi: { lat: -6.2, lng: 106.85, kodeProvinsi: "31", provinsi: "DKI Jakarta" },
+      },
+      { ...dasar, phone: "628222", statusLokasi: "belum-dibagikan", lokasi: null },
+    ]);
+    const iProv = header.indexOf("Provinsi Lokasi");
+    const iStatus = header.indexOf("Status Lokasi");
+    expect(iStatus).toBe(iProv + 1);
+    expect(rows[0][iProv]).toBe("DKI Jakarta");
+    expect(rows[0][iStatus]).toBe("Beda provinsi");
+    expect(rows[1][iProv]).toBe("");
+    expect(rows[1][iStatus]).toBe("Tidak dibagikan");
+    expect(rows[0].join(" ")).not.toContain("106.85");
+  });
+
+  it("survei yang dulu meminta lokasi tetap mengekspor kolomnya", () => {
+    expect(adaKolomLokasi({ mintaLokasi: false }, [{ statusLokasi: "sesuai" }])).toBe(true);
+    expect(labelStatusLokasi("sesuai")).toBe("Sesuai");
+    expect(labelStatusLokasi(undefined)).toBe("");
   });
 });

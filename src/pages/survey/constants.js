@@ -39,5 +39,12 @@ export function qSummary(q) {
 // PESAN_KUOTA_PENUH_BAWAAN di backend/src/services/kuotaSurvei.ts; bila salah satu diubah,
 // ubah juga yang lain. Kolom yang dikosongkan tetap memakai teks dari backend, jadi selisih
 // di sini hanya membuat contoh di layar keliru, bukan pesan yang terkirim.
+// Kembar PESAN_MINTA_LOKASI_BAWAAN di backend/src/lib/lokasi.ts — aturannya sama dengan
+// pesan kuota di atas: kolom kosong memakai teks backend, ini hanya contoh di layar.
+export const PESAN_MINTA_LOKASI_BAWAAN =
+  "Satu langkah lagi, boleh dilewati: bagikan lokasi Anda saat ini dengan menekan tombol di bawah. " +
+  "Lokasi hanya dipakai untuk memastikan sebaran wilayah responden dan disimpan dengan ketelitian sekitar 1 km. " +
+  "Abaikan pesan ini bila Anda tidak bersedia.";
+
 export const PESAN_KUOTA_PENUH_BAWAAN =
   "Terima kasih atas kesediaan Anda. Kuota responden survei ini sudah terpenuhi, sehingga kami tidak dapat mengikutsertakan jawaban baru. 🙏";

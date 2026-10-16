@@ -53,6 +53,8 @@ export const api = {
   duplicateSurvey: (id) => request(`/api/surveys/${id}/gandakan`, { method: "POST" }),
   deleteSurvey: (id) => request(`/api/surveys/${id}`, { method: "DELETE" }),
   surveyResponses: (id) => request(`/api/surveys/${id}/responses`),
+  // Garis batas provinsi untuk peta sebaran di Laporan ({ tersedia: false } bila belum dipasang).
+  petaProvinsi: () => request("/api/peta/provinsi"),
   bulkDeleteResponses: (ids) => request("/api/surveys/responses/bulk-delete", { method: "POST", body: { ids } }),
   surveyFlowJson: (id) => request(`/api/surveys/${id}/flow-json`),
 

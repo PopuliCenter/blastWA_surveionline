@@ -20,6 +20,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { env } from "../env.js";
 import { cleanProfileName } from "../lib/profileName.js";
+import { koordinatDari } from "../lib/lokasi.js";
 import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 type GwStatus = "disconnected" | "connecting" | "qr" | "connected" | "logged_out";
@@ -47,6 +48,20 @@ function unwrapMessage(msg: WAMessageContent | null | undefined): WAMessageConte
     m = inner;
   }
   return m;
+}
+
+// Lokasi yang dibagikan lewat lampiran. Dikenali supaya tidak terbaca sebagai pesan kosong
+// — dulu pesan seperti itu memulai survei. Lokasi tidak pernah DIMINTA lewat Baileys
+// (lihat kirimPenutup di mesin survei), jadi tak pernah tersimpan sebagai jawaban.
+// Lokasi langsung (live) tidak diteruskan sama sekali: tanpa teks maupun lokasi, ia
+// dilewati seperti pesan kosong lain.
+function extractLocation(
+  raw: WAMessageContent | null | undefined,
+): { latitude: number; longitude: number } | undefined {
+  const msg: any = unwrapMessage(raw);
+  const l = msg?.locationMessage;
+  const k = l ? koordinatDari(l.degreesLatitude, l.degreesLongitude) : null;
+  return k ? { latitude: k.lat, longitude: k.lng } : undefined;
 }
 
 function extractText(raw: WAMessageContent | null | undefined): string | undefined {
@@ -183,7 +198,8 @@ class BaileysGateway {
             continue;
           }
           const text = extractText(m.message);
-          if (!text) {
+          const location = extractLocation(m.message);
+          if (!text && !location) {
             dbg(`[baileys] lewati tanpa-teks dari ${jid}, tipe=${Object.keys(m.message ?? {}).join(",")}`);
             continue;
           }
@@ -219,6 +235,7 @@ class BaileysGateway {
             from,
             senderName: cleanProfileName(m.pushName),
             text,
+            ...(location ? { location } : {}),
             messageId: key.id ?? undefined,
             timestamp: new Date(tsNum * 1000).toISOString(),
             raw: m,

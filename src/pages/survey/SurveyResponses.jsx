@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import { exportResponses, ditolakKuota } from "../../lib/exportSurvey";
+import { exportResponses, ditolakKuota, labelStatusLokasi } from "../../lib/exportSurvey";
 import { confirmDialog } from "../../lib/confirm";
 import {
   Button,
@@ -28,7 +28,13 @@ const STATUS_TABS = [
   // Hanya muncul bila ada isinya. Respons ini tidak ikut tab lain — dan karena ekspor
   // mengikuti apa yang tampil, tidak pula ikut berkas — tapi tetap bisa dilihat dan dihapus.
   { id: "kuota", label: "Ditolak kuota" },
+  // Juga hanya bila ada isinya: responden yang lokasinya berada di provinsi LAIN dari yang
+  // ia sebut — kandidat untuk diperiksa ulang, bukan otomatis dibuang (orang bisa saja
+  // sedang bepergian saat membagikan lokasi).
+  { id: "lokasi-beda", label: "Beda provinsi" },
 ];
+
+const lokasiBeda = (r) => !ditolakKuota(r) && r.statusLokasi === "tidak-sesuai";
 
 // Cocokkan kata kunci ke nama, nomor, atau nilai atribut kontak.
 function matches(r, q) {
@@ -63,13 +69,18 @@ export function SurveyResponses({ survey, onClose }) {
   const doneCount = useMemo(() => responses.filter((r) => r.completedAt && !ditolakKuota(r)).length, [responses]);
   // Tab "Ditolak kuota" hilang begitu isinya habis dihapus — jangan tinggalkan pemakai di
   // tab yang tak lagi terlihat dengan daftar kosong.
-  const status = statusDipilih === "kuota" && !tolakCount ? "all" : statusDipilih;
+  const bedaCount = useMemo(() => responses.filter(lokasiBeda).length, [responses]);
+  const status =
+    (statusDipilih === "kuota" && !tolakCount) || (statusDipilih === "lokasi-beda" && !bedaCount)
+      ? "all"
+      : statusDipilih;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return responses.filter((r) => {
       if (status === "kuota") return ditolakKuota(r) && matches(r, needle);
       if (ditolakKuota(r)) return false;
+      if (status === "lokasi-beda" && !lokasiBeda(r)) return false;
       if (status === "done" && !r.completedAt) return false;
       if (status === "ongoing" && r.completedAt) return false;
       return matches(r, needle);
@@ -78,7 +89,7 @@ export function SurveyResponses({ survey, onClose }) {
   // Yang ditolak kuota memang tidak pernah masuk berkas. Di tab mereka sendiri tombol
   // ekspornya menunjukkan 0, bukan jumlah baris yang tampil, supaya tidak menjanjikan isi.
   const untukEkspor = status === "kuota" ? [] : filtered;
-  const tabs = tolakCount ? STATUS_TABS : STATUS_TABS.filter((t) => t.id !== "kuota");
+  const tabs = STATUS_TABS.filter((t) => (t.id === "kuota" ? tolakCount : t.id === "lokasi-beda" ? bedaCount : true));
 
   const total = filtered.length;
   const pageCount = Math.max(1, Math.ceil(total / perPage));
@@ -278,7 +289,16 @@ export function SurveyResponses({ survey, onClose }) {
             }}
           />
         </div>
-        <div style={{ display: "inline-flex", gap: 4, background: theme.surfaceAlt, padding: 4, borderRadius: 11 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            flexWrap: "wrap",
+            gap: 4,
+            background: theme.surfaceAlt,
+            padding: 4,
+            borderRadius: 11,
+          }}
+        >
           {tabs.map((t) => {
             const on = status === t.id;
             return (
@@ -295,6 +315,9 @@ export function SurveyResponses({ survey, onClose }) {
                   background: on ? theme.surface : "transparent",
                   color: on ? theme.primary : theme.textMuted,
                   boxShadow: on ? "0 1px 2px rgba(16,24,40,0.10)" : "none",
+                  // Tab yang tidak muat pindah utuh ke baris berikutnya, bukan diperas
+                  // jadi label dua baris.
+                  whiteSpace: "nowrap",
                 }}
               >
                 {t.label}
@@ -410,6 +433,9 @@ export function SurveyResponses({ survey, onClose }) {
                     </span>
                   </button>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {/* Di ponsel badge ini pindah ke baris kedua: di baris judul ia memeras nama
+                        responden sampai tinggal satu huruf. */}
+                    {lokasiBeda(r) && !isMobile ? <Badge tone="yellow">beda provinsi</Badge> : null}
                     {ditolakKuota(r) ? (
                       <Badge tone="red">ditolak kuota</Badge>
                     ) : (
@@ -428,8 +454,22 @@ export function SurveyResponses({ survey, onClose }) {
                   </div>
                 </div>
                 {isMobile ? (
-                  <div style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 6, marginLeft: 26 }}>
-                    {r.phone} • {fmtDate(r.startedAt)}
+                  <div
+                    style={{
+                      color: theme.textMuted,
+                      fontSize: 11.5,
+                      marginTop: 6,
+                      marginLeft: 26,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span>
+                      {r.phone} • {fmtDate(r.startedAt)}
+                    </span>
+                    {lokasiBeda(r) ? <Badge tone="yellow">beda provinsi</Badge> : null}
                   </div>
                 ) : null}
                 {open ? (
@@ -447,6 +487,15 @@ export function SurveyResponses({ survey, onClose }) {
                     ) : (
                       <div style={{ color: theme.textMuted, fontSize: 12 }}>Belum ada jawaban.</div>
                     )}
+                    {r.statusLokasi && r.statusLokasi !== "tidak-diminta" ? (
+                      <div style={{ borderLeft: `3px solid ${theme.primary}`, paddingLeft: 11, marginTop: 4 }}>
+                        <div style={{ fontSize: 12, color: theme.textMuted }}>Lokasi</div>
+                        <div style={{ fontSize: 13.5, color: theme.text }}>
+                          {r.lokasi?.provinsi ? `${r.lokasi.provinsi} — ` : ""}
+                          {labelStatusLokasi(r.statusLokasi)}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

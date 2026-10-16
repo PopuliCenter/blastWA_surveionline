@@ -28,6 +28,12 @@ export type NormalizedInbound = {
   // pesan yang diterima API-nya ternyata tidak sampai ke penerima.
   deliveryError?: string;
   interactiveType?: string; // mis. "nfm_reply" (balasan WhatsApp Flow)
+  // Lokasi yang dibagikan responden — lewat tombol "Kirim lokasi" maupun lampiran. Titik
+  // ASLI dari vendor; disimpan hanya setelah dibulatkan (lib/lokasi.ts).
+  location?: { latitude: number; longitude: number };
+  // ID pesan kita yang dijawab (Meta: message.context.id) — untuk lokasi lewat tombol
+  // "Kirim lokasi", menunjuk pesan permintaannya.
+  contextId?: string;
   flowResponse?: Record<string, unknown>; // isi response_json flow (sudah diparse)
   timestamp: string; // ISO 8601
   raw: unknown;
@@ -77,6 +83,11 @@ export interface MessagingProvider {
   markRead?(messageId: string): Promise<void>;
   /** Kirim pesan interaktif WhatsApp Flow (opsional; hanya vendor yang mendukung). */
   sendFlow?(input: SendFlowInput): Promise<SendResult>;
+  /**
+   * Kirim pesan dengan tombol "Kirim lokasi" (Meta: interactive location_request_message).
+   * Opsional: vendor tanpa dukungan jatuh ke teks berisi petunjuk lewat lampiran.
+   */
+  sendLocationRequest?(input: { to: string; text: string }): Promise<SendResult>;
   /** Kirim gambar + caption (banner pembuka survei mode chat). Opsional per vendor. */
   sendImage?(input: { to: string; link: string; caption?: string }): Promise<SendResult>;
 

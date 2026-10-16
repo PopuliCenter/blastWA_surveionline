@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cleanProfileName } from "../lib/profileName.js";
+import { koordinatDariObjek } from "../lib/lokasi.js";
 import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
 // ⚠️ SUMBER KEBENARAN: Postman collection Qontak Anda
@@ -166,6 +167,30 @@ export class QontakAdapter implements MessagingProvider {
       //   paling belakang untuk payload versi lain.
       const from =
         it.room?.account_uniq_id ?? it.from ?? it.phone ?? it.account_uniq_id ?? it.contact?.phone ?? it.sender_id;
+      // Pesan lokasi. Bentuknya tidak tercantum di dokumentasi Qontak, jadi koordinat dicari
+      // di beberapa letak dan ejaan — ejaan yang SAMA dengan yang disaring saringLokasi
+      // (lib/lokasi.ts), supaya tak ada bentuk yang diterima di sini tapi lolos penyaringan.
+      // Yang koordinatnya tak terbaca tetap TIDAK diteruskan sebagai pesan kosong — pesan
+      // kosong dari penerima blast memulai survei.
+      const tipe = String(it.type ?? it.message_type ?? it.data_message?.type ?? "").toLowerCase();
+      if (tipe === "location") {
+        const k =
+          koordinatDariObjek(it.location) ?? koordinatDariObjek(it.data_message?.location) ?? koordinatDariObjek(it);
+        if (from && k)
+          out.push({
+            vendor: this.name,
+            kind: "message",
+            from: String(from),
+            senderName: cleanProfileName(
+              it.sender?.name ?? it.room?.name ?? it.contact_full_name ?? it.contact?.name ?? it.sender_name,
+            ),
+            location: { latitude: k.lat, longitude: k.lng },
+            messageId: it.id ? String(it.id) : undefined,
+            timestamp: it.created_at ?? it.timestamp ?? new Date().toISOString(),
+            raw: it,
+          });
+        continue;
+      }
       const text = it.text?.body ?? it.text ?? it.message ?? it.data_message?.text ?? it.body;
       const senderName = it.sender?.name ?? it.room?.name ?? it.contact_full_name ?? it.contact?.name ?? it.sender_name;
       if (from || text) {

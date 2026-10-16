@@ -16,7 +16,7 @@ import {
   theme,
   card,
 } from "../../lib/ui";
-import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN } from "./constants";
+import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN, PESAN_MINTA_LOKASI_BAWAAN } from "./constants";
 import { QuestionItem } from "./QuestionItem";
 import { AturanDurasiEditor } from "./AturanDurasiEditor";
 import { galatAturanDurasi } from "../../lib/exportSurvey";
@@ -63,6 +63,9 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   // Kosong = teks bawaan backend. Sengaja TIDAK diisi teks bawaan sebagai nilai awal:
   // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
   const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
+  const [mintaLokasi, setMintaLokasi] = useState(survey?.mintaLokasi ?? false);
+  // Kosong = teks bawaan backend, alasannya sama dengan pesanKuotaPenuh.
+  const [pesanMintaLokasi, setPesanMintaLokasi] = useState(survey?.pesanMintaLokasi || "");
   // null = aturan bawaan (lihat AturanDurasiEditor).
   const [aturanDurasi, setAturanDurasi] = useState(survey?.aturanDurasi ?? null);
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
@@ -138,6 +141,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      mintaLokasi,
+      pesanMintaLokasi,
       aturanDurasi,
       questions,
     }),
@@ -156,6 +161,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      mintaLokasi,
+      pesanMintaLokasi,
       aturanDurasi,
       questions,
     ],
@@ -245,6 +252,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
         bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
         pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
+        mintaLokasi,
+        pesanMintaLokasi: pesanMintaLokasi.trim() || null,
         aturanDurasi,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
@@ -729,6 +738,40 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
               placeholder="Terima kasih, semua jawaban Anda sudah kami terima. 🙏"
               style={{ minHeight: 70 }}
             />
+          </Panel>
+
+          <Panel
+            title="Lokasi responden"
+            note="Untuk memeriksa responden benar-benar berada di provinsi yang ia sebut, dan untuk peta sebaran di Laporan."
+          >
+            <Toggle checked={mintaLokasi} onChange={setMintaLokasi} label="Minta lokasi setelah responden selesai" />
+            {mintaLokasi ? (
+              <div style={{ marginTop: 12 }}>
+                <Textarea
+                  value={pesanMintaLokasi}
+                  onChange={(e) => setPesanMintaLokasi(e.target.value)}
+                  placeholder={PESAN_MINTA_LOKASI_BAWAAN}
+                  maxLength={900}
+                  aria-label="Pesan permintaan lokasi"
+                  style={{ minHeight: 90 }}
+                  hint={
+                    <span style={{ lineHeight: 1.5 }}>
+                      Dikirim bersama kata penutup dalam satu pesan, dengan tombol <strong>Kirim lokasi</strong>.
+                      Sebutkan untuk apa lokasinya dipakai dan bahwa responden boleh melewatinya. Kosongkan untuk teks
+                      default.
+                    </span>
+                  }
+                />
+                <div style={{ marginTop: 10 }}>
+                  <Notice kind="warning">
+                    Lokasi adalah data pribadi. Pastikan kebijakan privasi survei menyebutkannya sebelum fitur ini
+                    dipakai. Titik disimpan dibulatkan (sekitar 1 km), dan responden yang menolak persetujuan tidak
+                    dimintai lokasi. Hanya untuk nomor WhatsApp Business resmi (Meta): responden yang mengisi lewat
+                    vendor lain tidak dimintai lokasi.
+                  </Notice>
+                </div>
+              </div>
+            ) : null}
           </Panel>
 
           <Panel

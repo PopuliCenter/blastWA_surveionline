@@ -139,6 +139,24 @@ export const bersihkanKodeWilayah = (nilai) => String(nilai).replace(/\s*\(\d{2}
 // Satu fungsi untuk semua halaman, supaya angka di layar dan isi berkas tidak berselisih.
 export const ditolakKuota = (r) => Boolean(r?.ditolakKuotaPada);
 
+// Kesesuaian lokasi yang dibagikan dengan provinsi yang DISEBUT responden. Kembar
+// LABEL_STATUS_LOKASI di backend/src/lib/lokasi.ts — statusnya dihitung di sana.
+export const LABEL_STATUS_LOKASI = {
+  "tidak-diminta": "",
+  "belum-dibagikan": "Tidak dibagikan",
+  "belum-diperiksa": "Provinsi belum dapat ditentukan",
+  "di-luar-batas": "Di luar batas provinsi",
+  sesuai: "Sesuai",
+  "tidak-sesuai": "Beda provinsi",
+  "tanpa-pembanding": "Provinsi tidak ditanyakan",
+};
+export const labelStatusLokasi = (s) => LABEL_STATUS_LOKASI[s] ?? "";
+
+// Kolom lokasi hanya muncul bila survei memintanya (atau pernah memintanya): survei tanpa
+// fitur ini tidak perlu dua kolom kosong di setiap berkas.
+export const adaKolomLokasi = (survey, responses) =>
+  Boolean(survey?.mintaLokasi) || responses.some((r) => r.statusLokasi && r.statusLokasi !== "tidak-diminta");
+
 // Bentuk tabel respons (MURNI — tanpa I/O, mudah diuji): header + baris.
 // Kolom = Nomor, Nama, Sumber Kontak, pembobot (urut kemunculan), lalu 1 kolom/pertanyaan.
 // Pengenal dan metadata di depan, variabel analisis di belakang, agar kolom pembobot dan
@@ -151,6 +169,7 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
   const responses = semuaRespons.filter((r) => !ditolakKuota(r));
   const questions = (survey.questions || []).map((q) => q.text);
   const wilayah = new Set((survey.questions || []).filter((q) => q.type === "wilayah").map((q) => q.text));
+  const lokasi = adaKolomLokasi(survey, responses);
   const attrKeys = [];
   responses.forEach((r) =>
     Object.keys(r.attributes || {}).forEach((k) => {
@@ -173,6 +192,9 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
     "Durasi (menit)",
     "Asesmen Durasi",
     "Lama Pengisian",
+    // Koordinat sengaja tidak ikut: berkas ekspor berpindah tangan, dan untuk memeriksa
+    // wilayah cukup provinsinya. Titiknya (dibulatkan ±1 km) hanya untuk peta di Laporan.
+    ...(lokasi ? ["Provinsi Lokasi", "Status Lokasi"] : []),
     ...attrKeys,
     ...questions,
   ];
@@ -194,6 +216,7 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       // Dari angka yang sama dengan kolom Durasi (sudah dibulatkan), supaya 1,9 terbaca
       // 1 menit 54 detik — bukan 1 menit 53 detik dari detik aslinya.
       clean(formatLamaPengisian(menit === null ? null : bulatkanMenit(menit))),
+      ...(lokasi ? [clean(r.lokasi?.provinsi ?? ""), clean(labelStatusLokasi(r.statusLokasi))] : []),
       ...attrKeys.map((k) => clean(attrs[k] ?? "")),
       ...questions.map((q) => clean(wilayah.has(q) ? bersihkanKodeWilayah(map[q] ?? "") : (map[q] ?? ""))),
     ];
