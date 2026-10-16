@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { exportResponses, ditolakKuota } from "../lib/exportSurvey";
+import { tally, distribusiWilayah, distribusiPilihanGanda, nilaiTampil } from "../lib/ringkasJawaban";
+import { TYPE_LABEL } from "./survey/constants";
 import {
   PageHeader,
   Card,
@@ -18,14 +20,6 @@ import {
 } from "../lib/ui";
 
 const INTERNAL = new Set(["chatResolved", "chatResolvedAt", "notes"]);
-const TYPE_LABEL = {
-  text: "Teks",
-  rating: "Rating",
-  number: "Angka",
-  choice: "Pilihan",
-  boolean: "Ya/Tidak",
-  image: "Gambar",
-};
 // Distribusi digambar dengan SATU warna, bukan palet berputar. Warna yang berganti tiap
 // baris tidak membawa informasi apa pun di sini — labelnya sudah menempel di tiap bar, dan
 // peringkatnya sudah disampaikan panjang bar beserta urutannya. Yang ditambahkannya hanya
@@ -107,15 +101,6 @@ function Distribusi({ data, total, batas = BATAS_AWAL }) {
       ) : null}
     </div>
   );
-}
-
-function tally(values) {
-  const m = new Map();
-  values.forEach((v) => {
-    const k = String(v);
-    m.set(k, (m.get(k) || 0) + 1);
-  });
-  return [...m.entries()].sort((a, b) => b[1] - a[1]);
 }
 
 function BarRow({ label, count, total, color }) {
@@ -421,7 +406,13 @@ export default function Reports() {
                           <th style={thStyle}>{demo} \ Jawaban</th>
                           {crosstab.cols.map((c) => (
                             <th key={c} style={thStyle}>
-                              {c}
+                              {/* Wilayah tanpa kode resminya, sama dengan berkas ekspor. Cukup
+                                  saat ditampilkan: satu provinsi selalu satu kode, jadi kode
+                                  tidak pernah memisahkan kategori yang seharusnya satu. */}
+                              {nilaiTampil(
+                                questions.find((q) => q.text === ctQ),
+                                c,
+                              )}
                             </th>
                           ))}
                           <th style={thStyle}>Total</th>
@@ -489,9 +480,35 @@ function QuestionBreakdown({ q, values, total }) {
       </div>
     );
   }
-  if (q.type === "choice" || q.type === "boolean") {
+  if (q.type === "choice" || q.type === "boolean" || q.type === "consent") {
     const dist = tally(values);
     return <Distribusi data={dist} total={total} />;
+  }
+  if (q.type === "wilayah") {
+    const d = distribusiWilayah(values);
+    // Provinsi selalu; kabupaten/kota menyusul bila pertanyaannya sampai tingkat itu. 38
+    // provinsi dan ratusan kabupaten/kota diringkas seperti distribusi lain — sisanya
+    // disebut jumlahnya dan bisa dibuka.
+    return d.kabKota ? (
+      <div style={{ display: "grid", gap: 14 }}>
+        <SubJudul>Per provinsi</SubJudul>
+        <Distribusi data={d.provinsi} total={total} />
+        <SubJudul>Per kabupaten/kota</SubJudul>
+        <Distribusi data={d.kabKota} total={d.kabKota.reduce((n, [, c]) => n + c, 0)} />
+      </div>
+    ) : (
+      <Distribusi data={d.provinsi} total={total} />
+    );
+  }
+  if (q.type === "multichoice") {
+    return (
+      <div>
+        <div style={{ color: theme.textMuted, fontSize: 11.5, marginBottom: 8 }}>
+          Satu responden boleh memilih lebih dari satu, jadi persentasenya bisa berjumlah lebih dari 100%.
+        </div>
+        <Distribusi data={distribusiPilihanGanda(q, values)} total={total} />
+      </div>
+    );
   }
   // text / image: tampilkan beberapa contoh
   return (
@@ -517,6 +534,10 @@ function QuestionBreakdown({ q, values, total }) {
       ) : null}
     </div>
   );
+}
+
+function SubJudul({ children }) {
+  return <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, marginBottom: -6 }}>{children}</div>;
 }
 
 function Stat({ label, value }) {
