@@ -1,16 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  INDONESIA,
-  bboxSebaran,
-  bboxPoligon,
-  bersinggungan,
-  dalamIndonesia,
-  jalurPoligon,
-  jariJari,
-  pasAspek,
-  proyeksi,
-  ringkasLokasi,
-} from "./petaSebaran";
+import { INDONESIA, bboxSebaran, dalamIndonesia, jariJari, ringkasLokasi } from "./petaSebaran";
 
 const r = (statusLokasi, lokasi = null, lain = {}) => ({ statusLokasi, lokasi, ...lain });
 const jabar = (lat, lng) => ({ lat, lng, kodeProvinsi: "32", provinsi: "Jawa Barat" });
@@ -67,74 +56,6 @@ describe("kotak tampilan", () => {
     expect(c - a).toBeGreaterThanOrEqual(1.2);
     expect(d - b).toBeGreaterThanOrEqual(1.2);
     expect((a + c) / 2).toBeCloseTo(107.61);
-  });
-
-  it("pasAspek menghasilkan perbandingan yang diminta dengan titik tengah tetap", () => {
-    for (const aspek of [0.4, 0.85]) {
-      const bb = pasAspek([105, -8, 109, -5], aspek);
-      const { tinggi } = proyeksi(bb, 1000);
-      expect(tinggi / 1000).toBeCloseTo(aspek, 5);
-      expect((bb[0] + bb[2]) / 2).toBeCloseTo(107);
-      expect((bb[1] + bb[3]) / 2).toBeCloseTo(-6.5);
-    }
-  });
-});
-
-describe("proyeksi & jalur", () => {
-  it("sudut kiri atas di (0,0), kanan bawah di (lebar, tinggi)", () => {
-    const p = proyeksi([100, -10, 110, 0], 1000);
-    expect(p.xy(100, 0)).toEqual([0, 0]);
-    const [x, y] = p.xy(110, -10);
-    expect(x).toBeCloseTo(1000);
-    expect(y).toBeCloseTo(p.tinggi);
-  });
-
-  it("jalur SVG menutup setiap cincin", () => {
-    const p = proyeksi([0, 0, 10, 10], 100);
-    const d = jalurPoligon(
-      [
-        [
-          [
-            [0, 0],
-            [10, 0],
-            [10, 10],
-            [0, 0],
-          ],
-        ],
-      ],
-      p.xy,
-    );
-    expect(d.startsWith("M")).toBe(true);
-    expect(d.endsWith("Z")).toBe(true);
-    expect(d.match(/L/g)).toHaveLength(3);
-  });
-
-  it("provinsi di luar kotak tampilan dilewati; yang tampil sebagian — termasuk di sudut — tidak", () => {
-    const besar = [
-      [
-        [
-          [0, 0],
-          [20, 0],
-          [20, 20],
-          [0, 20],
-          [0, 0],
-        ],
-      ],
-    ];
-    expect(bersinggungan(bboxPoligon(besar), [30, 30, 40, 40])).toBe(false);
-    expect(bersinggungan(bboxPoligon(besar), [5, 5, 6, 6])).toBe(true);
-    // Segitiga yang memotong sudut kiri bawah kotak [4,4,7,7] tanpa satu titik pun di dalamnya.
-    const segitiga = [
-      [
-        [
-          [0, 0],
-          [10, 0],
-          [0, 10],
-          [0, 0],
-        ],
-      ],
-    ];
-    expect(bersinggungan(bboxPoligon(segitiga), [4, 4, 7, 7])).toBe(true);
   });
 });
 

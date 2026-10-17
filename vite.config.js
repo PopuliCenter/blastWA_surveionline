@@ -5,6 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Lisensi semua pustaka yang ikut dibundel (React, Leaflet, …) → dist/lisensi-pihak-ketiga.md.
+    // Minifier membuang komentar hak cipta dari kode, padahal mis. lisensi BSD Leaflet mewajibkan
+    // pemberitahuannya ikut disebarkan bersama hasil build.
+    license: { fileName: 'lisensi-pihak-ketiga.md' },
     rollupOptions: {
       output: {
         // React jarang berubah → chunk sendiri agar tetap ter-cache walau kode app di-deploy ulang.

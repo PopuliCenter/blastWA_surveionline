@@ -6,20 +6,34 @@
   koordinat tidak dikirim ke layanan geocoding pihak ketiga), dan
 - menggambar peta sebaran di halaman Laporan.
 
-Berkas ini **dihasilkan**, bukan disunting tangan. Langkah lengkapnya ada di kepala
-`src/scripts/siapkan-batas-provinsi.ts`. Ringkasnya:
+Berkas ini **dihasilkan**, bukan disunting tangan. Sumbernya OpenStreetMap: relasi batas
+provinsi (`admin_level=4`) yang membawa tag `ref:ID:kemendagri` — kode yang sama dengan
+aplikasi. Lisensinya ODbL 1.0: wajib atribusi "© kontributor OpenStreetMap", dan bila peta
+atau datanya dipakai secara publik (mis. laporan untuk klien), berkas ini harus ikut
+ditawarkan dengan lisensi yang sama.
 
-1. Unduh sekali data batas kab/kota BIG (`BATAS_KABKOTA_AR`) dari layanan ArcGIS REST BIG,
-   simpan **di luar repo**:
-   `https://geoservices.big.go.id/rbi/rest/services/BATASWILAYAH/BATAS_KABKOTA_AR/MapServer/0/query`
-   dengan `where=1=1&outFields=KDPPUM,WADMPR&returnGeometry=true&returnZ=false&outSR=4326&f=geojson`.
-2. Lebur per provinsi dan sederhanakan dengan topologi terjaga (`mapshaper -clean -dissolve KDPPUM -simplify …`).
-   Skrip menolak data yang belum dilebur: peta per kab/kota yang hanya ditumpuk tampil retak.
-3. `npm run siapkan:batas -- <provinsi.geojson> --kode=KDPPUM --sumber="…" --lisensi="…"`
+Batas provinsi OSM mencakup wilayah laut provinsi, jadi responden di pesisir tetap
+terhitung di provinsinya.
+
+Cara membuat ulang (semua berkas antara disimpan di luar repo):
+
+1. Unduh dari Overpass API (±14 MB):
+   ```
+   [out:json][timeout:900];
+   rel["boundary"="administrative"]["admin_level"="4"]["ref:ID:kemendagri"];
+   out body; >; out skel qt;
+   ```
+2. `npx osmtogeojson -f json -m provinsi-osm.json > provinsi-osm.geojson`, lalu ambil hanya
+   fitur poligon relasi dengan properti `kode` = `ref:ID:kemendagri`.
+3. `npx mapshaper provinsi.geojson -simplify interval=100 keep-shapes -o format=geojson precision=0.00001 provinsi-100m.geojson`
+   — penyederhanaan yang menjaga topologi, jadi batas bersama dua provinsi tidak retak.
+4. `npm run siapkan:batas -- provinsi-100m.geojson --kode=kode --sumber="…" --lisensi="© kontributor OpenStreetMap, ODbL 1.0"`
+5. `npx vitest run test/batasProvinsi.data.test.ts` — ibu kota ke-38 provinsi, kota dekat
+   batas antarprovinsi, dan kota di negara tetangga harus lolos.
 
 Sumber dan lisensinya tersimpan di dalam berkas dan tampil sebagai atribusi di bawah peta.
 
-Selama berkas ini belum ada, fitur lokasi tetap berjalan: lokasi disimpan (dibulatkan
+Tanpa berkas ini fitur lokasi tetap berjalan: lokasi disimpan (dibulatkan
 ±1 km) dengan status "Provinsi belum dapat ditentukan", dan petanya belum bisa digambar.
 Setelah berkas dipasang (dan backend dijalankan ulang), provinsi lokasi lama langsung
 dihitung saat daftar respons dibuka; `npm run lengkapi:lokasi -- --apply` menyimpannya

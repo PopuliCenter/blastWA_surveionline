@@ -7,16 +7,13 @@
  * retak di peta — setiap batas kab/kota tergaris, dan kota yang dikelilingi kabupaten
  * tampil berlubang — jadi skrip ini menolaknya.
  *
- * Langkah untuk data BIG BATAS_KABKOTA_AR (kode Kepmendagri di properti KDPPUM), dari
- * folder backend/:
+ * Sumber yang dipakai: OpenStreetMap (relasi admin_level=4 ber-ref:ID:kemendagri) — satu
+ * relasi per provinsi, jadi sudah "dilebur". Langkah lengkapnya ada di data/README.md:
+ * Overpass → osmtogeojson → mapshaper -simplify (topologi terjaga) → skrip ini → tes data.
  *
- *   1. Unduh sekali dari layanan BIG (541 poligon kab/kota) ke folder di luar repo, mis.
- *      ../_data-batas/kabkota.geojson — lihat data/README.md untuk alamat kuerinya.
- *   2. Lebur per provinsi dan sederhanakan dengan topologi terjaga:
- *        npx mapshaper ../_data-batas/kabkota.geojson -clean -dissolve KDPPUM \
- *          -simplify interval=150 keep-shapes -o format=geojson ../_data-batas/provinsi.geojson
- *   3. npx tsx src/scripts/siapkan-batas-provinsi.ts ../_data-batas/provinsi.geojson \
- *        --kode=KDPPUM --sumber="..." --lisensi="..."
+ * Untuk sumber per kab/kota (mis. BIG BATAS_KABKOTA_AR), lebur dulu per provinsi:
+ *   npx mapshaper kabkota.geojson -clean -dissolve KDPPUM -simplify interval=150 keep-shapes
+ *     -o format=geojson provinsi.geojson
  *
  * --kode: properti berisi kode 2 digit (mis. "32"). --nama: properti nama provinsi,
  *         dicocokkan dengan daftar provinsi dan sinonimnya (lib/wilayah.ts).
