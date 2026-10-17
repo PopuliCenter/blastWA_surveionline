@@ -105,6 +105,11 @@ model Survey {
   mintaLokasi     Boolean      @default(false)
   // Teks permintaan lokasi khusus survei ini; null = teks bawaan (lib/lokasi.ts).
   pesanMintaLokasi String?
+  // Kirim permintaan lokasi sebagai pesan SENDIRI sesudah kata penutup. Bawaannya digabung
+  // dalam satu pesan: dua pesan berarti dua tagihan per responden.
+  lokasiPesanTerpisah Boolean   @default(false)
+  // Balasan setelah lokasi diterima; null = teks bawaan (lib/lokasi.ts).
+  balasanLokasi   String?
   createdAt       DateTime     @default(now())
   questions       Question[]
   blasts          Blast[]

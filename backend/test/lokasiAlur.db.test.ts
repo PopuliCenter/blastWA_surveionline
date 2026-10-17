@@ -129,7 +129,15 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
 
   const ke = (to: string) => terkirim.filter((t) => t.to === to);
 
-  async function surveiChat(opsi: { mintaLokasi?: boolean; pesanMintaLokasi?: string; closingMessage?: string } = {}) {
+  async function surveiChat(
+    opsi: {
+      mintaLokasi?: boolean;
+      pesanMintaLokasi?: string;
+      closingMessage?: string;
+      lokasiPesanTerpisah?: boolean;
+      balasanLokasi?: string;
+    } = {},
+  ) {
     const kata = `uji lokasi ${Math.random().toString(36).slice(2, 7)}`;
     const s = await prisma.survey.create({
       data: {
@@ -141,6 +149,8 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
         mintaLokasi: opsi.mintaLokasi ?? true,
         pesanMintaLokasi: opsi.pesanMintaLokasi ?? null,
         closingMessage: opsi.closingMessage ?? null,
+        lokasiPesanTerpisah: opsi.lokasiPesanTerpisah ?? false,
+        balasanLokasi: opsi.balasanLokasi ?? null,
         questions: {
           create: [
             {
@@ -414,5 +424,38 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     // Responden mengikuti petunjuk lampiran: lokasinya diterima.
     await kirimLokasi(hp, -6.9, 107.6);
     expect((await respons(surveyId, hp)).lokasiDiterimaPada).not.toBeNull();
+  });
+
+  // ===== Opsi pesan lokasi per survei =====
+
+  it("pesan terpisah: penutup dulu (teks biasa), lalu permintaan lokasi sendiri dengan tombol", async () => {
+    const { surveyId, kata } = await surveiChat({
+      lokasiPesanTerpisah: true,
+      pesanMintaLokasi: "Boleh bagikan lokasi?",
+    });
+    const hp = nomorBaru();
+    await kirim(hp, kata);
+    await kirim(hp, "ya");
+    await kirim(hp, "Jawa Barat");
+    const [penutup, minta] = ke(hp).slice(-2);
+    expect(penutup!.tombolLokasi).toBeUndefined();
+    expect(penutup!.text).toContain("Terima kasih");
+    expect(penutup!.text).not.toContain("Boleh bagikan lokasi?");
+    expect(minta!.tombolLokasi).toBe(true);
+    expect(minta!.text).toBe("Boleh bagikan lokasi?");
+    // Lokasi lewat tombol pesan itu tetap tercocokkan.
+    await kirimLokasi(hp, -6.91, 107.61, { contextId: minta!.id });
+    expect((await respons(surveyId, hp)).lokasiDiterimaPada).not.toBeNull();
+  });
+
+  it("balasan setelah lokasi diterima memakai teks survei bila diisi", async () => {
+    const { kata } = await surveiChat({ balasanLokasi: "  Makasih, lokasi sudah masuk!  " });
+    const hp = nomorBaru();
+    await kirim(hp, kata);
+    await kirim(hp, "ya");
+    await kirim(hp, "Jawa Barat");
+    terkirim.length = 0;
+    await kirimLokasi(hp, -6.91, 107.61);
+    expect(ke(hp).map((t) => t.text)).toEqual(["Makasih, lokasi sudah masuk!"]);
   });
 });

@@ -50,6 +50,9 @@ export const surveySchema = z.object({
   // kosong = teks bawaan, yang menyebut tujuan, ketelitian, dan bahwa boleh dilewati.
   mintaLokasi: z.boolean().default(false),
   pesanMintaLokasi: z.string().max(900).optional().nullable(),
+  // Opsional: permintaan lokasi sebagai pesan terpisah, dan balasan setelah lokasi diterima.
+  lokasiPesanTerpisah: z.boolean().default(false),
+  balasanLokasi: z.string().max(500).optional().nullable(),
   // null = kembali ke aturan bawaan. Diperiksa dengan aturan yang SAMA dengan yang dipakai
   // saat membaca (lib/asesmenDurasi.ts), supaya yang lolos disimpan pasti terpakai.
   aturanDurasi: z

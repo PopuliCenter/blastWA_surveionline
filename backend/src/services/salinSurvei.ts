@@ -61,6 +61,8 @@ export async function gandakanSurvei(id: string) {
           pesanKuotaPenuh: asli.pesanKuotaPenuh,
           mintaLokasi: asli.mintaLokasi,
           pesanMintaLokasi: asli.pesanMintaLokasi,
+          lokasiPesanTerpisah: asli.lokasiPesanTerpisah,
+          balasanLokasi: asli.balasanLokasi,
           aturanDurasi: (asli.aturanDurasi ?? undefined) as Prisma.InputJsonValue | undefined,
           oncePerContact: asli.oncePerContact,
           triggerEnabled: false,

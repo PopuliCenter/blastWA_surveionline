@@ -730,6 +730,7 @@ async function advanceSurvey(
     pesanKuotaPenuh: string | null;
     mintaLokasi: boolean;
     pesanMintaLokasi: string | null;
+    lokasiPesanTerpisah: boolean;
     // Pertanyaan yang ditunjuk survei sebagai sumber provinsi (selain tipe "wilayah").
     questionProvinsiId: string | null;
   },
@@ -812,8 +813,9 @@ async function advanceSurvey(
 
 // Kata penutup — dan, bila survei meminta lokasi, permintaan lokasinya dalam pesan yang SAMA.
 //
-// Satu pesan, bukan dua: sejak Oktober 2026 pesan service ikut ditagih per pesan, dan
-// penutup + permintaan terpisah berarti dua tagihan per responden.
+// Bawaannya satu pesan, bukan dua: sejak Oktober 2026 pesan service ikut ditagih per pesan,
+// dan penutup + permintaan terpisah berarti dua tagihan per responden. Survei boleh
+// memilih pesan terpisah (Survey.lokasiPesanTerpisah) dengan sadar akan biaya itu.
 //
 // HANYA vendor yang punya pesan bertombol "Kirim lokasi" (Meta). Di vendor lain responden
 // harus berbagi lewat lampiran, dan di sana janji privasinya tidak bisa ditepati: Baileys
@@ -829,7 +831,12 @@ async function kirimPenutup(
   phone: string,
   contactId: string,
   responseId: string,
-  survei: { closingMessage: string | null; mintaLokasi: boolean; pesanMintaLokasi: string | null },
+  survei: {
+    closingMessage: string | null;
+    mintaLokasi: boolean;
+    pesanMintaLokasi: string | null;
+    lokasiPesanTerpisah: boolean;
+  },
 ): Promise<void> {
   const penutup = closingText(survei.closingMessage);
   const provider = getProvider(vendor);
@@ -851,10 +858,11 @@ async function kirimPenutup(
   });
 
   const minta = survei.pesanMintaLokasi?.trim() || PESAN_MINTA_LOKASI_BAWAAN;
-  // Badan pesan bertombol dibatasi Meta 1024 karakter. Penutup yang panjang dikirim sendiri
-  // lebih dulu — memotongnya justru membuang kalimat permintaan lokasinya.
+  // Digabung kecuali survei memilih pesan terpisah. Badan pesan bertombol dibatasi Meta 1024
+  // karakter: penutup yang terlalu panjang juga dikirim sendiri lebih dulu — memotongnya
+  // justru membuang kalimat permintaan lokasinya.
   const gabung = `${penutup}\n\n${minta}`;
-  const satuPesan = gabung.length <= BATAS_BADAN_INTERAKTIF;
+  const satuPesan = !survei.lokasiPesanTerpisah && gabung.length <= BATAS_BADAN_INTERAKTIF;
   const teks = satuPesan ? gabung : minta;
 
   // Catatan permintaan dibatalkan bila permintaannya TIDAK PERNAH sampai ke responden —
@@ -937,7 +945,12 @@ async function simpanLokasi(
   phone: string,
   vendor: string,
 ): Promise<boolean> {
-  const pilih = { id: true, lokasiDimintaPada: true, lokasiDiterimaPada: true } as const;
+  const pilih = {
+    id: true,
+    lokasiDimintaPada: true,
+    lokasiDiterimaPada: true,
+    survey: { select: { balasanLokasi: true } },
+  } as const;
   const r =
     (contextId
       ? await prisma.surveyResponse.findFirst({ where: { contactId, lokasiPesanId: contextId }, select: pilih })
@@ -957,7 +970,7 @@ async function simpanLokasi(
     where: { id: r.id, lokasiDiterimaPada: null },
     data: { lokasiDiterimaPada: new Date(), lokasiLat: bulat.lat, lokasiLng: bulat.lng, kodeProvinsiLokasi },
   });
-  if (count) await reply(vendor, phone, TERIMA_KASIH_LOKASI, contactId);
+  if (count) await reply(vendor, phone, r.survey.balasanLokasi?.trim() || TERIMA_KASIH_LOKASI, contactId);
   return true;
 }
 

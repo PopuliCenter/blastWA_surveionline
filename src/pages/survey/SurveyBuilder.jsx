@@ -16,7 +16,15 @@ import {
   theme,
   card,
 } from "../../lib/ui";
-import { QTYPE_OPTIONS, HAS_CHOICES, PESAN_KUOTA_PENUH_BAWAAN, PESAN_MINTA_LOKASI_BAWAAN } from "./constants";
+import {
+  QTYPE_OPTIONS,
+  HAS_CHOICES,
+  PESAN_KUOTA_PENUH_BAWAAN,
+  PESAN_MINTA_LOKASI_BAWAAN,
+  TERIMA_KASIH_LOKASI_BAWAAN,
+  PENUTUP_BAWAAN,
+  BATAS_PESAN_BERTOMBOL,
+} from "./constants";
 import { QuestionItem } from "./QuestionItem";
 import { AturanDurasiEditor } from "./AturanDurasiEditor";
 import { galatAturanDurasi } from "../../lib/exportSurvey";
@@ -66,6 +74,15 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   const [mintaLokasi, setMintaLokasi] = useState(survey?.mintaLokasi ?? false);
   // Kosong = teks bawaan backend, alasannya sama dengan pesanKuotaPenuh.
   const [pesanMintaLokasi, setPesanMintaLokasi] = useState(survey?.pesanMintaLokasi || "");
+  const [lokasiPesanTerpisah, setLokasiPesanTerpisah] = useState(survey?.lokasiPesanTerpisah ?? false);
+  const [balasanLokasi, setBalasanLokasi] = useState(survey?.balasanLokasi || "");
+  // Penutup + permintaan yang tak muat dalam satu pesan bertombol tetap terkirim sebagai dua
+  // pesan — perhitungannya sama dengan kirimPenutup di backend, supaya biayanya tidak mengejutkan.
+  const gabunganTerlaluPanjang =
+    (closingMessage.trim() || PENUTUP_BAWAAN).length +
+      2 +
+      (pesanMintaLokasi.trim() || PESAN_MINTA_LOKASI_BAWAAN).length >
+    BATAS_PESAN_BERTOMBOL;
   // null = aturan bawaan (lihat AturanDurasiEditor).
   const [aturanDurasi, setAturanDurasi] = useState(survey?.aturanDurasi ?? null);
   const [flowJsonOpen, setFlowJsonOpen] = useState(false);
@@ -143,6 +160,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       pesanKuotaPenuh,
       mintaLokasi,
       pesanMintaLokasi,
+      lokasiPesanTerpisah,
+      balasanLokasi,
       aturanDurasi,
       questions,
     }),
@@ -163,6 +182,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       pesanKuotaPenuh,
       mintaLokasi,
       pesanMintaLokasi,
+      lokasiPesanTerpisah,
+      balasanLokasi,
       aturanDurasi,
       questions,
     ],
@@ -254,6 +275,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
         pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
         mintaLokasi,
         pesanMintaLokasi: pesanMintaLokasi.trim() || null,
+        lokasiPesanTerpisah,
+        balasanLokasi: balasanLokasi.trim() || null,
         aturanDurasi,
         questions: questions.map((q) => ({
           id: typeof q.id === "string" && !q.id.startsWith("t") ? q.id : undefined,
@@ -735,7 +758,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
             <Textarea
               value={closingMessage}
               onChange={(e) => setClosingMessage(e.target.value)}
-              placeholder="Terima kasih, semua jawaban Anda sudah kami terima. 🙏"
+              placeholder={PENUTUP_BAWAAN}
               style={{ minHeight: 70 }}
             />
           </Panel>
@@ -748,19 +771,44 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
             {mintaLokasi ? (
               <div style={{ marginTop: 12 }}>
                 <Textarea
+                  label="Teks permintaan lokasi"
                   value={pesanMintaLokasi}
                   onChange={(e) => setPesanMintaLokasi(e.target.value)}
                   placeholder={PESAN_MINTA_LOKASI_BAWAAN}
                   maxLength={900}
-                  aria-label="Pesan permintaan lokasi"
                   style={{ minHeight: 90 }}
                   hint={
                     <span style={{ lineHeight: 1.5 }}>
-                      Dikirim bersama kata penutup dalam satu pesan, dengan tombol <strong>Kirim lokasi</strong>.
-                      Sebutkan untuk apa lokasinya dipakai dan bahwa responden boleh melewatinya. Kosongkan untuk teks
-                      default.
+                      {lokasiPesanTerpisah || gabunganTerlaluPanjang
+                        ? "Dikirim sebagai pesan sendiri sesudah kata penutup"
+                        : "Dikirim bersama kata penutup dalam satu pesan"}
+                      , dengan tombol <strong>Kirim lokasi</strong>. Sebutkan untuk apa lokasinya dipakai dan bahwa
+                      responden boleh melewatinya. Kosongkan untuk teks default.
                     </span>
                   }
+                />
+                <div style={{ marginBottom: 14 }}>
+                  <Toggle
+                    checked={lokasiPesanTerpisah}
+                    onChange={setLokasiPesanTerpisah}
+                    label="Kirim sebagai pesan terpisah dari kata penutup"
+                  />
+                  <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+                    {lokasiPesanTerpisah
+                      ? "Responden menerima dua pesan: kata penutup, lalu permintaan lokasi. Meta menagih keduanya."
+                      : gabunganTerlaluPanjang
+                        ? `Kata penutup dan permintaan lokasi melebihi ${BATAS_PESAN_BERTOMBOL} karakter, jadi tetap dikirim sebagai dua pesan (dua tagihan). Persingkat salah satunya agar muat dalam satu pesan.`
+                        : "Mati = satu pesan, satu tagihan per responden."}
+                  </div>
+                </div>
+                <Textarea
+                  label="Balasan setelah lokasi diterima"
+                  value={balasanLokasi}
+                  onChange={(e) => setBalasanLokasi(e.target.value)}
+                  placeholder={TERIMA_KASIH_LOKASI_BAWAAN}
+                  maxLength={500}
+                  style={{ minHeight: 60 }}
+                  hint="Dikirim sekali, setelah responden membagikan lokasinya. Kosongkan untuk teks default."
                 />
                 <div style={{ marginTop: 10 }}>
                   <Notice kind="warning">

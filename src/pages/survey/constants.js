@@ -46,5 +46,15 @@ export const PESAN_MINTA_LOKASI_BAWAAN =
   "Lokasi hanya dipakai untuk memastikan sebaran wilayah responden dan disimpan dengan ketelitian sekitar 1 km. " +
   "Abaikan pesan ini bila Anda tidak bersedia.";
 
+// Kembar TERIMA_KASIH_LOKASI di backend/src/lib/lokasi.ts (balasan setelah lokasi diterima).
+export const TERIMA_KASIH_LOKASI_BAWAAN = "Terima kasih, lokasi Anda sudah kami terima. 🙏";
+
+// Kembar closingText() di backend/src/lib/surveyLogic.ts.
+export const PENUTUP_BAWAAN = "Terima kasih, semua jawaban Anda sudah kami terima. 🙏";
+
+// Badan pesan bertombol "Kirim lokasi" dibatasi Meta 1024 karakter. Kata penutup + permintaan
+// yang lebih panjang dari ini dikirim sebagai dua pesan (lihat kirimPenutup di backend).
+export const BATAS_PESAN_BERTOMBOL = 1024;
+
 export const PESAN_KUOTA_PENUH_BAWAAN =
   "Terima kasih atas kesediaan Anda. Kuota responden survei ini sudah terpenuhi, sehingga kami tidak dapat mengikutsertakan jawaban baru. 🙏";
