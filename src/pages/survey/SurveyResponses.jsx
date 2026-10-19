@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "../../lib/api";
-import { exportResponses, ditolakKuota, labelStatusLokasi } from "../../lib/exportSurvey";
+import { exportResponses, ditolakKuota, ditolakKarenaDitutup, labelStatusLokasi } from "../../lib/exportSurvey";
 import { confirmDialog } from "../../lib/confirm";
 import {
   Button,
@@ -25,9 +25,10 @@ const STATUS_TABS = [
   { id: "all", label: "Semua" },
   { id: "done", label: "Selesai" },
   { id: "ongoing", label: "Berlangsung" },
-  // Hanya muncul bila ada isinya. Respons ini tidak ikut tab lain — dan karena ekspor
-  // mengikuti apa yang tampil, tidak pula ikut berkas — tapi tetap bisa dilihat dan dihapus.
-  { id: "kuota", label: "Ditolak kuota" },
+  // Hanya muncul bila ada isinya: yang ditolak karena kuota penuh, dan yang masuk setelah
+  // survei ditutup. Tidak ikut tab lain — dan karena ekspor mengikuti apa yang tampil, tidak
+  // pula ikut berkas — tapi tetap bisa dilihat dan dihapus.
+  { id: "kuota", label: "Ditolak" },
   // Juga hanya bila ada isinya: responden yang lokasinya berada di provinsi LAIN dari yang
   // ia sebut — kandidat untuk diperiksa ulang, bukan otomatis dibuang (orang bisa saja
   // sedang bepergian saat membagikan lokasi).
@@ -66,8 +67,12 @@ export function SurveyResponses({ survey, onClose }) {
   const sel = useSelection();
 
   const tolakCount = useMemo(() => responses.filter(ditolakKuota).length, [responses]);
+  // Dua sebab di tab "Ditolak": kuota penuh, atau masuk setelah survei ditutup. Penjelasan
+  // dan cara memulihkannya berbeda, jadi keduanya dihitung terpisah.
+  const ditutupCount = useMemo(() => responses.filter(ditolakKarenaDitutup).length, [responses]);
+  const kuotaCount = tolakCount - ditutupCount;
   const doneCount = useMemo(() => responses.filter((r) => r.completedAt && !ditolakKuota(r)).length, [responses]);
-  // Tab "Ditolak kuota" hilang begitu isinya habis dihapus — jangan tinggalkan pemakai di
+  // Tab "Ditolak" hilang begitu isinya habis dihapus — jangan tinggalkan pemakai di
   // tab yang tak lagi terlihat dengan daftar kosong.
   const bedaCount = useMemo(() => responses.filter(lokasiBeda).length, [responses]);
   const status =
@@ -249,7 +254,7 @@ export function SurveyResponses({ survey, onClose }) {
             { label: "Selesai", value: doneCount, tone: "green" },
             { label: "Berlangsung", value: responses.length - doneCount - tolakCount, tone: "yellow" },
             // Hanya bila ada — supaya ketiga angka di atas tetap menjumlah ke "Responden".
-            ...(tolakCount ? [{ label: "Ditolak kuota", value: tolakCount, tone: "red" }] : []),
+            ...(tolakCount ? [{ label: "Ditolak", value: tolakCount, tone: "red" }] : []),
             { label: "Pertanyaan", value: survey.questions?.length ?? 0, tone: "purple" },
           ]}
         />
@@ -334,9 +339,21 @@ export function SurveyResponses({ survey, onClose }) {
 
       {status === "kuota" ? (
         <Notice kind="info">
-          Responden ini datang saat kuotanya sudah penuh. Jawabannya disimpan, tetapi <strong>tidak dihitung</strong>{" "}
-          dan <strong>tidak ikut</strong> berkas Excel, CSV, maupun Google Sheets. Bila kuotanya dinaikkan, yang
-          jawabannya lengkap bisa dipulihkan dengan skrip <code>pulihkan:kuota</code>.
+          {kuotaCount && ditutupCount
+            ? "Responden ini datang saat kuotanya sudah penuh, atau mengirim jawaban setelah survei ditutup. "
+            : ditutupCount
+              ? "Responden ini mengirim jawaban setelah survei ditutup. "
+              : "Responden ini datang saat kuotanya sudah penuh. "}
+          Jawabannya disimpan, tetapi <strong>tidak dihitung</strong> dan <strong>tidak ikut</strong> berkas Excel, CSV,
+          maupun Google Sheets.
+          {kuotaCount
+            ? " Bila kuotanya dinaikkan, yang ditolak kuota dan jawabannya lengkap bisa dipulihkan dengan skrip "
+            : null}
+          {kuotaCount ? <code>pulihkan:kuota</code> : null}
+          {kuotaCount ? "." : null}
+          {ditutupCount
+            ? ` Yang bertanda "setelah ditutup" baru bisa dipulihkan${kuotaCount ? " dengan skrip yang sama" : " dengan skrip pulihkan:kuota"} bila surveinya dibuka lagi.`
+            : null}
         </Notice>
       ) : null}
 
@@ -365,7 +382,13 @@ export function SurveyResponses({ survey, onClose }) {
             <Empty
               icon="survey"
               title="Belum ada respons yang dihitung"
-              note={`Semua ${tolakCount} responden datang saat kuotanya sudah penuh. Lihat tab "Ditolak kuota".`}
+              note={`Semua ${tolakCount} responden ${
+                kuotaCount && ditutupCount
+                  ? "ditolak karena kuotanya penuh atau masuk setelah survei ditutup"
+                  : ditutupCount
+                    ? "masuk setelah survei ditutup"
+                    : "datang saat kuotanya sudah penuh"
+              }. Lihat tab "Ditolak".`}
             />
           ) : (
             <Empty
@@ -436,7 +459,9 @@ export function SurveyResponses({ survey, onClose }) {
                     {/* Di ponsel badge ini pindah ke baris kedua: di baris judul ia memeras nama
                         responden sampai tinggal satu huruf. */}
                     {lokasiBeda(r) && !isMobile ? <Badge tone="yellow">beda provinsi</Badge> : null}
-                    {ditolakKuota(r) ? (
+                    {ditolakKarenaDitutup(r) ? (
+                      <Badge tone="default">setelah ditutup</Badge>
+                    ) : ditolakKuota(r) ? (
                       <Badge tone="red">ditolak kuota</Badge>
                     ) : (
                       <Badge tone={r.completedAt ? "green" : "yellow"}>

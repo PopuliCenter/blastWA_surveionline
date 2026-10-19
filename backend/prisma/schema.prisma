@@ -91,6 +91,9 @@ model Survey {
   // nama provinsinya — dan itu membocorkan rancangan sampel ke responden: orang jadi tahu
   // wilayah mana yang masih dicari dan bisa mengaku tinggal di sana.
   pesanKuotaPenuh String?
+  // Balasan untuk orang yang mencoba ikut setelah survei DITUTUP (status "closed"): kata
+  // pemicunya, balasan blastnya, atau formulir yang terlanjur dibuka. null = teks bawaan.
+  pesanSurveiBerakhir String?
   // Aturan kolom "Asesmen Durasi" di ekspor dan Google Sheets. null = aturan bawaan.
   //
   // Per survei, karena lama pengisian yang wajar bergantung pada panjang instrumennya:
@@ -291,7 +294,7 @@ model SurveyResponse {
   // Respons chat yang dihentikan di TENGAH — begitu provinsinya ketahuan penuh — hanya
   // berisi jawaban sampai pertanyaan wilayah, jadi tidak bisa dipulihkan menjadi data utuh.
   ditolakKuotaPada   DateTime?
-  alasanDitolakKuota String? // "global" | "provinsi"
+  alasanDitolakKuota String? // "global" | "provinsi" | "ditutup" (masuk setelah survei ditutup)
   // Lokasi yang DIBAGIKAN responden atas permintaan (Survey.mintaLokasi).
   //
   // Disimpan DIBULATKAN ke dua desimal (±1,1 km), bukan titik GPS mentah: cukup untuk

@@ -124,12 +124,15 @@ describe.skipIf(!URL_UJI)("tutupRespons — pengisian bersamaan pada Postgres su
   it("menutup ulang respons yang sama tidak mengubah keputusan pertama", async () => {
     const { ids } = await siapkan({ n: 2, targetGlobal: 1 });
     await m.tutupRespons(ids[0]!);
-    expect(await m.tutupRespons(ids[1]!)).toEqual({ diterima: false });
+    expect(await m.tutupRespons(ids[1]!)).toEqual({ diterima: false, alasan: "global" });
     const sebelum = await m.prisma.surveyResponse.findUnique({ where: { id: ids[1]! } });
 
     // Webhook yang dikirim ulang Meta: dua kali, bersamaan.
     const ulang = await Promise.all([m.tutupRespons(ids[1]!), m.tutupRespons(ids[1]!)]);
-    expect(ulang).toEqual([{ diterima: false }, { diterima: false }]);
+    expect(ulang).toEqual([
+      { diterima: false, alasan: "global" },
+      { diterima: false, alasan: "global" },
+    ]);
     const sesudah = await m.prisma.surveyResponse.findUnique({ where: { id: ids[1]! } });
     expect(sesudah?.ditolakKuotaPada?.getTime()).toBe(sebelum?.ditolakKuotaPada?.getTime());
   });
@@ -168,7 +171,7 @@ describe.skipIf(!URL_UJI)("tutupRespons — pengisian bersamaan pada Postgres su
     // pemulihan dijalankan. Memulihkan yang lama membuatnya tercatat dua kali.
     const { surveyId, ids } = await siapkan({ n: 2, targetGlobal: 1 });
     await m.tutupRespons(ids[0]!);
-    expect(await m.tutupRespons(ids[1]!)).toEqual({ diterima: false });
+    expect(await m.tutupRespons(ids[1]!)).toEqual({ diterima: false, alasan: "global" });
     const lama = await m.prisma.surveyResponse.findUnique({ where: { id: ids[1]! } });
 
     await m.prisma.survey.update({ where: { id: surveyId }, data: { targetResponden: 5 } });

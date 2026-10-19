@@ -195,6 +195,15 @@ export default function AiAgent() {
             ia tidak akan dimatikan lagi sampai kuota kembali longgar.
           </Notice>
         </div>
+      ) : data.enabled && data.diamKarenaSurveiDitutup ? (
+        <div style={{ marginBottom: 16 }}>
+          <Notice kind="info">
+            Saat ini <strong>tidak ada survei yang aktif</strong>, jadi Agen AI tidak membalas. Responden yang bertanya
+            menerima "Pesan saat survei sudah berakhir" dari survei terakhirnya, sekali dalam 24 jam; pesan berikutnya
+            tidak dibalas otomatis. Aturan Auto Reply tetap berjalan. Agen AI kembali menjawab begitu ada survei yang
+            aktif.
+          </Notice>
+        </div>
       ) : data.enabled && data.kuotaPenuh ? (
         <div style={{ marginBottom: 16 }}>
           <Notice kind="warning">
@@ -349,6 +358,7 @@ export default function AiAgent() {
               "Pertanyaan tentang survei (mis. “cara isi survei”) tidak memulai survei.",
               "Lalu aturan Auto Reply dicek.",
               "Bila tak ada yang cocok & AI aktif, AI menjawab.",
+              'Saat tidak ada survei aktif, AI diam: dikirim pesan "survei sudah berakhir" sekali saja.',
               `AI memakai ${f.historyLimit} pesan terakhir sebagai konteks.`,
               `Maks ${f.maxRepliesPerDay || "∞"} balasan AI per nomor tiap 24 jam.`,
               "Ganti provider kapan saja tanpa ubah kode.",

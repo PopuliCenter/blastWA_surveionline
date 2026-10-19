@@ -91,6 +91,24 @@ export function pesanKuotaPenuh(teksSurvei: string | null | undefined): string {
   return teksSurvei?.trim() || PESAN_KUOTA_PENUH_BAWAAN;
 }
 
+// ===== Survei yang sudah ditutup =====
+//
+// Survei berstatus "closed" tidak menerima data baru lewat jalur MANA PUN: kata pemicunya,
+// balasan blastnya, maupun formulir Flow yang terlanjur dibuka sebelum ditutup. Jawaban yang
+// sempat masuk tetap DISIMPAN — ditandai lewat kolom penolakan kuota dengan alasan
+// "ditutup" — sehingga tidak ikut ekspor, Google Sheets, kuota, maupun laporan, tetapi masih
+// bisa dipulihkan bila surveinya dibuka lagi (pulihkanRespons).
+export const ALASAN_DITUTUP = "ditutup";
+export type AlasanTolak = "global" | "provinsi" | typeof ALASAN_DITUTUP;
+
+// Kembar PESAN_SURVEI_BERAKHIR_BAWAAN di src/pages/survey/constants.js.
+export const PESAN_SURVEI_BERAKHIR_BAWAAN =
+  "Terima kasih atas minat Anda. Survei ini sudah berakhir, sehingga kami tidak dapat menerima jawaban baru. 🙏";
+
+export function pesanSurveiBerakhir(teksSurvei: string | null | undefined): string {
+  return teksSurvei?.trim() || PESAN_SURVEI_BERAKHIR_BAWAAN;
+}
+
 // Keadaan kuota seluruh survei yang BERJALAN. Dipakai Agen AI untuk berhenti membalas
 // ketika tak ada lagi responden yang bisa diterima.
 //
@@ -152,7 +170,7 @@ export async function provinsiAwal(surveyId: string, contactId: string, attribut
 // yang sama — survei lain, dan responden yang masih mengisi, tidak ikut menunggu. Pemegang
 // kunci berikutnya baru menghitung setelah pemegang sebelumnya commit, jadi angkanya sudah
 // memuat respons yang baru saja diterima.
-export type HasilTutup = { diterima: true } | { diterima: false };
+export type HasilTutup = { diterima: true } | { diterima: false; alasan: AlasanTolak };
 
 // Menahan kunci kuota sebuah survei sampai transaksinya berakhir.
 //
@@ -187,11 +205,22 @@ export async function tutupRespons(
     // lebih dulu (webhook yang dikirim ulang Meta).
     const r = await tx.surveyResponse.findUnique({
       where: { id: responseId },
-      select: { surveyId: true, kodeProvinsi: true, completedAt: true, consentDitolak: true, ditolakKuotaPada: true },
+      select: {
+        surveyId: true,
+        kodeProvinsi: true,
+        completedAt: true,
+        consentDitolak: true,
+        ditolakKuotaPada: true,
+        alasanDitolakKuota: true,
+        survey: { select: { status: true } },
+      },
     });
     if (!r) return { diterima: true };
     // Sudah ditutup — laporkan keputusan yang dulu, jangan memutuskan ulang.
-    if (r.completedAt) return { diterima: !r.ditolakKuotaPada };
+    if (r.completedAt)
+      return r.ditolakKuotaPada
+        ? { diterima: false, alasan: (r.alasanDitolakKuota as AlasanTolak | null) ?? "global" }
+        : { diterima: true };
 
     const step = typeof ubah.currentStep === "number" ? { currentStep: ubah.currentStep } : {};
     const consentDitolak = ubah.consentDitolak ?? r.consentDitolak;
@@ -203,6 +232,28 @@ export async function tutupRespons(
     // Hitungan diambil SEBELUM completedAt dicap. Respons yang sedang diputuskan belum
     // selesai, jadi belum ikut terhitung — kalau urutannya dibalik, ia menghitung dirinya
     // sendiri dan setiap survei berhenti satu responden sebelum targetnya.
+    // Survei sudah ditutup: jawabannya disimpan, tidak dihitung (lihat ALASAN_DITUTUP).
+    // Diperiksa di dalam kunci yang sama, jadi respons yang selesai tepat saat survei
+    // ditutup diputuskan menurut status terakhirnya.
+    //
+    // Berlaku juga untuk penolak consent — berbeda dari pemeriksaan kuota di bawah. Survei
+    // yang ditutup tidak menerima data apa pun; tanpa ini, formulir yang dikirim dengan
+    // consent "tidak" setelah survei ditutup tetap diterima, masuk Google Sheets, dan tiap
+    // ketukan ulang tombol formulir menambah baris baru.
+    if (r.survey.status === "closed") {
+      await tx.surveyResponse.update({
+        where: { id: responseId },
+        data: {
+          ...step,
+          completedAt: new Date(),
+          consentDitolak,
+          ditolakKuotaPada: new Date(),
+          alasanDitolakKuota: ALASAN_DITUTUP,
+        },
+      });
+      return { diterima: false, alasan: ALASAN_DITUTUP };
+    }
+
     if (!consentDitolak) {
       const hasil = periksaKuota(await angkaKuota(r.surveyId, r.kodeProvinsi, tx));
       if (!hasil.boleh) {
@@ -210,7 +261,7 @@ export async function tutupRespons(
           where: { id: responseId },
           data: { ...step, completedAt: new Date(), ditolakKuotaPada: new Date(), alasanDitolakKuota: hasil.alasan },
         });
-        return { diterima: false };
+        return { diterima: false, alasan: hasil.alasan };
       }
     }
     await tx.surveyResponse.update({
@@ -232,7 +283,7 @@ export async function tutupRespons(
 // DITERIMA, yang kedua menghitung respons itu sendiri sebagai pemakan jatah, lalu
 // membaliknya jadi ditolak — padahal barisnya sudah terdorong ke Google Sheets.
 // Mengembalikan false bila respons sudah diputuskan proses lain: jangan kirim pesan apa pun.
-export async function tolakKarenaKuota(responseId: string, alasan: "global" | "provinsi"): Promise<boolean> {
+export async function tolakKarenaKuota(responseId: string, alasan: AlasanTolak): Promise<boolean> {
   const { count } = await prisma.surveyResponse.updateMany({
     where: { id: responseId, completedAt: null },
     data: { completedAt: new Date(), ditolakKuotaPada: new Date(), alasanDitolakKuota: alasan },
@@ -245,7 +296,7 @@ export async function tolakKarenaKuota(responseId: string, alasan: "global" | "p
 //
 // Lewat kunci yang SAMA dengan tutupRespons(): pemulihan berebut jatah dengan responden
 // yang sedang selesai, dan tanpa kunci keduanya bisa sama-sama mengambil jatah terakhir.
-export type HasilPulih = "dipulihkan" | "masih-penuh" | "sudah-diterima" | "bukan-tolakan";
+export type HasilPulih = "dipulihkan" | "masih-penuh" | "masih-ditutup" | "sudah-diterima" | "bukan-tolakan";
 
 export async function pulihkanRespons(responseId: string): Promise<HasilPulih> {
   return prisma.$transaction(async (tx) => {
@@ -255,9 +306,20 @@ export async function pulihkanRespons(responseId: string): Promise<HasilPulih> {
 
     const r = await tx.surveyResponse.findUnique({
       where: { id: responseId },
-      select: { surveyId: true, contactId: true, kodeProvinsi: true, ditolakKuotaPada: true },
+      select: {
+        surveyId: true,
+        contactId: true,
+        kodeProvinsi: true,
+        ditolakKuotaPada: true,
+        alasanDitolakKuota: true,
+        survey: { select: { status: true } },
+      },
     });
     if (!r?.ditolakKuotaPada) return "bukan-tolakan";
+    // Yang masuk SETELAH survei ditutup baru bisa dipulihkan bila surveinya dibuka lagi.
+    // Yang dulu ditolak kuota (sebelum ditutup) tetap boleh: jawabannya masuk saat survei
+    // masih berjalan, dan klien bisa memutuskan menerimanya setelah survei selesai.
+    if (r.alasanDitolakKuota === ALASAN_DITUTUP && r.survey.status === "closed") return "masih-ditutup";
     // Orangnya sudah punya respons lain yang DITERIMA di survei ini — biasanya karena ia
     // mengisi ulang setelah kuotanya dinaikkan, sebelum skrip pemulihan dijalankan.
     // Memulihkan yang lama membuatnya tercatat dua kali: dobel di kuota, di ekspor, dan di

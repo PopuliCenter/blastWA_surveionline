@@ -50,7 +50,7 @@ async function main(): Promise<void> {
       ...(surveiId ? { id: surveiId } : {}),
       responses: { some: { ditolakKuotaPada: { not: null } } },
     },
-    select: { id: true, title: true, _count: { select: { questions: true } } },
+    select: { id: true, title: true, status: true, _count: { select: { questions: true } } },
     orderBy: { createdAt: "asc" },
   });
   if (!surveys.length) {
@@ -60,6 +60,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  let adaTertahanTutup = false;
   for (const s of surveys) {
     const jml = s._count.questions;
     const semua = await prisma.surveyResponse.findMany({
@@ -69,13 +70,21 @@ async function main(): Promise<void> {
     });
     const lengkap = semua.filter((r) => r.currentStep >= jml);
     const global = semua.filter((r) => r.alasanDitolakKuota === "global").length;
+    const ditutup = semua.filter((r) => r.alasanDitolakKuota === "ditutup").length;
+    // Yang masuk setelah survei ditutup tidak terpulihkan selama surveinya masih ditutup
+    // (pulihkanRespons → "masih-ditutup"), berapa pun targetnya dinaikkan.
+    const tertahanTutup = s.status === "closed" ? lengkap.filter((r) => r.alasanDitolakKuota === "ditutup").length : 0;
+    if (tertahanTutup) adaTertahanTutup = true;
 
     console.log(`\n${s.title}`);
     console.log(`  id survei            : ${s.id}`);
     console.log(
-      `  Ditolak kuota        : ${semua.length} (${global} batas global, ${semua.length - global} batas provinsi)`,
+      `  Ditolak              : ${semua.length} (${global} batas global, ${semua.length - global - ditutup} batas provinsi, ` +
+        `${ditutup} masuk setelah survei ditutup)`,
     );
-    console.log(`  Jawaban lengkap      : ${lengkap.length} — bisa dipulihkan`);
+    console.log(`  Jawaban lengkap      : ${lengkap.length - tertahanTutup} — bisa dipulihkan`);
+    if (tertahanTutup)
+      console.log(`  Setelah ditutup      : ${tertahanTutup} — buka lagi surveinya dulu untuk memulihkan`);
     console.log(`  Dihentikan di tengah : ${semua.length - lengkap.length} — tidak bisa dipulihkan`);
 
     if (!apply) continue;
@@ -83,6 +92,7 @@ async function main(): Promise<void> {
     let dipulihkan = 0;
     let masihPenuh = 0;
     let sudahDiterima = 0;
+    let masihDitutup = 0;
     for (const r of lengkap) {
       const hasil = await pulihkanRespons(r.id);
       if (hasil === "dipulihkan") {
@@ -92,12 +102,17 @@ async function main(): Promise<void> {
         await enqueueSheetSync(r.id);
       } else if (hasil === "masih-penuh") masihPenuh++;
       else if (hasil === "sudah-diterima") sudahDiterima++;
+      else if (hasil === "masih-ditutup") masihDitutup++;
     }
     console.log(`\n  Dipulihkan           : ${dipulihkan}`);
     if (masihPenuh)
       console.log(`  Dilewati, kuota penuh: ${masihPenuh} — naikkan lagi targetnya bila ingin ikut dipulihkan`);
     if (sudahDiterima)
       console.log(`  Dilewati, sudah ada  : ${sudahDiterima} — orangnya sudah mengisi ulang dan diterima`);
+    if (masihDitutup)
+      console.log(
+        `  Dilewati, ditutup    : ${masihDitutup} — masuk setelah survei ditutup; buka lagi surveinya bila ingin ikut dipulihkan`,
+      );
   }
 
   if (!apply) {
@@ -105,6 +120,11 @@ async function main(): Promise<void> {
       "\nBelum ada yang diubah. Naikkan dulu targetnya di layar Kuota, lalu jalankan lagi dengan" +
         "\n--survei=<id> --apply untuk memulihkan respons yang lengkap.",
     );
+    if (adaTertahanTutup)
+      console.log(
+        "Respons yang masuk setelah survei ditutup baru ikut dipulihkan bila surveinya dibuka lagi" +
+          "\n(status Aktif) — menaikkan target saja tidak cukup.",
+      );
   }
 }
 

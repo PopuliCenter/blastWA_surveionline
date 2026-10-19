@@ -59,6 +59,7 @@ export async function gandakanSurvei(id: string) {
           bannerUrl: asli.bannerUrl,
           closingMessage: asli.closingMessage,
           pesanKuotaPenuh: asli.pesanKuotaPenuh,
+          pesanSurveiBerakhir: asli.pesanSurveiBerakhir,
           mintaLokasi: asli.mintaLokasi,
           pesanMintaLokasi: asli.pesanMintaLokasi,
           lokasiPesanTerpisah: asli.lokasiPesanTerpisah,

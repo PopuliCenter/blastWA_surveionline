@@ -20,6 +20,7 @@ import {
   QTYPE_OPTIONS,
   HAS_CHOICES,
   PESAN_KUOTA_PENUH_BAWAAN,
+  PESAN_SURVEI_BERAKHIR_BAWAAN,
   PESAN_MINTA_LOKASI_BAWAAN,
   TERIMA_KASIH_LOKASI_BAWAAN,
   PENUTUP_BAWAAN,
@@ -71,6 +72,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   // Kosong = teks bawaan backend. Sengaja TIDAK diisi teks bawaan sebagai nilai awal:
   // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
   const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
+  // Kosong = teks bawaan backend, alasannya sama dengan pesanKuotaPenuh.
+  const [pesanSurveiBerakhir, setPesanSurveiBerakhir] = useState(survey?.pesanSurveiBerakhir || "");
   const [mintaLokasi, setMintaLokasi] = useState(survey?.mintaLokasi ?? false);
   // Kosong = teks bawaan backend, alasannya sama dengan pesanKuotaPenuh.
   const [pesanMintaLokasi, setPesanMintaLokasi] = useState(survey?.pesanMintaLokasi || "");
@@ -158,6 +161,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      pesanSurveiBerakhir,
       mintaLokasi,
       pesanMintaLokasi,
       lokasiPesanTerpisah,
@@ -180,6 +184,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       bannerUrl,
       closingMessage,
       pesanKuotaPenuh,
+      pesanSurveiBerakhir,
       mintaLokasi,
       pesanMintaLokasi,
       lokasiPesanTerpisah,
@@ -273,6 +278,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
         bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
         pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
+        pesanSurveiBerakhir: pesanSurveiBerakhir.trim() || null,
         mintaLokasi,
         pesanMintaLokasi: pesanMintaLokasi.trim() || null,
         lokasiPesanTerpisah,
@@ -839,6 +845,26 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
                   Pesan yang sama dikirim <strong>sebelum</strong> survei dimulai maupun <strong>sesudah</strong>{" "}
                   responden selesai mengisi formulir Flow, jadi tulis kalimat yang cocok untuk keduanya. Jangan sebut
                   nama provinsi atau angka kuota.
+                </span>
+              }
+            />
+          </Panel>
+
+          <Panel
+            title="Pesan saat survei sudah berakhir"
+            note="Dikirim kepada orang yang mencoba ikut setelah survei ini ditutup (status Ditutup). Kosongkan untuk teks default."
+          >
+            <Textarea
+              value={pesanSurveiBerakhir}
+              onChange={(e) => setPesanSurveiBerakhir(e.target.value)}
+              placeholder={PESAN_SURVEI_BERAKHIR_BAWAAN}
+              maxLength={1000}
+              aria-label="Pesan saat survei sudah berakhir"
+              hint={
+                <span style={{ lineHeight: 1.5 }}>
+                  Dikirim bila seseorang mengetik kata pemicu survei ini, membalas blastnya, atau mengirim formulir yang
+                  terlanjur dibuka — setelah survei ditutup. Jawaban yang masuk setelah ditutup tetap disimpan, tetapi
+                  tidak ikut ekspor, Google Sheets, maupun kuota.
                 </span>
               }
             />

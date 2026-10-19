@@ -139,6 +139,10 @@ export const bersihkanKodeWilayah = (nilai) => String(nilai).replace(/\s*\(\d{2}
 // Satu fungsi untuk semua halaman, supaya angka di layar dan isi berkas tidak berselisih.
 export const ditolakKuota = (r) => Boolean(r?.ditolakKuotaPada);
 
+// Bagian dari yang ditolak di atas: masuk SETELAH survei ditutup (bukan karena kuota). Sama-
+// sama tidak dihitung; dibedakan hanya untuk labelnya.
+export const ditolakKarenaDitutup = (r) => ditolakKuota(r) && r?.alasanDitolakKuota === "ditutup";
+
 // Kesesuaian lokasi yang dibagikan dengan provinsi yang DISEBUT responden. Kembar
 // LABEL_STATUS_LOKASI di backend/src/lib/lokasi.ts — statusnya dihitung di sana.
 export const LABEL_STATUS_LOKASI = {

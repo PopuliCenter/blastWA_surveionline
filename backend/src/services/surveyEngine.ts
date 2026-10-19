@@ -14,8 +14,10 @@ import {
 import { suppressNumber, unsuppressNumber } from "../lib/optOutList.js";
 import { kodeProvinsiDari } from "../lib/wilayah.js";
 import {
+  ALASAN_DITUTUP,
   bolehMulaiSurvei,
   pesanKuotaPenuh,
+  pesanSurveiBerakhir,
   provinsiAwal,
   pulihkanRespons,
   stempelProvinsi,
@@ -240,8 +242,16 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
 
   // Formulir Flow yang tak kunjung diisi TIDAK boleh mengunci kontak selamanya.
   // Lewat jendela 24 jam → anggap ditinggalkan, pesan berikutnya diproses normal
-  // (pemicu survei, auto-reply, agen AI).
-  if (active && active.survey.mode === "flow" && isFlowAbandoned(active.startedAt)) active = null;
+  // (pemicu survei, auto-reply, agen AI). Begitu pula bila surveinya sudah DITUTUP:
+  // formulirnya tidak lagi ditunggu, dan pesan berikutnya diperlakukan seperti dari orang
+  // tanpa sesi — kata pemicu survei itu dijawab pesan berakhirnya (langkah 3a). Formulir
+  // yang tetap dikirim nanti ditolak di tutupRespons (ALASAN_DITUTUP).
+  if (
+    active &&
+    active.survey.mode === "flow" &&
+    (isFlowAbandoned(active.startedAt) || active.survey.status === "closed")
+  )
+    active = null;
 
   if (active) {
     if (active.survey.mode === "flow") {
@@ -272,8 +282,15 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
         await doOptIn(contact, ev.vendor, phone);
         return;
       }
-      const auto = await findAutoResponse(contact.id, ev.text ?? "");
-      if (auto) await reply(ev.vendor, phone, auto.text, contact.id, auto.source);
+      await balasOtomatis(ev.vendor, phone, contact.id, ev.text ?? "");
+      return;
+    }
+    // Survei DITUTUP saat orang ini masih mengisi: berhenti di sini. Jawaban yang sudah
+    // masuk tetap tersimpan tetapi tidak dihitung (ALASAN_DITUTUP), dan ia diberi tahu.
+    // false = respons ini sudah diputuskan proses lain bersamaan — jangan kirim dua kali.
+    if (active.survey.status === "closed") {
+      if (await tolakKarenaKuota(active.id, ALASAN_DITUTUP))
+        await kirimPesanBerakhir(ev.vendor, phone, contact.id, active.survey.id, active.survey.pesanSurveiBerakhir);
       return;
     }
     await advanceSurvey(
@@ -329,13 +346,39 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
         text: ev.text ?? "",
       })
     ) {
-      await startSurvey(recipient.blast.survey, contact.id, phone, ev.vendor, recipient.blastId);
-      return;
+      const survei = recipient.blast.survey;
+      // Hanya survei yang AKTIF yang boleh dimulai. Dulu jalur ini tidak memeriksa status:
+      // balasan atas blast yang dikirim sebelum survei ditutup tetap memulai survei itu.
+      if (survei.status === "active") {
+        await startSurvey(survei, contact.id, phone, ev.vendor, recipient.blastId);
+        return;
+      }
+      if (survei.status === "closed") {
+        await balasSurveiBerakhir(ev.vendor, phone, contact.id, survei.id, survei.pesanSurveiBerakhir);
+        return;
+      }
+      // Draf: belum dimulai — biarkan jatuh ke Auto Reply / Agen AI.
     }
     // Sengaja TIDAK return: pesan diteruskan ke Auto Reply / Agen AI. Dulu di sini
     // dibalas "jawaban Anda sudah kami terima" lalu berhenti, sehingga kontak yang
     // pernah diblast tak pernah bisa mendapat balasan sapaan. Pesan itu tetap dikirim
     // pada jalur pemicu eksplisit di atas, tempat ia memang bermakna.
+  }
+
+  // 3a) Kata pemicu survei yang sudah DITUTUP: dijawab bahwa surveinya sudah berakhir.
+  // Dulu tidak cocok dengan survei mana pun, lalu jatuh ke Auto Reply / Agen AI — yang tidak
+  // tahu survei itu — atau didiamkan sama sekali.
+  //
+  // Sengaja SETELAH jalur blast: kata pemicu survei lama yang umum ("survei", "ikut") tidak
+  // boleh menyerobot balasan atas blast survei yang masih berjalan. Dan pesan yang memuat
+  // kata berhenti ("stop survei") dilewatkan ke 3b — permintaan berhenti harus tercatat,
+  // bukan dijawab "survei sudah berakhir".
+  if (!isOptOutMessage(ev.text ?? "")) {
+    const berakhir = await findSurveiBerakhir(ev.text ?? "");
+    if (berakhir) {
+      await balasSurveiBerakhir(ev.vendor, phone, contact.id, berakhir.id, berakhir.pesanSurveiBerakhir);
+      return;
+    }
   }
 
   // 3b) Permintaan berhenti/berlangganan yang tidak persis satu perintah — mis. "STOP.",
@@ -356,8 +399,57 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   }
 
   // 4) Auto Reply / Agen AI
-  const auto = await findAutoResponse(contact.id, ev.text ?? "");
-  if (auto) await reply(ev.vendor, phone, auto.text, contact.id, auto.source);
+  await balasOtomatis(ev.vendor, phone, contact.id, ev.text ?? "");
+}
+
+// Balasan untuk pesan yang tidak ditangani mesin survei: aturan Auto Reply, lalu Agen AI.
+//
+// KECUALI saat tidak ada survei yang aktif sama sekali. Setelah survei ditutup, responden
+// masih bertanya-tanya ("kapan hasilnya?", "masih bisa ikut?"), dan Agen AI — yang tidak
+// punya survei untuk ditawarkan — menjawab setiap pesan dengan kalimat penolakan yang sama
+// dari promptnya, berulang-ulang, dan tiap balasan ditagih. Di keadaan itu:
+//  • aturan Auto Reply tetap berlaku (isinya ditulis operator);
+//  • selain itu dikirim "pesan saat survei sudah berakhir" milik survei terakhir orang ini,
+//    SEKALI — pesan berikutnya dalam 24 jam tidak dibalas otomatis (balasSurveiBerakhir).
+//    Operator tetap bisa membalas manual dari kotak masuk.
+// Belum pernah ada survei yang ditutup → perilaku lama (Agen AI).
+async function balasOtomatis(vendor: string, phone: string, contactId: string, text: string): Promise<void> {
+  if (!(await prisma.survey.count({ where: { status: "active" } }))) {
+    const survei = await surveiBerakhirUntukKontak(contactId);
+    if (survei) {
+      const aturan = await findAutoResponse(contactId, text, { tanpaAi: true });
+      if (aturan) await reply(vendor, phone, aturan.text, contactId, aturan.source);
+      // Pesan tanpa teks (stiker, gambar) tidak dibalas — sama seperti Auto Reply.
+      else if (text.trim()) await balasSurveiBerakhir(vendor, phone, contactId, survei.id, survei.pesanSurveiBerakhir);
+      return;
+    }
+  }
+  const auto = await findAutoResponse(contactId, text);
+  if (auto) await reply(vendor, phone, auto.text, contactId, auto.source);
+}
+
+// Survei yang sudah ditutup yang paling relevan bagi kontak ini: survei terakhir yang ia isi
+// atau yang blastnya ia terima, bila survei itu sudah ditutup; selain itu survei yang paling
+// baru dibuat di antara yang sudah ditutup.
+async function surveiBerakhirUntukKontak(contactId: string) {
+  const pilih = { id: true, status: true, pesanSurveiBerakhir: true } as const;
+  const [respons, blast] = await Promise.all([
+    prisma.surveyResponse.findFirst({
+      where: { contactId },
+      orderBy: { startedAt: "desc" },
+      select: { startedAt: true, survey: { select: pilih } },
+    }),
+    prisma.blastRecipient.findFirst({
+      where: { contactId, blast: { surveyId: { not: null } } },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, blast: { select: { survey: { select: pilih } } } },
+    }),
+  ]);
+  const dariBlast = blast?.blast.survey ?? null;
+  const terakhir =
+    respons && (!blast || respons.startedAt >= blast.createdAt) ? respons.survey : (dariBlast ?? respons?.survey);
+  if (terakhir?.status === "closed") return terakhir;
+  return prisma.survey.findFirst({ where: { status: "closed" }, orderBy: { createdAt: "desc" }, select: pilih });
 }
 
 const ALREADY_DONE_TEXT = "Terima kasih, jawaban Anda untuk survei ini sudah kami terima sebelumnya. 🙏";
@@ -402,6 +494,27 @@ async function findTriggeredSurvey(text: string) {
   // BUKAN includes() mentah — itu dulu menjaring "sudah saya isi surveinya" (potongan
   // kata) dan kalimat panjang yang cuma menyebut survei, lalu melempar pengirimnya ke
   // pertanyaan 1. Yang tak cocok di sini jatuh ke Auto Reply / Agen AI, bukan didiamkan.
+  for (const s of surveys) if (kataKunci(s).some((k) => matchesTriggerInSentence(t, k))) return s;
+  return null;
+}
+
+// Survei yang sudah DITUTUP dan kata pemicunya cocok dengan pesan ini — aturan cocok yang
+// SAMA dengan findTriggeredSurvey (persis, atau frasa utuh di kalimat pendek yang bukan
+// pertanyaan). Sakelar pemicu tidak ikut diperiksa: banyak tim mematikannya saat menutup
+// survei, padahal responden masih mengetik kata yang sama. Yang terbaru didahulukan bila
+// beberapa survei lama memakai kata yang sama.
+async function findSurveiBerakhir(text: string) {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  const surveys = await prisma.survey.findMany({
+    where: { status: "closed", triggerKeywords: { isEmpty: false } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, triggerKeywords: true, pesanSurveiBerakhir: true },
+  });
+  const kataKunci = (s: (typeof surveys)[number]) =>
+    (s.triggerKeywords ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean);
+  for (const s of surveys) if (kataKunci(s).some((k) => t === k)) return s;
+  if (looksLikeQuestion(t)) return null;
   for (const s of surveys) if (kataKunci(s).some((k) => matchesTriggerInSentence(t, k))) return s;
   return null;
 }
@@ -570,7 +683,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     if (!surveyResponse) {
       const survey = await prisma.survey.findUnique({
         where: { id: surveyId },
-        select: { id: true, oncePerContact: true, pesanKuotaPenuh: true },
+        select: { id: true, oncePerContact: true, pesanKuotaPenuh: true, status: true, pesanSurveiBerakhir: true },
       });
       if (survey) {
         // Tombol formulir di template blast tetap bisa ditekan lagi kapan pun, jadi
@@ -597,7 +710,20 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
           where: { surveyId, contactId, ditolakKuotaPada: { not: null } },
           select: { id: true },
         });
-        if (pernahDitolak && !(await bolehMulaiSurvei(surveyId, kodeProv)).boleh) {
+        if (survey.status === "closed") {
+          // Survei sudah ditutup: formulir PERTAMA tetap disimpan (tidak dihitung — diputuskan
+          // tutupRespons), tetapi ketukan berikutnya tidak melahirkan respons baru lagi. Begitu
+          // pula orang yang sudah pernah mengisi sampai selesai sebelum survei ditutup —
+          // jawabannya sudah ada, salinan yang tidak dihitung tidak menambah apa pun.
+          const sudahAdaJawaban = await prisma.surveyResponse.findFirst({
+            where: { surveyId, contactId, completedAt: { not: null } },
+            select: { id: true },
+          });
+          if (sudahAdaJawaban) {
+            await balasSurveiBerakhir(vendor, phone, contactId, surveyId, survey.pesanSurveiBerakhir);
+            return;
+          }
+        } else if (pernahDitolak && !(await bolehMulaiSurvei(surveyId, kodeProv)).boleh) {
           await balasKuotaPenuh(vendor, phone, contactId, surveyId, survey.pesanKuotaPenuh);
           return;
         }
@@ -625,12 +751,22 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       // sudah membawa jawaban lengkap, jadi cukup dipulihkan lewat kunci yang sama — tanpa
       // respons baru dan tanpa menulis jawaban dua kali.
       const lengkap = surveyResponse.currentStep >= surveyResponse.survey.questions.length;
-      const hasil = lengkap ? await pulihkanRespons(surveyResponse.id) : "masih-penuh";
+      const masihDitutup =
+        surveyResponse.alasanDitolakKuota === ALASAN_DITUTUP && surveyResponse.survey.status === "closed";
+      const hasil = masihDitutup ? "masih-ditutup" : lengkap ? await pulihkanRespons(surveyResponse.id) : "masih-penuh";
       if (hasil === "dipulihkan") {
         await enqueueSheetSync(surveyResponse.id);
         await kirimPenutup(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
       } else if (hasil === "masih-penuh") {
         await balasKuotaPenuh(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
+      } else if (hasil === "masih-ditutup") {
+        await balasSurveiBerakhir(
+          vendor,
+          phone,
+          contactId,
+          surveyResponse.surveyId,
+          surveyResponse.survey.pesanSurveiBerakhir,
+        );
       }
       // "sudah-diterima": ia sudah punya respons lain yang diterima — sama seperti respons
       // selesai biasa yang dikirim ulang, tidak perlu dibalas.
@@ -709,7 +845,16 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     consentDitolak: disaringKeluar(questions, answers),
   });
   if (!tutup.diterima) {
-    await kirimPesanKuota(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
+    if (tutup.alasan === ALASAN_DITUTUP)
+      await kirimPesanBerakhir(
+        vendor,
+        phone,
+        contactId,
+        surveyResponse.surveyId,
+        surveyResponse.survey.pesanSurveiBerakhir,
+      );
+    else
+      await kirimPesanKuota(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
     return;
   }
   await enqueueSheetSync(surveyResponse.id);
@@ -728,6 +873,7 @@ async function advanceSurvey(
     id: string;
     closingMessage: string | null;
     pesanKuotaPenuh: string | null;
+    pesanSurveiBerakhir: string | null;
     mintaLokasi: boolean;
     pesanMintaLokasi: string | null;
     lokasiPesanTerpisah: boolean;
@@ -804,7 +950,9 @@ async function advanceSurvey(
   // responden lain yang selesai lebih dulu.
   const tutup = await tutupRespons(responseId, { currentStep: questions.length });
   if (!tutup.diterima) {
-    await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
+    if (tutup.alasan === ALASAN_DITUTUP)
+      await kirimPesanBerakhir(vendor, phone, contactId, survei.id, survei.pesanSurveiBerakhir);
+    else await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
     return;
   }
   await enqueueSheetSync(responseId);
@@ -1014,6 +1162,45 @@ async function kirimPesanKuota(
   teksSurvei: string | null | undefined,
 ): Promise<void> {
   await reply(vendor, phone, pesanKuotaPenuh(teksSurvei), contactId, "survey", { kuotaSurveyId: surveyId });
+}
+
+// Pesan "survei sudah berakhir", ditandai id surveinya di payload — pola yang sama dengan
+// pesan kuota. Dikirim langsung (tanpa penahan) untuk orang yang baru saja mengisi sampai
+// habis: ia harus selalu tahu kenapa jawabannya tidak dihitung.
+async function kirimPesanBerakhir(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  surveyId: string,
+  teksSurvei: string | null | undefined,
+): Promise<void> {
+  await reply(vendor, phone, pesanSurveiBerakhir(teksSurvei), contactId, "survey", { berakhirSurveyId: surveyId });
+}
+
+// Untuk tindakan yang BERULANG — mengetik kata pemicu lagi, menekan tombol formulir lagi,
+// bertanya lagi setelah survei usai: dikirim paling banyak SEKALI dalam 24 jam per kontak.
+//
+// Berbeda dari balasKuotaPenuh(), yang dilihat bukan hanya pesan keluar TERAKHIR. Setelah
+// survei usai, operator sering membalas manual dari kotak masuk dan aturan Auto Reply bisa
+// menjawab di sela-sela; dulu balasan itu memutus penahan, sehingga pesan berikutnya dibalas
+// "survei sudah berakhir" lagi. Penahannya juga tidak per survei: pesan berakhir survei A
+// sudah memberi tahu orang itu, dan menyusulkan pesan berakhir survei B (dipilih dari jalur
+// lain) hanya mengulang kabar yang sama.
+async function balasSurveiBerakhir(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  surveyId: string,
+  teksSurvei: string | null | undefined,
+): Promise<void> {
+  const keluar = await prisma.message.findMany({
+    where: { contactId, direction: "out", createdAt: { gte: new Date(Date.now() - SEHARI_MS) } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { payload: true },
+  });
+  if (keluar.some((m) => (m.payload as { berakhirSurveyId?: unknown } | null)?.berakhirSurveyId)) return;
+  await kirimPesanBerakhir(vendor, phone, contactId, surveyId, teksSurvei);
 }
 
 const SEHARI_MS = 24 * 60 * 60 * 1000;

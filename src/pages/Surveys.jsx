@@ -164,9 +164,18 @@ export default function Surveys() {
     </>
   );
 
+  // Yang tidak dihitung, dirinci menurut sebabnya: kuota penuh, atau masuk setelah ditutup.
+  const ringkasDitolak = (s) => {
+    const ditutup = s.responsesDitolakDitutup ?? 0;
+    const kuota = (s.responsesDitolakKuota ?? 0) - ditutup;
+    const bagian = [kuota ? `${kuota} ditolak kuota` : "", ditutup ? `${ditutup} masuk setelah ditutup` : ""];
+    const isi = bagian.filter(Boolean).join(", ");
+    return isi ? ` (${isi})` : "";
+  };
+
   const ringkasanSurvei = (s) =>
     `${s.questions.length} pertanyaan • ${s.responses} respons` +
-    (s.responsesDitolakKuota ? ` (${s.responsesDitolakKuota} ditolak kuota)` : "") +
+    ringkasDitolak(s) +
     (s.triggerEnabled && s.triggerKeywords?.length
       ? ` • pemicu: ${s.triggerKeywords.slice(0, 3).join(", ")}${s.triggerKeywords.length > 3 ? "…" : ""}`
       : "");

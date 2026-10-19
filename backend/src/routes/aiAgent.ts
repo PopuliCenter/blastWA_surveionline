@@ -41,9 +41,11 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
 
   // Ambil konfigurasi (TANPA membocorkan API key)
   app.get("/api/ai-agent", async () => {
-    const [cfg, kuota] = await Promise.all([
+    const [cfg, kuota, jmlAktif, jmlDitutup] = await Promise.all([
       prisma.aiConfig.findUnique({ where: { id: "default" } }),
       statusKuotaSurveiAktif(),
+      prisma.survey.count({ where: { status: "active" } }),
+      prisma.survey.count({ where: { status: "closed" } }),
     ]);
     return {
       // Keadaan NYATA, bukan sekadar nilai konfigurasi. Agen yang "Aktif" di layar tapi
@@ -51,6 +53,9 @@ export async function aiAgentRoutes(app: FastifyInstance): Promise<void> {
       // integrasinya rusak dan menghabiskan waktu mencari sebab yang tidak ada.
       kuotaPenuh: kuota.semuaPenuh,
       surveiAktif: kuota.survei,
+      // Tidak ada survei aktif (dan sudah ada yang ditutup): agen tidak membalas — responden
+      // menerima "pesan saat survei sudah berakhir" sekali (balasOtomatis di mesin survei).
+      diamKarenaSurveiDitutup: jmlAktif === 0 && jmlDitutup > 0,
       // Kapan SISTEM yang mematikannya. Tanpa jejak ini, operator yang menemukan agennya
       // mati akan mengira ada orang lain yang mematikan — lalu menyalakannya tanpa tahu
       // bahwa tagihan akan jalan lagi tanpa membawa responden baru.

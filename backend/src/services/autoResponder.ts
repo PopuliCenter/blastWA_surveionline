@@ -5,7 +5,7 @@ import { generateReply, type AiMessage } from "../lib/ai.js";
 import { decideAiReply, AI_QUOTA_WINDOW_MS, AI_QUOTA_REACHED_REPLY } from "../lib/aiLimits.js";
 import { logError } from "../lib/errorLog.js";
 import { buildContactFacts } from "../lib/aiContext.js";
-import { statusKuotaSurveiAktif } from "./kuotaSurvei.js";
+import { ALASAN_DITUTUP, statusKuotaSurveiAktif } from "./kuotaSurvei.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
 // Urutan: aturan Auto Reply (cocok kata kunci) → Agen AI (bila aktif).
@@ -14,7 +14,14 @@ import { statusKuotaSurveiAktif } from "./kuotaSurvei.js";
 
 export type AutoResponse = { text: string; source: "autoreply" | "ai" };
 
-export async function findAutoResponse(contactId: string, text: string): Promise<AutoResponse | null> {
+// tanpaAi: hanya aturan Auto Reply. Dipakai saat tidak ada survei aktif (lihat balasOtomatis
+// di mesin survei): aturan ditulis operator dan tetap berlaku, sedangkan Agen AI yang tidak
+// punya survei untuk ditawarkan hanya akan mengulang kalimat penolakan yang sama.
+export async function findAutoResponse(
+  contactId: string,
+  text: string,
+  opsi: { tanpaAi?: boolean } = {},
+): Promise<AutoResponse | null> {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
 
@@ -30,6 +37,8 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       r.matchType === "exact" ? lower === kw : r.matchType === "starts" ? lower.startsWith(kw) : lower.includes(kw);
     if (hit) return { text: r.response, source: "autoreply" };
   }
+
+  if (opsi.tanpaAi) return null;
 
   // 2) Agen AI
   const ai = await prisma.aiConfig.findUnique({ where: { id: "default" } });
@@ -97,7 +106,7 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       // karena kuota penuh" adalah dua cerita yang berbeda bagi orangnya.
       responses: {
         where: { contactId, completedAt: { not: null } },
-        select: { ditolakKuotaPada: true },
+        select: { ditolakKuotaPada: true, alasanDitolakKuota: true },
       },
     },
   });
@@ -107,7 +116,9 @@ export async function findAutoResponse(contactId: string, text: string): Promise
       triggers: s.triggerEnabled ? (s.triggerKeywords ?? []) : [],
       oncePerContact: s.oncePerContact,
       completedByContact: s.responses.some((r) => !r.ditolakKuotaPada),
-      ditolakKuota: s.responses.some((r) => r.ditolakKuotaPada),
+      // Yang masuk saat survei ini sempat DITUTUP bukan penolakan kuota — surveinya kini aktif
+      // lagi, jadi bagi orangnya ia sekadar belum ikut.
+      ditolakKuota: s.responses.some((r) => r.ditolakKuotaPada && r.alasanDitolakKuota !== ALASAN_DITUTUP),
     })),
   );
 

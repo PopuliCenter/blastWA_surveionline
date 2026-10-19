@@ -56,5 +56,10 @@ export const PENUTUP_BAWAAN = "Terima kasih, semua jawaban Anda sudah kami terim
 // yang lebih panjang dari ini dikirim sebagai dua pesan (lihat kirimPenutup di backend).
 export const BATAS_PESAN_BERTOMBOL = 1024;
 
+// Kembar PESAN_SURVEI_BERAKHIR_BAWAAN di backend/src/services/kuotaSurvei.ts — aturannya
+// sama dengan pesan kuota di bawah: kolom kosong memakai teks backend.
+export const PESAN_SURVEI_BERAKHIR_BAWAAN =
+  "Terima kasih atas minat Anda. Survei ini sudah berakhir, sehingga kami tidak dapat menerima jawaban baru. 🙏";
+
 export const PESAN_KUOTA_PENUH_BAWAAN =
   "Terima kasih atas kesediaan Anda. Kuota responden survei ini sudah terpenuhi, sehingga kami tidak dapat mengikutsertakan jawaban baru. 🙏";

@@ -7,7 +7,14 @@ import { tabBertabrakan, teksPertanyaanGanda } from "../lib/salinSurvei.js";
 import { galatAturanDurasi, menitDari } from "../lib/asesmenDurasi.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
-import { DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
+import { ALASAN_DITUTUP, DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
+
+// Ditolak karena kuota penuh — BUKAN yang masuk setelah survei ditutup. OR dengan null:
+// `not` saja di SQL membuang baris yang alasannya kosong.
+const DITOLAK_KARENA_KUOTA = {
+  ditolakKuotaPada: { not: null },
+  OR: [{ alasanDitolakKuota: null }, { alasanDitolakKuota: { not: ALASAN_DITUTUP } }],
+};
 import { statusLokasi } from "../lib/lokasi.js";
 import { batasTerpasang, provinsiDariTitik } from "../services/petaProvinsi.js";
 
@@ -46,6 +53,8 @@ export const surveySchema = z.object({
   // Wajib terdaftar di sini: z.object membuang kunci yang tak dikenal TANPA galat, jadi
   // tanpa baris ini builder menyimpan dengan HTTP 200 dan pesannya tak pernah tersimpan.
   pesanKuotaPenuh: z.string().max(1000).optional().nullable(),
+  // Balasan untuk orang yang mencoba ikut setelah survei ditutup; kosong = teks bawaan.
+  pesanSurveiBerakhir: z.string().max(1000).optional().nullable(),
   // Minta lokasi setelah responden selesai (lihat kirimPenutup di mesin survei). Teksnya
   // kosong = teks bawaan, yang menyebut tujuan, ketelitian, dan bahwa boleh dilewati.
   mintaLokasi: z.boolean().default(false),
@@ -130,16 +139,26 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     });
     // `responses` tetap SELURUH baris — Biaya memakainya, dan pesannya memang sudah
     // ditagih. Yang ditolak kuota dikirim terpisah untuk layar yang menampilkan data terpakai.
+    // responsesDitolakKuota = SEMUA yang tidak dihitung (kuota penuh maupun masuk setelah
+    // survei ditutup) — layar memakainya untuk mengurangi jumlah respons terpakai.
+    // responsesDitolakDitutup = bagian yang masuk setelah ditutup, untuk labelnya.
     const ditolak = await prisma.surveyResponse.groupBy({
-      by: ["surveyId"],
+      by: ["surveyId", "alasanDitolakKuota"],
       where: { surveyId: { in: surveys.map((s) => s.id) }, ditolakKuotaPada: { not: null } },
       _count: { _all: true },
     });
-    const ditolakPer = new Map(ditolak.map((d) => [d.surveyId, d._count._all]));
+    const ditolakPer = new Map<string, number>();
+    const ditutupPer = new Map<string, number>();
+    for (const d of ditolak) {
+      ditolakPer.set(d.surveyId, (ditolakPer.get(d.surveyId) ?? 0) + d._count._all);
+      if (d.alasanDitolakKuota === ALASAN_DITUTUP)
+        ditutupPer.set(d.surveyId, (ditutupPer.get(d.surveyId) ?? 0) + d._count._all);
+    }
     return surveys.map((s) => ({
       ...s,
       responses: s._count.responses,
       responsesDitolakKuota: ditolakPer.get(s.id) ?? 0,
+      responsesDitolakDitutup: ditutupPer.get(s.id) ?? 0,
     }));
   });
 
@@ -333,9 +352,14 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       prisma.question.count({ where: { surveyId: id, type: "wilayah" } }),
       // Ditampilkan, bukan sekadar dikecualikan diam-diam: selisih antara "respons selesai"
       // dan "terhitung kuota" harus bisa dijelaskan ke klien tanpa membuka database.
-      prisma.surveyResponse.count({ where: { surveyId: id, completedAt: { not: null }, consentDitolak: true } }),
+      // Penolak consent yang masuk setelah survei ditutup sudah terhitung di tab "Ditolak".
+      prisma.surveyResponse.count({
+        where: { surveyId: id, completedAt: { not: null }, consentDitolak: true, ditolakKuotaPada: null },
+      }),
       // Kategori pengecualian KEDUA, dilaporkan dengan asas yang sama.
-      prisma.surveyResponse.count({ where: { surveyId: id, ditolakKuotaPada: { not: null } } }),
+      // Yang masuk setelah survei DITUTUP tidak termasuk: itu bukan penolakan kuota, dan
+      // menaikkan target tidak memulihkannya.
+      prisma.surveyResponse.count({ where: { surveyId: id, ...DITOLAK_KARENA_KUOTA } }),
     ]);
     // Dari yang ditolak, berapa yang jawabannya LENGKAP — hanya itu yang bisa dipulihkan
     // bila kuotanya dinaikkan. Respons chat yang dihentikan begitu provinsinya ketahuan
@@ -343,7 +367,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
     const jmlPertanyaan = await prisma.question.count({ where: { surveyId: id } });
     const ditolakKuotaLengkap = ditolakKuota
       ? await prisma.surveyResponse.count({
-          where: { surveyId: id, ditolakKuotaPada: { not: null }, currentStep: { gte: jmlPertanyaan } },
+          where: { surveyId: id, ...DITOLAK_KARENA_KUOTA, currentStep: { gte: jmlPertanyaan } },
         })
       : 0;
     const terisi = new Map(perProvinsi.map((r) => [r.kodeProvinsi ?? "", r._count._all]));
