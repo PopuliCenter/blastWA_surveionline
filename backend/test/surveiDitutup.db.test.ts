@@ -42,6 +42,8 @@ vi.mock("../src/services/autoResponder.js", () => ({
   },
 }));
 
+import { OPT_OUT_REPLY } from "../src/lib/optOut.js";
+
 type Engine = typeof import("../src/services/surveyEngine.js");
 type Db = typeof import("../src/db.js");
 type Kuota = typeof import("../src/services/kuotaSurvei.js");
@@ -50,6 +52,8 @@ describe.skipIf(!URL_UJI)("survei yang sudah ditutup", () => {
   let engine: Engine;
   let prisma: Db["prisma"];
   let K: Kuota;
+  let Fastify: typeof import("fastify").default;
+  let autoReplyRoutes: typeof import("../src/routes/autoReply.js").autoReplyRoutes;
   const surveiDibuat: string[] = [];
   const nomorDibuat: string[] = [];
   const blastDibuat: string[] = [];
@@ -59,6 +63,10 @@ describe.skipIf(!URL_UJI)("survei yang sudah ditutup", () => {
     prisma = (await import("../src/db.js")).prisma;
     engine = await import("../src/services/surveyEngine.js");
     K = await import("../src/services/kuotaSurvei.js");
+    // Dimuat di sini, bukan di dalam tesnya: memuat Fastify di tengah suite penuh bisa
+    // melewati batas waktu satu tes.
+    Fastify = (await import("fastify")).default;
+    autoReplyRoutes = (await import("../src/routes/autoReply.js")).autoReplyRoutes;
   });
 
   afterAll(async () => {
@@ -316,5 +324,111 @@ describe.skipIf(!URL_UJI)("survei yang sudah ditutup", () => {
     await kirim(hp, "ada survei baru?");
     expect(panggilanAi).toEqual(["ada survei baru?"]);
     await prisma.survey.update({ where: { id: baru.s.id }, data: { status: "closed" } });
+  });
+
+  // "Bot diam saat tidak ada survei berjalan" (services/modeBot.ts).
+  describe("bot diam saat tidak ada survei berjalan", () => {
+    beforeEach(async () => {
+      await prisma.botConfig.upsert({
+        where: { id: "default" },
+        create: { id: "default", diamTanpaSurveiAktif: true },
+        update: { diamTanpaSurveiAktif: true },
+      });
+    });
+    afterEach(async () => {
+      await prisma.botConfig.deleteMany({ where: { id: "default" } });
+    });
+
+    it("tak satu pun balasan otomatis, Agen AI tidak dipanggil; pesan masuk tetap tercatat", async () => {
+      expect(await prisma.survey.count({ where: { status: "active" } })).toBe(0);
+      const { s, kata } = await survei({ status: "closed", pesan: "Survei sudah berakhir." });
+      const hp = nomorBaru();
+      const kontak = await prisma.contact.create({ data: { phone: hp } });
+      await prisma.surveyResponse.create({
+        data: { surveyId: s.id, contactId: kontak.id, completedAt: new Date(), currentStep: 2 },
+      });
+
+      await kirim(hp, kata); // kata pemicu survei yang ditutup
+      await kirim(hp, "kapan hasilnya keluar?"); // pertanyaan bebas
+      await kirim(hp, "aturan"); // cocok dengan aturan Auto Reply
+      expect(teksKe(hp)).toEqual([]);
+      expect(panggilanAi).toEqual([]);
+      expect(await prisma.message.count({ where: { contactId: kontak.id, direction: "in" } })).toBe(3);
+    });
+
+    it("konfirmasi berhenti dikirim SEKALI saat nomornya baru berhenti; STOP berulang tidak dibalas lagi", async () => {
+      const hp = nomorBaru();
+      await kirim(hp, "STOP");
+      await kirim(hp, "stop");
+      await kirim(hp, "berhenti");
+      expect(teksKe(hp)).toEqual([OPT_OUT_REPLY]);
+      expect((await prisma.contact.findUniqueOrThrow({ where: { phone: hp } })).subscribed).toBe(false);
+    });
+
+    it("kata berlangganan di pesan biasa tidak dibalas; berlangganan kembali tetap tercatat", async () => {
+      const hp = nomorBaru();
+      await kirim(hp, "kapan mulai lagi?");
+      await kirim(hp, "mau daftar dong");
+      await kirim(hp, "daftar");
+      expect(teksKe(hp)).toEqual([]);
+
+      // Orang yang dulu berhenti lalu menyatakan berlangganan lagi: dicatat, tanpa balasan.
+      const hp2 = nomorBaru();
+      await kirim(hp2, "STOP");
+      terkirim.length = 0;
+      await kirim(hp2, "MULAI");
+      expect(teksKe(hp2)).toEqual([]);
+      expect((await prisma.contact.findUniqueOrThrow({ where: { phone: hp2 } })).subscribed).toBe(true);
+    });
+
+    it("formulir yang dikirim setelah survei ditutup tetap disimpan (tidak dihitung), tanpa balasan", async () => {
+      const { s, kata } = await survei({ status: "active", mode: "flow" });
+      const hp = nomorBaru();
+      await kirim(hp, kata); // survei masih berjalan → formulir terkirim seperti biasa
+      const token = terkirim.find((t) => t.to === hp)?.flow;
+      expect(token).toBeTruthy();
+      await prisma.survey.update({ where: { id: s.id }, data: { status: "closed" } });
+      terkirim.length = 0;
+
+      await kirimFormulir(hp, {
+        flow_token: token,
+        [`q_${s.questions[0]!.id}`]: "Siti",
+        [`q_${s.questions[1]!.id}`]: "Setuju",
+      });
+      const r = await prisma.surveyResponse.findFirstOrThrow({ where: { surveyId: s.id } });
+      expect(r.alasanDitolakKuota).toBe("ditutup");
+      expect(keSheets).toEqual([]);
+      expect(teksKe(hp)).toEqual([]);
+    });
+
+    it("API /api/mode-bot: membaca keadaan, menyimpan, menolak isian yang salah", async () => {
+      const app = Fastify();
+      app.decorate("authenticate", async () => {});
+      app.decorate("requireWriter", async () => {});
+      await app.register(autoReplyRoutes);
+
+      const baca = await app.inject({ url: "/api/mode-bot" });
+      expect(baca.json()).toEqual({ diamTanpaSurveiAktif: true, adaSurveiBerjalan: false });
+      const simpan = await app.inject({
+        method: "PUT",
+        url: "/api/mode-bot",
+        payload: { diamTanpaSurveiAktif: false },
+      });
+      expect(simpan.json()).toEqual({ diamTanpaSurveiAktif: false, adaSurveiBerjalan: false });
+      expect((await prisma.botConfig.findUniqueOrThrow({ where: { id: "default" } })).diamTanpaSurveiAktif).toBe(false);
+      const salah = await app.inject({ method: "PUT", url: "/api/mode-bot", payload: { diamTanpaSurveiAktif: "ya" } });
+      expect(salah.statusCode).toBe(400);
+      await app.close();
+    });
+
+    it("selama ada survei berjalan, bot membalas seperti biasa", async () => {
+      const { kata } = await survei({ status: "active" });
+      const hp = nomorBaru();
+      await kirim(hp, kata);
+      expect(teksKe(hp)).toEqual(["Nama Anda?"]);
+      const hp2 = nomorBaru();
+      await kirim(hp2, "halo, ini nomor apa?");
+      expect(panggilanAi).toEqual(["halo, ini nomor apa?"]);
+    });
   });
 });

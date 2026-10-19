@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { adaSurveiBerjalan, bacaModeBot, simpanModeBot } from "../services/modeBot.js";
 
 const ruleSchema = z.object({
   name: z.string().min(1),
@@ -38,5 +39,18 @@ export async function autoReplyRoutes(app: FastifyInstance): Promise<void> {
     const id = (req.params as { id: string }).id;
     await prisma.autoReplyRule.delete({ where: { id } });
     return { ok: true };
+  });
+
+  // Mode bot (lihat services/modeBot.ts). adaSurveiBerjalan ikut dikirim supaya layar bisa
+  // mengatakan apakah bot SAAT INI sedang diam, bukan hanya apa pengaturannya.
+  const keadaanModeBot = async () => ({ ...(await bacaModeBot()), adaSurveiBerjalan: await adaSurveiBerjalan() });
+
+  app.get("/api/mode-bot", keadaanModeBot);
+
+  app.put("/api/mode-bot", async (req, reply) => {
+    const parsed = z.object({ diamTanpaSurveiAktif: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    await simpanModeBot(parsed.data);
+    return keadaanModeBot();
   });
 }

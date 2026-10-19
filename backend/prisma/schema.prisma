@@ -352,6 +352,15 @@ model AutoReplyRule {
   @@index([enabled])
 }
 
+// Mode bot — pengaturan tunggal ("default"). Lihat services/modeBot.ts.
+// diamTanpaSurveiAktif: saat tidak ada survei berjalan, bot tidak membalas apa pun (kecuali
+// konfirmasi berhenti/berlangganan). Bot membalas lagi sendiri begitu ada survei berjalan.
+model BotConfig {
+  id                   String   @id // singleton: "default"
+  diamTanpaSurveiAktif Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+}
+
 model AiConfig {
   id           String   @id // singleton: "default"
   enabled      Boolean  @default(false)

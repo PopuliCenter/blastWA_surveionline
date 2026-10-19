@@ -167,6 +167,8 @@ export const api = {
   createAutoReply: (data) => request("/api/auto-replies", { method: "POST", body: data }),
   updateAutoReply: (id, data) => request(`/api/auto-replies/${id}`, { method: "PUT", body: data }),
   deleteAutoReply: (id) => request(`/api/auto-replies/${id}`, { method: "DELETE" }),
+  modeBot: () => request("/api/mode-bot"),
+  simpanModeBot: (data) => request("/api/mode-bot", { method: "PUT", body: data }),
 
   // AI Agent
   getAiAgent: () => request("/api/ai-agent"),

@@ -864,7 +864,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
                 <span style={{ lineHeight: 1.5 }}>
                   Dikirim bila seseorang mengetik kata pemicu survei ini, membalas blastnya, atau mengirim formulir yang
                   terlanjur dibuka — setelah survei ditutup. Jawaban yang masuk setelah ditutup tetap disimpan, tetapi
-                  tidak ikut ekspor, Google Sheets, maupun kuota.
+                  tidak ikut ekspor, Google Sheets, maupun kuota. Tidak dikirim bila "Bot diam saat tidak ada survei
+                  berjalan" dinyalakan di halaman Auto Reply.
                 </span>
               }
             />

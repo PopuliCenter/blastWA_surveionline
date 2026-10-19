@@ -37,6 +37,7 @@ import {
   saringLokasi,
 } from "../lib/lokasi.js";
 import { provinsiDariTitik } from "./petaProvinsi.js";
+import { botSedangDiam } from "./modeBot.js";
 import {
   validateAnswer,
   formatQuestion,
@@ -61,11 +62,15 @@ const SKIP_WORDS = ["lewati", "skip", "lewat", "-"];
 // Simpan/cabut langganan + balas konfirmasinya. Dipakai dari dua tempat: pencocokan
 // ketat di awal, dan pencocokan longgar untuk kontak yang tidak sedang mengisi survei.
 async function doOptOut(contactId: string, vendor: string, phone: string): Promise<void> {
+  const sebelum = await prisma.contact.findUnique({ where: { id: contactId }, select: { subscribed: true } });
   await prisma.contact.update({ where: { id: contactId }, data: { subscribed: false, optOutAt: new Date() } });
   // Dicatat juga di daftar penekan yang berdiri sendiri. Penanda pada Contact ikut hilang
   // bila kontaknya dihapus, dan tanpa daftar ini nomor yang sama bisa diimpor ulang lalu
   // dihubungi lagi seolah tak pernah menolak.
   await suppressNumber(phone, "pesan berhenti");
+  // Bot diam (services/modeBot.ts): konfirmasi STOP tetap dikirim, tetapi hanya saat nomornya
+  // BARU berhenti — STOP yang diulang-ulang tidak dibalas berkali-kali.
+  if (sebelum?.subscribed === false && (await botSedangDiam())) return;
   await reply(vendor, phone, OPT_OUT_REPLY, contactId, "optout");
 }
 
@@ -86,6 +91,10 @@ async function doOptIn(
   // Orangnya sendiri yang menyatakan berlangganan lagi — satu-satunya alasan sah untuk
   // mengangkat nomor dari daftar penekan.
   await unsuppressNumber(phone);
+  // Bot diam: dicatat, tetapi tidak dibalas. Kata berlangganan ("mulai", "daftar", "gabung")
+  // sering muncul di pesan biasa ("kapan mulai lagi?"), dan konfirmasi "Anda kembali
+  // berlangganan" untuk orang yang tak pernah berhenti hanya menambah tagihan.
+  if (await botSedangDiam()) return;
   await reply(vendor, phone, OPT_IN_REPLY, contact.id, "optout");
 }
 
@@ -413,7 +422,12 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
 //    SEKALI — pesan berikutnya dalam 24 jam tidak dibalas otomatis (balasSurveiBerakhir).
 //    Operator tetap bisa membalas manual dari kotak masuk.
 // Belum pernah ada survei yang ditutup → perilaku lama (Agen AI).
+//
+// "Bot diam" menyala (lihat services/modeBot.ts) → tidak ada apa pun. Diperiksa di sini, di
+// depan, bukan hanya di reply(): Agen AI tidak boleh dipanggil sama sekali — tokennya tetap
+// ditagih walaupun balasannya akhirnya tidak dikirim.
 async function balasOtomatis(vendor: string, phone: string, contactId: string, text: string): Promise<void> {
+  if (await botSedangDiam()) return;
   if (!(await prisma.survey.count({ where: { status: "active" } }))) {
     const survei = await surveiBerakhirUntukKontak(contactId);
     if (survei) {
@@ -986,6 +1000,10 @@ async function kirimPenutup(
     lokasiPesanTerpisah: boolean;
   },
 ): Promise<void> {
+  // Kata penutup dan permintaan lokasi juga balasan otomatis — dan permintaan lokasi tidak
+  // lewat reply(). Biasanya tidak pernah terjadi saat bot diam (penutup hanya untuk respons
+  // yang DITERIMA), kecuali formulir lama yang dipulihkan setelah semua survei ditutup.
+  if (await botSedangDiam()) return;
   const penutup = closingText(survei.closingMessage);
   const provider = getProvider(vendor);
   if (!survei.mintaLokasi || typeof provider.sendLocationRequest !== "function") {
@@ -1221,6 +1239,10 @@ async function reply(
   penanda?: Record<string, string>,
 ): Promise<void> {
   if (!to) return;
+  // Bot diam saat tidak ada survei berjalan: tak satu pun balasan otomatis dikirim — satu
+  // penjagaan untuk semua jalur (pesan survei berakhir, Auto Reply, Agen AI). Konfirmasi
+  // STOP (source "optout") diputuskan sendiri oleh doOptOut/doOptIn; lihat services/modeBot.ts.
+  if (source !== "optout" && (await botSedangDiam())) return;
   const result = await getProvider(vendor).sendText({ to, text });
   await prisma.message.create({
     data: {

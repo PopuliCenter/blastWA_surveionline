@@ -22,6 +22,79 @@ import { AutoReplyPresetPicker } from "./autoreply/PresetPicker";
 
 const MATCH_LABEL = { contains: "mengandung", exact: "sama persis", starts: "diawali" };
 
+// Bot diam saat tidak ada survei berjalan (lihat backend services/modeBot.ts). Tempatnya di
+// sini karena yang dibungkamnya justru balasan otomatis: aturan di halaman ini, Agen AI, dan
+// pesan survei berakhir.
+function KartuModeBot() {
+  const mode = useLoader(useCallback(() => api.modeBot(), []));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const d = mode.data;
+  const ubah = async (diam) => {
+    if (busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      mode.setData(await api.simpanModeBot({ diamTanpaSurveiAktif: diam }));
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sedangDiam = Boolean(d?.diamTanpaSurveiAktif && !d.adaSurveiBerjalan);
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 14,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <strong style={{ color: theme.text }}>Bot diam saat tidak ada survei berjalan</strong>
+            {d ? <Badge tone={sedangDiam ? "yellow" : "green"}>{sedangDiam ? "sedang diam" : "membalas"}</Badge> : null}
+          </div>
+          <div style={{ color: theme.textMuted, fontSize: 12.5, marginTop: 6, lineHeight: 1.55 }}>
+            Bila dinyalakan dan tidak ada satu pun survei berstatus Berjalan, bot tidak mengirim balasan otomatis apa
+            pun — pesan survei berakhir, aturan di bawah, Agen AI, maupun konfirmasi berlangganan. Satu-satunya
+            pengecualian: konfirmasi permintaan berhenti (STOP), sekali saat nomornya baru berhenti. Pesan masuk tetap
+            tercatat di Chat dan tetap bisa dibalas manual. Begitu ada survei berjalan, bot membalas lagi dengan
+            sendirinya.
+          </div>
+          {d?.diamTanpaSurveiAktif ? (
+            <div style={{ fontSize: 12.5, marginTop: 8, color: theme.text }}>
+              {d.adaSurveiBerjalan
+                ? "Ada survei yang sedang berjalan, jadi bot tetap membalas. Bot diam lagi begitu semua survei ditutup."
+                : "Tidak ada survei yang berjalan — bot sedang diam."}
+            </div>
+          ) : null}
+        </div>
+        {d ? (
+          // Lebar tetap: label berganti "Mati" → "Menyimpan…" → "Menyala", dan tanpa ini
+          // paragraf di sebelahnya ikut melebar-menyempit tiap kali sakelar ditekan.
+          <div style={{ minWidth: 136, display: "flex", justifyContent: "flex-end" }}>
+            <Toggle
+              checked={d.diamTanpaSurveiAktif}
+              onChange={ubah}
+              label={busy ? "Menyimpan…" : d.diamTanpaSurveiAktif ? "Menyala" : "Mati"}
+            />
+          </div>
+        ) : null}
+      </div>
+      {mode.error || err ? (
+        <div style={{ marginTop: 12 }}>
+          <Notice>{mode.error || err}</Notice>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 export default function AutoReply() {
   const { data, loading, error, reload } = useLoader(useCallback(() => api.listAutoReplies(), []));
   const [modal, setModal] = useState(null);
@@ -86,6 +159,7 @@ export default function AutoReply() {
           </Button>,
         ]}
       />
+      <KartuModeBot />
       <Notice>{error || err}</Notice>
       <Notice kind="success">{note}</Notice>
       <Notice kind="info">
