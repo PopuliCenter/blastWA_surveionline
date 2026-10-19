@@ -5,6 +5,7 @@
 // digabung, dan kotak zoom.
 
 import { ditolakKuota } from "./exportSurvey";
+import { provinsiDariJawaban } from "./ringkasJawaban";
 
 // Kotak pembatas Indonesia [minBujur, minLintang, maksBujur, maksLintang] — termasuk
 // wilayah laut provinsi menurut data batas OpenStreetMap.
@@ -84,3 +85,56 @@ export function bboxSebaran(titik, { minRentang = 1.2, margin = 0.15 } = {}) {
 // Jari-jari titik menurut jumlah responden di koordinat itu: luas lingkaran sebanding
 // jumlah, jadi jari-jarinya sebanding akar — kalau tidak, titik berisi 4 orang tampak 16 kali.
 export const jariJari = (n, dasar = 4) => dasar * Math.sqrt(n);
+
+// ===== Peta jawaban Wilayah =====
+
+// Kode provinsi dari jawaban Wilayah. Jawabannya selalu ditulis dengan kode resmi di ujung:
+// "Jawa Barat (32)" atau "Kab. Bandung, Jawa Barat (32.04)" — dua angka pertama itulah
+// kode provinsinya, sama dengan kode pada garis batas.
+const KODE_DI_UJUNG = /\((\d{2})(?:\.\d{2})?\)\s*$/;
+const rapatkan = (t) =>
+  String(t)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+// Jumlah jawaban per kode provinsi. Jawaban tanpa kode (data lama, atau diisi di luar
+// formulir) dicocokkan lewat nama provinsinya; yang tetap tak cocok dihitung terpisah agar
+// bisa disebutkan di bawah peta, bukan hilang diam-diam.
+export function jumlahWilayahPerProvinsi(values, fitur) {
+  const kodeAda = new Set(fitur.map((f) => f.kode));
+  const kodeNama = new Map(fitur.map((f) => [rapatkan(f.nama), f.kode]));
+  const perProvinsi = new Map();
+  let takTerpetakan = 0;
+  for (const v of values) {
+    const cocok = KODE_DI_UJUNG.exec(String(v));
+    const kode = cocok && kodeAda.has(cocok[1]) ? cocok[1] : kodeNama.get(rapatkan(provinsiDariJawaban(v)));
+    if (kode) perProvinsi.set(kode, (perProvinsi.get(kode) ?? 0) + 1);
+    else takTerpetakan++;
+  }
+  return { perProvinsi, takTerpetakan };
+}
+
+// Kotak tampilan yang memuat semua provinsi yang punya responden — survei satu provinsi
+// langsung diperbesar ke provinsi itu. Tanpa responden sama sekali: seluruh Indonesia.
+export function bboxProvinsi(fitur, perProvinsi) {
+  let [a, b, c, d] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const f of fitur) {
+    if (!perProvinsi.get(f.kode)) continue;
+    for (const poligon of f.poligon)
+      for (const cincin of poligon)
+        for (const [lng, lat] of cincin) {
+          a = Math.min(a, lng);
+          b = Math.min(b, lat);
+          c = Math.max(c, lng);
+          d = Math.max(d, lat);
+        }
+  }
+  return a === Infinity ? INDONESIA : [a, b, c, d];
+}
+
+// Kepekatan warna provinsi: akar dari bagiannya terhadap provinsi terbanyak. Dengan skala
+// lurus, provinsi berisi 10 orang di samping provinsi berisi 230 orang nyaris sebening
+// provinsi tanpa responden — padahal justru di ekor itulah orang mencari "di mana masih
+// sedikit". Provinsi tanpa responden tidak diwarnai sama sekali.
+export const kepekatanIsi = (n, maks) => (n > 0 && maks > 0 ? 0.12 + 0.58 * Math.sqrt(n / maks) : 0);

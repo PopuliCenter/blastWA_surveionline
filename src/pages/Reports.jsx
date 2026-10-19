@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { exportResponses, ditolakKuota, adaKolomLokasi, labelStatusLokasi } from "../lib/exportSurvey";
 import { ringkasLokasi, URUTAN_STATUS } from "../lib/petaSebaran";
 import { PetaSebaran } from "./survey/PetaSebaran";
+import { PetaWilayah } from "./survey/PetaWilayah";
 import { tally, distribusiWilayah, distribusiPilihanGanda, nilaiTampil } from "../lib/ringkasJawaban";
 import { TYPE_LABEL } from "./survey/constants";
 import {
@@ -174,7 +175,14 @@ export default function Reports() {
     [survey, responses],
   );
 
-  const questions = survey?.questions || [];
+  const questions = useMemo(() => survey?.questions || [], [survey]);
+  // Jawaban per pertanyaan, dihitung sekali per data — bukan di tiap render. Peta Wilayah
+  // menggambar ulang lapisannya setiap kali daftar ini berganti, dan memilih pembobot atau
+  // pertanyaan tabulasi silang tidak boleh ikut menutup tooltip yang sedang dibaca.
+  const nilaiPerPertanyaan = useMemo(
+    () => questions.map((q) => perResponse.map((m) => m[q.text]).filter((v) => v !== undefined && v !== "")),
+    [questions, perResponse],
+  );
   const total = responses.length;
   const completed = responses.filter((r) => r.completedAt).length;
 
@@ -359,7 +367,7 @@ export default function Reports() {
               <Card title="Ringkasan Jawaban per Pertanyaan" style={{ marginBottom: 16 }}>
                 <div style={{ display: "grid", gap: 18 }}>
                   {questions.map((q, qi) => {
-                    const values = perResponse.map((m) => m[q.text]).filter((v) => v !== undefined && v !== "");
+                    const values = nilaiPerPertanyaan[qi];
                     const answered = values.length;
                     return (
                       <div
@@ -496,18 +504,24 @@ function QuestionBreakdown({ q, values, total }) {
   }
   if (q.type === "wilayah") {
     const d = distribusiWilayah(values);
-    // Provinsi selalu; kabupaten/kota menyusul bila pertanyaannya sampai tingkat itu. 38
-    // provinsi dan ratusan kabupaten/kota diringkas seperti distribusi lain — sisanya
-    // disebut jumlahnya dan bisa dibuka.
-    return d.kabKota ? (
+    // Peta sebaran per provinsi di atas, grafiknya tetap di bawah. Provinsi selalu;
+    // kabupaten/kota menyusul bila pertanyaannya sampai tingkat itu. 38 provinsi dan ratusan
+    // kabupaten/kota diringkas seperti distribusi lain — sisanya disebut jumlahnya dan bisa
+    // dibuka.
+    return (
       <div style={{ display: "grid", gap: 14 }}>
-        <SubJudul>Per provinsi</SubJudul>
-        <Distribusi data={d.provinsi} total={total} />
-        <SubJudul>Per kabupaten/kota</SubJudul>
-        <Distribusi data={d.kabKota} total={d.kabKota.reduce((n, [, c]) => n + c, 0)} />
+        <PetaWilayah values={values} kabKota={Boolean(d.kabKota)} />
+        {d.kabKota ? (
+          <>
+            <SubJudul>Per provinsi</SubJudul>
+            <Distribusi data={d.provinsi} total={total} />
+            <SubJudul>Per kabupaten/kota</SubJudul>
+            <Distribusi data={d.kabKota} total={d.kabKota.reduce((n, [, c]) => n + c, 0)} />
+          </>
+        ) : (
+          <Distribusi data={d.provinsi} total={total} />
+        )}
       </div>
-    ) : (
-      <Distribusi data={d.provinsi} total={total} />
     );
   }
   if (q.type === "multichoice") {
