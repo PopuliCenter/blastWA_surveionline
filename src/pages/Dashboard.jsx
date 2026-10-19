@@ -1,10 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import { statusBlast, statusSurvei } from "../lib/labelStatus";
 import {
   PageHeader,
   StatCard,
   Card,
   Badge,
+  Button,
   Loading,
   Notice,
   Empty,
@@ -16,6 +18,8 @@ import {
 } from "../lib/ui";
 
 const pctOf = (v, t) => (t > 0 ? Math.round((v / t) * 100) : 0);
+// Angka dengan pemisah ribuan ("1.437", bukan "1437").
+const angka = (n) => (n || 0).toLocaleString("id-ID");
 
 // Progress bar berlabel + persentase
 function Rate({ label, value, total, tone, hint }) {
@@ -68,7 +72,9 @@ function Mini({ label, value, tone, icon }) {
           <Icon name={icon} size={16} />
         </div>
       ) : null}
-      <div style={{ fontSize: 21, fontWeight: 800, color: tone || theme.text, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 21, fontWeight: 800, color: tone || theme.text, lineHeight: 1 }}>
+        {typeof value === "number" ? angka(value) : value}
+      </div>
       <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>{label}</div>
     </div>
   );
@@ -107,6 +113,85 @@ function BarRow({ label, value, max, tone, sub }) {
   );
 }
 
+// Daftar di kartu Dashboard ditampilkan per 5. Dulu dipotong begitu saja (5, 6, 8 teratas),
+// sehingga survei dan blast lama tak terjangkau dari sini; tanpa potongan, kartunya memanjang
+// terus seiring bertambahnya survei. Halaman berikutnya tinggal digeser dengan tombol di kaki
+// kartu.
+const PER_KARTU = 5;
+
+function useHalaman(items) {
+  const [halaman, setHalaman] = useState(1);
+  const jumlahHalaman = Math.max(1, Math.ceil(items.length / PER_KARTU));
+  // Dijepit, bukan disimpan ulang: daftar bisa memendek (survei dihapus) saat sedang di
+  // halaman terakhir.
+  const hal = Math.min(halaman, jumlahHalaman);
+  const mulai = (hal - 1) * PER_KARTU;
+  return {
+    hal,
+    jumlahHalaman,
+    mulai,
+    total: items.length,
+    tampil: items.slice(mulai, mulai + PER_KARTU),
+    ganti: (n) => setHalaman(Math.max(1, Math.min(n, jumlahHalaman))),
+  };
+}
+
+// Kartu berdaftar: isinya kolom flex, sehingga pager selalu menempel di DASAR kartu. Dua
+// kartu yang bersebelahan sama tingginya (grid), dan tanpa ini pager kartu yang isinya lebih
+// pendek menggantung di tengah — tidak sejajar dengan pager tetangganya.
+const KARTU_BERDAFTAR = {
+  style: { display: "flex", flexDirection: "column" },
+  bodyStyle: { flex: 1, display: "flex", flexDirection: "column" },
+};
+
+// Kaki kartu: posisi dalam daftar dan tombol geser. Tidak tampil bila semuanya muat di satu
+// halaman.
+function PagerKartu({ h, noun }) {
+  if (h.jumlahHalaman <= 1) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        marginTop: "auto",
+        paddingTop: 10,
+        borderTop: `1px solid ${theme.border}`,
+      }}
+    >
+      <span style={{ fontSize: 12, color: theme.textMuted }}>
+        {h.mulai + 1}–{Math.min(h.mulai + PER_KARTU, h.total)} dari {h.total} {noun}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => h.ganti(h.hal - 1)}
+          disabled={h.hal <= 1}
+          aria-label="Halaman sebelumnya"
+          title="Halaman sebelumnya"
+        >
+          ‹
+        </Button>
+        <span style={{ fontSize: 12, color: theme.textMuted, minWidth: 40, textAlign: "center" }}>
+          {h.hal} / {h.jumlahHalaman}
+        </span>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => h.ganti(h.hal + 1)}
+          disabled={h.hal >= h.jumlahHalaman}
+          aria-label="Halaman berikutnya"
+          title="Halaman berikutnya"
+        >
+          ›
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 const QUALITY = {
   GREEN: ["green", "Tinggi (Hijau)"],
   YELLOW: ["yellow", "Sedang (Kuning)"],
@@ -127,6 +212,18 @@ export default function Dashboard() {
   const quality = useLoader(
     useCallback(() => api.getWaQuality().catch((e) => ({ error: e?.message || "gagal menghubungi backend" })), []),
   );
+
+  // Daftar berhalaman — dipanggil SEBELUM return dini di bawah (aturan hooks).
+  const daftarBlast = useMemo(() => blasts.data || [], [blasts.data]);
+  // Respons per survei: terbanyak lebih dulu.
+  const surveiUrutRespons = useMemo(
+    () => [...(surveys.data || [])].sort((a, b) => (b.responses || 0) - (a.responses || 0)),
+    [surveys.data],
+  );
+  const hPerforma = useHalaman(daftarBlast);
+  const hRespons = useHalaman(surveiUrutRespons);
+  const hSurvei = useHalaman(surveys.data || []);
+  const hBlast = useHalaman(daftarBlast);
 
   if (stats.error)
     return (
@@ -178,13 +275,11 @@ export default function Dashboard() {
   const qTone = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[0] : qErr ? "red" : "default";
   const qLabel = q ? (QUALITY[q.quality_rating] || QUALITY.UNKNOWN)[1] : qErr ? "Gagal" : "Belum tersambung";
 
-  // Grafik blast (delivered per blast, terbaru)
-  const bl = (blasts.data || []).slice(0, 8);
-  const blMax = Math.max(1, ...bl.map((b) => b.sent || 0));
-
-  // Grafik respons per survei (terbanyak)
-  const svByResp = [...(surveys.data || [])].sort((a, b) => (b.responses || 0) - (a.responses || 0)).slice(0, 6);
-  const svMax = Math.max(1, ...svByResp.map((v) => v.responses || 0));
+  // Skala bar diambil dari SELURUH daftar, bukan halaman yang tampil — kalau tidak, bar
+  // terpanjang di tiap halaman selalu penuh dan halaman 2 tampak sama besarnya dengan
+  // halaman 1.
+  const blMax = Math.max(1, ...daftarBlast.map((b) => b.sent || 0));
+  const svMax = Math.max(1, surveiUrutRespons[0]?.responses || 0);
 
   // minmax(0,…) — tanpa itu kolom melebar mengikuti isi terpanjang, bukan lebar layar.
   const grid2 = {
@@ -274,14 +369,14 @@ export default function Dashboard() {
         />
         <StatCard
           label="Survei"
-          value={s.surveys}
+          value={angka(s.surveys)}
           note={`${s.activeSurveys ?? 0} aktif • ${s.responses} respons`}
           tone="purple"
           icon="survey"
         />
         <StatCard
           label="Gagal Kirim Blast"
-          value={s.failed}
+          value={angka(s.failed)}
           // Ruang lingkupnya disebut eksplisit: angka ini HANYA dari blast dan bersifat
           // seumur hidup, sementara panel merah di atas menghitung semua pesan keluar
           // dalam 24 jam. Dua angka yang berdekatan dan mirip bunyinya mudah tertukar.
@@ -396,20 +491,25 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card title="Performa Blast Terakhir">
-          {bl.length ? (
-            <div>
-              {bl.map((b) => (
-                <BarRow
-                  key={b.id}
-                  label={b.surveyTitle && b.surveyTitle !== "-" ? b.surveyTitle : b.message || b.segmentName || "Blast"}
-                  value={b.sent || 0}
-                  max={blMax}
-                  tone={theme.primary}
-                  sub={`${b.sent || 0}✓ · ${b.opened || 0} dibaca`}
-                />
-              ))}
-            </div>
+        <Card title="Performa Blast Terakhir" {...KARTU_BERDAFTAR}>
+          {hPerforma.total ? (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                {hPerforma.tampil.map((b) => (
+                  <BarRow
+                    key={b.id}
+                    label={
+                      b.surveyTitle && b.surveyTitle !== "-" ? b.surveyTitle : b.message || b.segmentName || "Blast"
+                    }
+                    value={b.sent || 0}
+                    max={blMax}
+                    tone={theme.primary}
+                    sub={`${angka(b.sent)}✓ · ${angka(b.opened)} dibaca`}
+                  />
+                ))}
+              </div>
+              <PagerKartu h={hPerforma} noun="blast" />
+            </>
           ) : (
             <Empty icon="broadcast" title="Belum ada blast" />
           )}
@@ -418,54 +518,74 @@ export default function Dashboard() {
 
       {/* Respons per survei + Survei terbaru */}
       <div style={grid2}>
-        <Card title="Respons per Survei">
-          {svByResp.length && svByResp.some((v) => v.responses) ? (
-            <div>
-              {svByResp.map((v) => (
-                <BarRow
-                  key={v.id}
-                  label={v.title}
-                  value={v.responses || 0}
-                  max={svMax}
-                  tone={theme.purple}
-                  sub={`${v.responses || 0} respons`}
-                />
-              ))}
-            </div>
+        <Card title="Respons per Survei" {...KARTU_BERDAFTAR}>
+          {surveys.loading ? (
+            <Loading />
+          ) : surveiUrutRespons.some((v) => v.responses) ? (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                {hRespons.tampil.map((v) => (
+                  <BarRow
+                    key={v.id}
+                    label={v.title}
+                    value={v.responses || 0}
+                    max={svMax}
+                    tone={theme.purple}
+                    sub={`${angka(v.responses)} respons`}
+                  />
+                ))}
+              </div>
+              <PagerKartu h={hRespons} noun="survei" />
+            </>
           ) : (
             <Empty icon="survey" title="Belum ada respons" />
           )}
         </Card>
 
-        <Card title="Survei Terbaru">
+        <Card title="Survei Terbaru" {...KARTU_BERDAFTAR}>
           {surveys.loading ? (
             <Loading />
-          ) : (surveys.data || []).length ? (
-            <div style={{ display: "grid", gap: 10 }}>
-              {(surveys.data || []).slice(0, 5).map((sv) => (
-                <div
-                  key={sv.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "10px 12px",
-                    background: theme.surfaceAlt,
-                    borderRadius: 10,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 13.5 }}>{sv.title}</div>
-                    <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
-                      {sv.questions.length} pertanyaan • {sv.responses} respons{sv.mode === "flow" ? " • Flow" : ""}
+          ) : hSurvei.total ? (
+            <>
+              <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                {hSurvei.tampil.map((sv) => (
+                  <div
+                    key={sv.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 12px",
+                      background: theme.surfaceAlt,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          color: theme.text,
+                          fontSize: 13.5,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                        title={sv.title}
+                      >
+                        {sv.title}
+                      </div>
+                      <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
+                        {sv.questions.length} pertanyaan • {angka(sv.responses)} respons
+                        {sv.mode === "flow" ? " • Flow" : ""}
+                      </div>
                     </div>
+                    <Badge tone={statusSurvei(sv.status).tone}>{statusSurvei(sv.status).label}</Badge>
                   </div>
-                  <Badge tone={sv.status === "active" ? "green" : sv.status === "draft" ? "yellow" : "default"}>
-                    {sv.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              <PagerKartu h={hSurvei} noun="survei" />
+            </>
           ) : (
             <Empty icon="survey" title="Belum ada survei" />
           )}
@@ -473,39 +593,30 @@ export default function Dashboard() {
       </div>
 
       {/* Blast terakhir (detail) */}
-      <Card title="Blast Terakhir">
+      <Card title="Blast Terakhir" {...KARTU_BERDAFTAR}>
         {blasts.loading ? (
           <Loading />
-        ) : (blasts.data || []).length ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            {(blasts.data || []).slice(0, 6).map((b) => (
-              <div key={b.id} style={{ padding: "10px 12px", background: theme.surfaceAlt, borderRadius: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <strong style={{ fontSize: 13.5, color: theme.text }}>{b.surveyTitle}</strong>
-                  <Badge
-                    tone={
-                      b.status === "completed"
-                        ? "green"
-                        : b.status === "failed"
-                          ? "red"
-                          : b.status === "scheduled"
-                            ? "yellow"
-                            : "blue"
-                    }
-                  >
-                    {b.status}
-                  </Badge>
+        ) : hBlast.total ? (
+          <>
+            <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+              {hBlast.tampil.map((b) => (
+                <div key={b.id} style={{ padding: "10px 12px", background: theme.surfaceAlt, borderRadius: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <strong style={{ fontSize: 13.5, color: theme.text }}>{b.surveyTitle}</strong>
+                    <Badge tone={statusBlast(b.status).tone}>{statusBlast(b.status).label}</Badge>
+                  </div>
+                  <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+                    {b.segmentName} • {b.vendor} • {fmtDate(b.sentAt)}
+                  </div>
+                  <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
+                    Terkirim {angka(b.sent)} • Sampai {angka(b.delivered)} • Dibaca {angka(b.opened)}
+                    {b.failed ? ` • Gagal ${angka(b.failed)}` : ""}
+                  </div>
                 </div>
-                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
-                  {b.segmentName} • {b.vendor} • {fmtDate(b.sentAt)}
-                </div>
-                <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
-                  Terkirim {b.sent} • Sampai {b.delivered} • Dibaca {b.opened}
-                  {b.failed ? ` • Gagal ${b.failed}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <PagerKartu h={hBlast} noun="blast" />
+          </>
         ) : (
           <Empty icon="broadcast" title="Belum ada blast" />
         )}

@@ -7,6 +7,7 @@ import {
   inputPlaceholder,
 } from "../../lib/surveyPreview";
 import { Button, Badge, Modal, theme, Icon } from "../../lib/ui";
+import { statusSurvei } from "../../lib/labelStatus";
 import { TYPE_LABEL } from "./constants";
 import { WaText } from "./WaText";
 
@@ -129,7 +130,7 @@ export function SurveyPreviewModal({ survey, onClose }) {
           </div>
           <div style={{ color: "#b2dfdb", fontSize: 11.5 }}>Simulasi preview survei</div>
         </div>
-        <Badge tone={survey.status === "active" ? "green" : "yellow"}>{survey.status}</Badge>
+        <Badge tone={statusSurvei(survey.status).tone}>{statusSurvei(survey.status).label}</Badge>
       </div>
 
       {/* Progress bar */}

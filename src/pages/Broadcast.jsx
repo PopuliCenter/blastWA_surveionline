@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog, promptDialog } from "../lib/confirm";
+import { statusBlast } from "../lib/labelStatus";
 import {
   PageHeader,
   Card,
@@ -218,19 +219,7 @@ export default function Broadcast() {
                         ) : null}
                       </div>
                     </div>
-                    <Badge
-                      tone={
-                        b.status === "completed"
-                          ? "green"
-                          : b.status === "failed"
-                            ? "red"
-                            : b.status === "scheduled"
-                              ? "yellow"
-                              : "blue"
-                      }
-                    >
-                      {b.status}
-                    </Badge>
+                    <Badge tone={statusBlast(b.status).tone}>{statusBlast(b.status).label}</Badge>
                   </div>
                   <div style={{ marginTop: 12 }}>
                     <StatStrip

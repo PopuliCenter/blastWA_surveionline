@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
+import { statusSurvei } from "../lib/labelStatus";
 import {
   PageHeader,
   Card,
@@ -157,7 +158,7 @@ export default function Surveys() {
   // pelan-pelan berbeda isi — perbedaan semacam itu baru ketahuan setelah dilaporkan.
   const badgeSurvei = (s) => (
     <>
-      <Badge tone={s.status === "active" ? "green" : s.status === "draft" ? "yellow" : "default"}>{s.status}</Badge>
+      <Badge tone={statusSurvei(s.status).tone}>{statusSurvei(s.status).label}</Badge>
       {s.mode === "flow" ? <Badge tone="blue">flow</Badge> : null}
       {s.triggerEnabled ? <Badge tone="purple">bot</Badge> : null}
       {s.oncePerContact ? <Badge tone="yellow">sekali isi</Badge> : null}
