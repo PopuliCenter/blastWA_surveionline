@@ -2,14 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { Button, Notice, Loading, Empty, theme, Icon, useLoader } from "../../lib/ui";
 import { sessionInfo, shortTime } from "./constants";
+import { MediaPesan } from "./MediaPesan";
+
+// Teks pengganti yang disimpan untuk pesan media tanpa keterangan ("[image]", "[sticker]").
+// Untuk gambar/stiker yang bisa dibuka, label ini diganti tombol "Lihat"; keterangan gambar
+// yang ditulis responden tetap ditampilkan.
+const PENGGANTI_MEDIA = /^\[(image|sticker)\]$/;
 
 // ── Percakapan (tengah) ─────────────────────────────────────────────────────
 // readOnly = peran "viewer": boleh membaca percakapan, tidak boleh membalas atau
 // mengubah status. Backend menolaknya (403); ini menghilangkan tombolnya.
 export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails, isMobile, readOnly = false }) {
-  const { data, loading, error, reload, setData } = useLoader(
-    useCallback(() => api.contactMessages(convo.id), [convo.id]),
-  );
+  const { data, loading, error, setData } = useLoader(useCallback(() => api.contactMessages(convo.id), [convo.id]));
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState("");
@@ -69,7 +73,10 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
     try {
       await api.sendMessage(convo.id, text.trim());
       setText("");
-      await reload();
+      // Disegarkan senyap seperti polling, bukan reload(): reload menampilkan "Memuat…" di
+      // tempat daftar pesan, dan gambar/stiker yang sudah dibuka ikut hilang menjadi tombol
+      // lagi — tepat saat operator membalas tentang gambar itu.
+      setData(await api.contactMessages(convo.id));
       await onReload?.();
     } catch (e) {
       setSendErr(e.message);
@@ -221,7 +228,14 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
                     {m.isBot ? "Bot" : "Anda"}
                   </div>
                 ) : null}
-                <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
+                {m.media && PENGGANTI_MEDIA.test(m.text ?? "") ? (
+                  <div style={{ color: theme.textMuted, fontStyle: "italic" }}>
+                    {m.media === "sticker" ? "Stiker" : "Gambar"}
+                  </div>
+                ) : (
+                  <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
+                )}
+                {m.media ? <MediaPesan pesanId={m.id} jenis={m.media} /> : null}
                 {m.deliveryStatus === "failed" ? (
                   <div
                     title={m.failedReason || undefined}

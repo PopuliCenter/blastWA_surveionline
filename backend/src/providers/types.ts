@@ -39,6 +39,12 @@ export type NormalizedInbound = {
   raw: unknown;
 };
 
+// Kegagalan dibedakan karena operator perlu tahu bedanya: media kedaluwarsa memang hilang
+// selamanya, sedangkan gangguan vendor (token, batas permintaan, 5xx) layak dicoba lagi.
+export type HasilUnduhMedia =
+  | { data: Buffer; mimeType: string }
+  | { gagal: "kedaluwarsa" | "terlalu-besar" | "galat-vendor"; status?: number; rincian?: unknown };
+
 export type WebhookRequest = {
   rawBody: string; // body mentah, untuk verifikasi signature
   body: unknown; // body terparse
@@ -88,6 +94,11 @@ export interface MessagingProvider {
    * Opsional: vendor tanpa dukungan jatuh ke teks berisi petunjuk lewat lampiran.
    */
   sendLocationRequest?(input: { to: string; text: string }): Promise<SendResult>;
+  /**
+   * Ambil isi media (gambar/stiker) yang dikirim responden, dari ID media di pesan masuk.
+   * Opsional: hanya vendor yang menyimpan medianya dan bisa diminta ulang (Meta).
+   */
+  downloadMedia?(mediaId: string, maksByte: number): Promise<HasilUnduhMedia>;
   /** Kirim gambar + caption (banner pembuka survei mode chat). Opsional per vendor. */
   sendImage?(input: { to: string; link: string; caption?: string }): Promise<SendResult>;
 

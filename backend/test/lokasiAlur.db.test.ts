@@ -458,4 +458,37 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     await kirimLokasi(hp, -6.91, 107.61);
     expect(ke(hp).map((t) => t.text)).toEqual(["Makasih, lokasi sudah masuk!"]);
   });
+
+  // ===== Balasan tanpa teks dari penerima blast =====
+
+  it("stiker atau gambar tanpa keterangan dari penerima blast TIDAK memulai survei; teks tetap memulai", async () => {
+    const { surveyId } = await surveiChat({ mintaLokasi: false });
+    const hp = nomorBaru();
+    const kontak = await prisma.contact.create({ data: { phone: hp } });
+    const b = await prisma.blast.create({
+      data: { vendor: "meta", surveyId, recipients: { create: { contactId: kontak.id, vendor: "meta" } } },
+    });
+    blastDibuat.push(b.id);
+    const kirimMedia = (mediaType: "sticker" | "image") =>
+      engine.handleInboundEvents([
+        {
+          vendor: "meta",
+          kind: "message",
+          from: hp,
+          mediaType,
+          mediaId: "123",
+          messageId: idUnik(),
+          timestamp: new Date().toISOString(),
+          raw: { type: mediaType, [mediaType]: { id: "123" } },
+        },
+      ]);
+
+    await kirimMedia("sticker");
+    await kirimMedia("image");
+    expect(ke(hp)).toHaveLength(0);
+    expect(await prisma.surveyResponse.count({ where: { surveyId, contactId: kontak.id } })).toBe(0);
+
+    await kirim(hp, "ya");
+    expect(await prisma.surveyResponse.count({ where: { surveyId, contactId: kontak.id } })).toBe(1);
+  });
 });

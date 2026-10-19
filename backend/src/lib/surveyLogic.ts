@@ -31,6 +31,11 @@ export function shouldStartSurveyFromBlast(args: {
   now?: Date;
 }): boolean {
   if (args.alreadyCompleted) return false;
+  // Pesan TANPA teks — stiker, gambar tanpa keterangan, pesan suara — bukan kesediaan ikut.
+  // Dulu lolos sebagai balasan kosong, sehingga penerima blast yang sekadar membalas stiker
+  // langsung dikirimi formulir/pertanyaan pertama. (undefined = pemanggil tidak tahu
+  // teksnya, perilaku lama; mesin survei selalu mengirim teksnya, kosong pun.)
+  if (args.text !== undefined && !args.text.trim()) return false;
   // Pertanyaan bukan kesediaan. "Apakah ada survei" sesudah blast itu orang MENANYAKAN
   // dulu sebelum memutuskan ikut; melemparnya langsung ke formulir/pertanyaan 1 membuat
   // pertanyaannya tak pernah terjawab (laporan lapangan). Biarkan jatuh ke Auto Reply /

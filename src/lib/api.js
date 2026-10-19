@@ -36,6 +36,24 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
   return data;
 }
 
+// Unduhan berkas (bukan JSON) — mis. gambar dari responden. Galat tetap dibaca sebagai JSON.
+async function requestBlob(path, { signal } = {}) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { headers, signal });
+  if (res.status === 401) {
+    setToken(null);
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("populi:logout"));
+    throw new Error("Sesi berakhir, silakan login ulang.");
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(pesanGalatApi(data, res.status));
+  }
+  return res.blob();
+}
+
 export const api = {
   // Auth
   login: (username, password) =>
@@ -137,6 +155,8 @@ export const api = {
   conversationsPage: ({ page = 1, search = "" } = {}) =>
     request(`/api/conversations?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ""}`),
   contactMessages: (id) => request(`/api/contacts/${id}/messages`),
+  // Gambar/stiker pesan masuk, diambil dari Meta saat dibuka (Blob).
+  mediaPesan: (id, opts) => requestBlob(`/api/messages/${id}/media`, opts),
   sendMessage: (id, text) => request(`/api/contacts/${id}/messages`, { method: "POST", body: { text } }),
   resolveConversation: (id, resolved) => request(`/api/contacts/${id}/resolve`, { method: "POST", body: { resolved } }),
   listNotes: (id) => request(`/api/contacts/${id}/notes`),

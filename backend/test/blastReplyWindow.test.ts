@@ -60,3 +60,22 @@ describe("shouldStartSurveyFromBlast", () => {
     expect(shouldStartSurveyFromBlast({ blastSentAt: jamLalu(1), alreadyCompleted: false, now: NOW })).toBe(true);
   });
 });
+
+describe("shouldStartSurveyFromBlast — pesan tanpa teks", () => {
+  const NOW2 = new Date("2026-10-19T10:00:00Z");
+  const sejamLalu = new Date(NOW2.getTime() - 60 * 60 * 1000);
+
+  it("stiker / gambar tanpa keterangan / pesan suara (teks kosong) tidak memulai survei", () => {
+    for (const text of ["", "   "])
+      expect(shouldStartSurveyFromBlast({ blastSentAt: sejamLalu, alreadyCompleted: false, text, now: NOW2 })).toBe(
+        false,
+      );
+  });
+
+  it("balasan teks — termasuk balasan tombol dan keterangan gambar — tetap memulai", () => {
+    for (const text of ["ya", "Ya, saya bersedia", "ini foto saya"])
+      expect(shouldStartSurveyFromBlast({ blastSentAt: sejamLalu, alreadyCompleted: false, text, now: NOW2 })).toBe(
+        true,
+      );
+  });
+});

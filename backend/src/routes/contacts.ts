@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
 import { parsePage, parsePageSize, CONTACT_PAGE_SIZES, CONVO_PAGE_SIZES } from "../lib/pageParams.js";
 import { getProvider } from "../providers/registry.js";
+import { bisaUnduhMedia, mediaDariPayload } from "../lib/mediaPesan.js";
 import { suppressNumber, unsuppressNumber, suppressedSince, suppressedAmong } from "../lib/optOutList.js";
 import { logError } from "../lib/errorLog.js";
 import { env } from "../env.js";
@@ -416,6 +417,12 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       // Tanpa ini, pesan gagal tampak sama persis dengan pesan berhasil di layar chat.
       deliveryStatus: m.deliveryStatus,
       failedReason: m.failedReason,
+      // "image" | "sticker" bila pesan masuk ini gambar/stiker yang bisa dibuka lewat
+      // GET /api/messages/:id/media (hanya vendor yang menyediakan unduhan media).
+      media:
+        m.direction === "in" && bisaUnduhMedia(() => getProvider(m.vendor))
+          ? (mediaDariPayload(m.payload)?.jenis ?? null)
+          : null,
       createdAt: m.createdAt,
     }));
   });

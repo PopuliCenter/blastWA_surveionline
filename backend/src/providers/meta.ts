@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cleanProfileName } from "../lib/profileName.js";
 import { koordinatDari } from "../lib/lokasi.js";
 import type {
+  HasilUnduhMedia,
   MessagingProvider,
   NormalizedInbound,
   SendFlowInput,
@@ -319,6 +320,38 @@ export class MetaCloudAdapter implements MessagingProvider {
         action: { name: "send_location" },
       },
     });
+  }
+
+  // Media dari responden: GET /{media-id} memberi URL sementara (berlaku ±5 menit), lalu
+  // URL itu diunduh dengan token yang sama. Meta menyimpan media masuk hanya sementara:
+  // media lama dijawab 404, atau 400 dengan kode 100 (objek tidak ada). Galat lain —
+  // token (190), batas permintaan (429/80007), 5xx — adalah gangguan, bukan media hilang.
+  async downloadMedia(mediaId: string, maksByte: number): Promise<HasilUnduhMedia> {
+    if (!/^\d{1,32}$/.test(mediaId)) return { gagal: "kedaluwarsa" };
+    const auth = { Authorization: `Bearer ${this.cfg.accessToken}` };
+    const infoRes = await fetch(`https://graph.facebook.com/${this.cfg.graphVersion}/${mediaId}`, { headers: auth });
+    const info = (await infoRes.json().catch(() => ({}))) as {
+      url?: unknown;
+      mime_type?: unknown;
+      file_size?: unknown;
+      error?: { code?: unknown };
+    };
+    if (!infoRes.ok) {
+      const hilang = infoRes.status === 404 || (infoRes.status === 400 && Number(info.error?.code) === 100);
+      return hilang
+        ? { gagal: "kedaluwarsa" }
+        : { gagal: "galat-vendor", status: infoRes.status, rincian: info.error ?? info };
+    }
+    if (typeof info.url !== "string" || !info.url.startsWith("https://"))
+      return { gagal: "galat-vendor", status: infoRes.status, rincian: "URL media tidak ada" };
+    if (Number(info.file_size) > maksByte) return { gagal: "terlalu-besar" };
+    const res = await fetch(info.url, { headers: auth });
+    if (!res.ok) return res.status === 404 ? { gagal: "kedaluwarsa" } : { gagal: "galat-vendor", status: res.status };
+    const panjang = Number(res.headers.get("content-length"));
+    if (Number.isFinite(panjang) && panjang > maksByte) return { gagal: "terlalu-besar" };
+    const data = Buffer.from(await res.arrayBuffer());
+    if (data.length > maksByte) return { gagal: "terlalu-besar" };
+    return { data, mimeType: String(info.mime_type ?? res.headers.get("content-type") ?? "") };
   }
 
   verifyWebhook(req: WebhookRequest): boolean | string {
