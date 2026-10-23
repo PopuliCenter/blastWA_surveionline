@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 # OpenSSL untuk engine Prisma (Alpine = musl + OpenSSL 3)
 RUN apk add --no-cache openssl
@@ -10,7 +10,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
 # OpenSSL untuk engine Prisma saat runtime (migrate deploy + query engine)
 RUN apk add --no-cache openssl
