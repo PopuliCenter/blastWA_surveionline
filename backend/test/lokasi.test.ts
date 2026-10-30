@@ -5,6 +5,7 @@ import {
   koordinatDariObjek,
   saringLokasi,
   statusLokasi,
+  kolomLokasiSheet,
   LABEL_STATUS_LOKASI,
 } from "../src/lib/lokasi.js";
 import { MetaCloudAdapter } from "../src/providers/meta.js";
@@ -250,5 +251,30 @@ describe("parseInbound Qontak — pesan lokasi", () => {
   it("lokasi yang koordinatnya tak terbaca dilewati, tidak diteruskan kosong", () => {
     const out = adapter.parseInbound(webhook({ type: "location", room: { account_uniq_id: "628111" } }));
     expect(out).toHaveLength(0);
+  });
+});
+
+describe("kolomLokasiSheet — sama dengan ekspor Excel", () => {
+  const t = new Date("2026-10-01T03:00:00Z");
+  const r = (lain: Partial<Parameters<typeof kolomLokasiSheet>[0]>) => ({
+    lokasiDimintaPada: t,
+    lokasiDiterimaPada: null,
+    lokasiLat: null,
+    lokasiLng: null,
+    kodeProvinsiLokasi: null,
+    kodeProvinsi: "31",
+    ...lain,
+  });
+
+  it("dibagikan: nama provinsi titiknya + status pemeriksaan", () => {
+    const dibagikan = { lokasiDiterimaPada: t, lokasiLat: -6.2, lokasiLng: 106.85 };
+    expect(kolomLokasiSheet(r({ ...dibagikan, kodeProvinsiLokasi: "31" }))).toEqual(["DKI Jakarta", "Sesuai"]);
+    expect(kolomLokasiSheet(r({ ...dibagikan, kodeProvinsiLokasi: "32" }))).toEqual(["Jawa Barat", "Beda provinsi"]);
+    expect(kolomLokasiSheet(r({ ...dibagikan }))).toEqual(["", "Di luar batas provinsi"]);
+  });
+
+  it("diminta tapi belum dibagikan, atau tidak diminta", () => {
+    expect(kolomLokasiSheet(r({}))).toEqual(["", "Tidak dibagikan"]);
+    expect(kolomLokasiSheet(r({ lokasiDimintaPada: null }))).toEqual(["", ""]);
   });
 });

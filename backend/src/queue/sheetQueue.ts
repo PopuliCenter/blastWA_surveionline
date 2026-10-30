@@ -30,8 +30,19 @@ export const sheetQueue = new Queue<SheetJob, string, string>(SHEET_QUEUE, {
 // jobId deterministik → job ganda untuk respons yang sama luruh sendiri; ditambah
 // penjaga sheetSyncedAt di worker, satu respons tidak mungkin jadi dua baris.
 export async function enqueueSheetSync(responseId: string): Promise<void> {
+  await antrekan("sync", responseId, `sheet_${responseId}`);
+}
+
+// Perbarui kolom "Provinsi Lokasi" dan "Status Lokasi" pada baris yang SUDAH terkirim, saat
+// lokasinya diterima. Barisnya sendiri ditulis setelah permintaan lokasi terkirim (status
+// "Tidak dibagikan"); responden membagikan lokasinya belakangan. Job menulis keadaan
+// TERKINI, jadi bila ia berjalan sebelum barisnya ada, job sinkron yang menulisnya nanti.
+export async function enqueueSheetLokasi(responseId: string): Promise<void> {
+  await antrekan("lokasi", responseId, `sheet_lokasi_${responseId}`);
+}
+
+async function antrekan(nama: "sync" | "lokasi", responseId: string, jobId: string): Promise<void> {
   try {
-    const jobId = `sheet_${responseId}`;
     // BullMQ MENGABAIKAN add() diam-diam bila jobId-nya masih diduduki job lama di
     // daftar completed/failed (removeOnComplete/Fail menyimpannya ribuan). Kejadian
     // nyata: survei selesai SEBELUM integrasi dikonfigurasi → job jalan → "skip-
@@ -45,8 +56,8 @@ export async function enqueueSheetSync(responseId: string): Promise<void> {
       if (state !== "completed" && state !== "failed") return; // masih antre/aktif
       await existing.remove();
     }
-    await sheetQueue.add("sync", { responseId }, { jobId });
+    await sheetQueue.add(nama, { responseId }, { jobId });
   } catch (err) {
-    logError("backend", err, { scope: "sheetQueue", responseId });
+    logError("backend", err, { scope: "sheetQueue", responseId, nama });
   }
 }

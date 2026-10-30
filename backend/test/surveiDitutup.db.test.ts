@@ -30,6 +30,7 @@ vi.mock("../src/queue/sheetQueue.js", () => ({
   enqueueSheetSync: async (id: string) => {
     keSheets.push(id);
   },
+  enqueueSheetLokasi: async () => {},
 }));
 // Aturan Auto Reply ditiru untuk teks "aturan"; selain itu Agen AI — dicatat supaya tes bisa
 // memastikan AI TIDAK dipanggil saat tidak ada survei aktif.

@@ -49,7 +49,18 @@ vi.mock("../src/providers/registry.js", () => ({
     },
   }),
 }));
-vi.mock("../src/queue/sheetQueue.js", () => ({ enqueueSheetSync: async () => {} }));
+// Antrean Google Sheets ditiru. Pembaruan kolom lokasi dicatat; saat baris diantrekan,
+// keadaan respons pada SAAT ITU bisa diperiksa lewat `saatSync`.
+const lokasiKeSheets: string[] = [];
+let saatSync: ((id: string) => Promise<void>) | null = null;
+vi.mock("../src/queue/sheetQueue.js", () => ({
+  enqueueSheetSync: async (id: string) => {
+    await saatSync?.(id);
+  },
+  enqueueSheetLokasi: async (id: string) => {
+    lokasiKeSheets.push(id);
+  },
+}));
 vi.mock("../src/services/autoResponder.js", () => ({ findAutoResponse: async () => null }));
 
 type Engine = typeof import("../src/services/surveyEngine.js");
@@ -81,6 +92,8 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
 
   beforeEach(() => {
     terkirim.length = 0;
+    lokasiKeSheets.length = 0;
+    saatSync = null;
     tiruan.tolakTombol = false;
     tiruan.tanpaTombol = false;
     tiruan.tolakTeks = false;
@@ -175,15 +188,24 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
   it("selesai → penutup + permintaan lokasi dalam SATU pesan bertombol, lalu lokasi tersimpan dibulatkan", async () => {
     const { surveyId, kata } = await surveiChat();
     const hp = nomorBaru();
+    // Baris Google Sheets diantrekan SETELAH permintaan lokasi tercatat, jadi kolom
+    // lokasinya langsung berisi keadaan akhir ("Tidak dibagikan").
+    const dimintaSaatSync: (Date | null)[] = [];
+    saatSync = async (id) => {
+      dimintaSaatSync.push((await prisma.surveyResponse.findUniqueOrThrow({ where: { id } })).lokasiDimintaPada);
+    };
     await kirim(hp, kata);
     await kirim(hp, "ya"); // setuju
     await kirim(hp, "Jawa Barat");
+    expect(dimintaSaatSync).toHaveLength(1);
+    expect(dimintaSaatSync[0]).not.toBeNull();
 
     const akhir = ke(hp).at(-1)!;
     expect(akhir.tombolLokasi).toBe(true);
     expect(akhir.text).toContain("Terima kasih");
     expect(akhir.text).toContain(L.PESAN_MINTA_LOKASI_BAWAAN);
     expect((await respons(surveyId, hp)).lokasiDimintaPada).not.toBeNull();
+    expect(lokasiKeSheets).toEqual([]);
 
     terkirim.length = 0;
     await kirimLokasi(hp, -6.914744, 107.60981);
@@ -191,6 +213,8 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     expect(r.lokasiDiterimaPada).not.toBeNull();
     expect([r.lokasiLat, r.lokasiLng]).toEqual([-6.91, 107.61]);
     expect(ke(hp).map((t) => t.text)).toEqual([L.TERIMA_KASIH_LOKASI]);
+    // Lokasi tiba setelah barisnya terkirim: kedua selnya diperbarui.
+    expect(lokasiKeSheets).toEqual([r.id]);
 
     // Riwayat pesan: teks penanda, titik dibulatkan, nama tempat & alamat dibuang.
     const masuk = await prisma.message.findFirstOrThrow({
@@ -401,11 +425,19 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     await kirim(hp, kata);
     await kirim(hp, "ya");
     tiruan.lemparTeks = true;
+    // Barisnya tetap diantrekan walau pengiriman penutup gagal — dan baru SETELAH catatan
+    // permintaannya dibatalkan, jadi Sheets tidak menulis "Tidak dibagikan".
+    const dimintaSaatSync: (Date | null)[] = [];
+    saatSync = async (id) => {
+      dimintaSaatSync.push((await prisma.surveyResponse.findUniqueOrThrow({ where: { id } })).lokasiDimintaPada);
+    };
     await kirim(hp, "Jawa Barat").catch(() => {});
+    expect(dimintaSaatSync).toEqual([null]);
     const r = await respons(surveyId, hp);
     expect(r.completedAt).not.toBeNull();
     expect(r.lokasiDimintaPada).toBeNull();
     expect(ke(hp).some((t) => t.tombolLokasi)).toBe(false);
+    expect(lokasiKeSheets).toEqual([]);
   });
 
   it("teks cadangan SUDAH terkirim lalu tulis DB gagal → catatan permintaan tetap ada", async () => {

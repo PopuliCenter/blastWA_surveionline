@@ -91,7 +91,10 @@ export async function ensureTab(
 ): Promise<string[]> {
   const key = `${spreadsheetId}::${tab}`;
   const tersimpan = ensured.get(key);
-  if (tersimpan && tersimpan.sampai > Date.now()) return tersimpan.header;
+  // Cache dilewati bila header yang diharapkan kini lebih panjang — mis. survei baru mulai
+  // meminta lokasi. Tanpa ini judul kolom lokasi baru ditambahkan setelah cache 10 menit
+  // habis, dan nilai lokasi di antaranya terlewat karena judulnya belum ada.
+  if (tersimpan && tersimpan.sampai > Date.now() && !judulYangKurang(tersimpan.header, header)) return tersimpan.header;
   const simpan = (h: string[]): string[] => {
     ensured.set(key, { header: h, sampai: Date.now() + UMUR_JUDUL_MS });
     return h;
@@ -143,6 +146,26 @@ export async function readRange(sa: ServiceAccount, spreadsheetId: string, tab: 
   const r = await call<{ values?: string[][] }>(sa, "GET", `/${spreadsheetId}/values/${rangeOf(tab, a1)}`);
   return r.values ?? [];
 }
+
+// Beberapa rentang satu tab dalam SATU permintaan (values:batchGet) — mis. judul segar dan
+// kolom kunci sekaligus, tanpa menghabiskan dua jatah baca per menit.
+export async function readRanges(
+  sa: ServiceAccount,
+  spreadsheetId: string,
+  tab: string,
+  a1: string[],
+): Promise<string[][][]> {
+  const q = a1.map((r) => `ranges=${rangeOf(tab, r)}`).join("&");
+  const r = await call<{ valueRanges?: { values?: string[][] }[] }>(
+    sa,
+    "GET",
+    `/${spreadsheetId}/values:batchGet?${q}`,
+  );
+  return a1.map((_, i) => r.valueRanges?.[i]?.values ?? []);
+}
+
+// Galat Sheets karena tab yang dirujuk tidak ada (dihapus/diganti nama).
+export const galatTabTidakAda = (err: unknown): boolean => /Unable to parse range/i.test(String(err));
 
 // Baca rentang APA ADANYA: rumus tetap berupa rumus ("=COUNTA(…)"), angka tetap angka.
 // readRange memberi nilai yang DITAMPILKAN, dan menulis balik nilai itu mengubah rumus

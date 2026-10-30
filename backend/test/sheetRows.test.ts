@@ -12,6 +12,9 @@ import {
   durasiDariSheet,
   parseWaktuSheet,
   susunBarisSheet,
+  cariBarisRespons,
+  JUDUL_LOKASI,
+  TRAILING_HEADER,
 } from "../src/lib/sheetRows.js";
 import { judulYangKurang, kolomA1 } from "../src/services/sheetPush.js";
 
@@ -280,5 +283,66 @@ describe("susunBarisSheet — kolom buntut ditaruh menurut judulnya", () => {
 
   it("tab tanpa judul sama sekali tetap menurut urutan", () => {
     expect(susunBarisSheet(judul, [], nilai)).toEqual(nilai);
+  });
+});
+
+describe("kolom lokasi (Sheets)", () => {
+  const dasar = {
+    phone: "6281",
+    name: "Ani",
+    consentSource: null,
+    startedAt: new Date("2026-10-01T03:00:00Z"),
+    completedAt: new Date("2026-10-01T03:05:00Z"),
+    questions,
+    answers: [],
+  };
+
+  it("paling belakang, setelah asesmen waktu — hanya bila diminta", () => {
+    expect(sheetHeader(questions).slice(-3)).toEqual([...TRAILING_HEADER]);
+    expect(sheetHeader(questions, { lokasi: true }).slice(-5)).toEqual([...TRAILING_HEADER, ...JUDUL_LOKASI]);
+    const baris = sheetRow({ ...dasar, lokasi: ["DKI Jakarta", "Beda provinsi"] });
+    expect(baris).toHaveLength(sheetHeader(questions, { lokasi: true }).length);
+    expect(baris.slice(-2)).toEqual(["DKI Jakarta", "Beda provinsi"]);
+    expect(sheetRow(dasar)).toHaveLength(sheetHeader(questions).length);
+  });
+
+  it("tab lama yang belum punya judul lokasi: nilai lokasi dilewati, tidak ada yang bergeser", () => {
+    const judul = sheetHeader(questions, { lokasi: true });
+    const lama = sheetHeader(questions);
+    const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
+    expect(susunBarisSheet(judul, lama, nilai)).toEqual(nilai.slice(0, lama.length));
+  });
+
+  it("kolom tim di kanan Lama Pengisian tidak terisi lokasi; judul lokasi dicari menurut namanya", () => {
+    const judul = sheetHeader(questions, { lokasi: true });
+    const aktual = [...sheetHeader(questions), "Catatan QC", ...JUDUL_LOKASI];
+    const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
+    const baris = susunBarisSheet(judul, aktual, nilai);
+    expect(baris[aktual.indexOf("Catatan QC")]).toBe("");
+    expect(baris.slice(-2)).toEqual(["Jawa Barat", "Sesuai"]);
+  });
+
+  it("pertanyaan yang kebetulan berjudul 'Durasi (menit)' tidak mengacaukan letak buntut", () => {
+    const qs = [...questions, { id: "q3", text: TRAILING_HEADER[0] }];
+    const judul = sheetHeader(qs, { lokasi: true });
+    const nilai = sheetRow({
+      ...dasar,
+      questions: qs,
+      answers: [{ questionId: "q3", value: "7" }],
+      lokasi: ["Bali", "Sesuai"],
+    });
+    expect(susunBarisSheet(judul, judul, nilai)).toEqual(nilai);
+  });
+
+  it("cariBarisRespons: Nomor + Mulai, berapa pun urutannya", () => {
+    const header = sheetHeader(questions, { lokasi: true });
+    const mulai = fmtJakarta(dasar.startedAt);
+    const baris = [
+      ["6282", "", "", mulai],
+      ["6281", "", "", "2026-09-30 10:00"],
+      [" 6281 ", "", "", mulai],
+    ];
+    expect(cariBarisRespons(header, baris, "6281", mulai)).toEqual([2]);
+    expect(cariBarisRespons(["Nama", "Mulai"], baris, "6281", mulai)).toEqual([]);
   });
 });

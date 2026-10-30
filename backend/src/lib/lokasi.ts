@@ -13,6 +13,8 @@
 // desimal — kira-kira 1,1 km di ekuator: cukup untuk peta sebaran, tidak menunjuk rumah.
 // Log webhook dan payload pesan ikut disaring dengan aturan yang sama.
 
+import { PROVINSI } from "./wilayah.js";
+
 export type Koordinat = { lat: number; lng: number };
 
 export const DESIMAL_KOORDINAT = 2;
@@ -147,3 +149,16 @@ export const LABEL_STATUS_LOKASI: Record<StatusLokasi, string> = {
   "tidak-sesuai": "Beda provinsi",
   "tanpa-pembanding": "Provinsi tidak ditanyakan",
 };
+
+// Isi kolom "Provinsi Lokasi" dan "Status Lokasi" di Google Sheets — SAMA PERSIS dengan
+// ekspor Excel: provinsi hanya bila titiknya ada, status memakai label di atas (kembarnya
+// di src/lib/exportSurvey.js). kodeProvinsiLokasi = yang tersimpan, atau yang dihitung dari
+// titiknya bila belum (services/lokasiSheet.ts), sama seperti layar Respons.
+export function kolomLokasiSheet(
+  r: Parameters<typeof statusLokasi>[0] & { lokasiLat: number | null; lokasiLng: number | null },
+  batasTerpasang = true,
+): [string, string] {
+  const adaTitik = Boolean(r.lokasiDiterimaPada) && r.lokasiLat != null && r.lokasiLng != null;
+  const provinsi = adaTitik ? (PROVINSI.find((p) => p.kode === r.kodeProvinsiLokasi)?.nama ?? "") : "";
+  return [provinsi, LABEL_STATUS_LOKASI[statusLokasi(r, batasTerpasang)]];
+}

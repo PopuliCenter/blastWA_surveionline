@@ -25,7 +25,7 @@ import {
   tutupRespons,
 } from "./kuotaSurvei.js";
 import { findAutoResponse } from "./autoResponder.js";
-import { enqueueSheetSync } from "../queue/sheetQueue.js";
+import { enqueueSheetLokasi, enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
 import {
@@ -769,8 +769,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
         surveyResponse.alasanDitolakKuota === ALASAN_DITUTUP && surveyResponse.survey.status === "closed";
       const hasil = masihDitutup ? "masih-ditutup" : lengkap ? await pulihkanRespons(surveyResponse.id) : "masih-penuh";
       if (hasil === "dipulihkan") {
-        await enqueueSheetSync(surveyResponse.id);
-        await kirimPenutup(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
+        await penutupLaluSheets(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
       } else if (hasil === "masih-penuh") {
         await balasKuotaPenuh(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
       } else if (hasil === "masih-ditutup") {
@@ -871,8 +870,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       await kirimPesanKuota(vendor, phone, contactId, surveyResponse.surveyId, surveyResponse.survey.pesanKuotaPenuh);
     return;
   }
-  await enqueueSheetSync(surveyResponse.id);
-  await kirimPenutup(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
+  await penutupLaluSheets(vendor, phone, contactId, surveyResponse.id, surveyResponse.survey);
 }
 
 async function advanceSurvey(
@@ -969,8 +967,27 @@ async function advanceSurvey(
     else await kirimPesanKuota(vendor, phone, contactId, survei.id, survei.pesanKuotaPenuh);
     return;
   }
-  await enqueueSheetSync(responseId);
-  await kirimPenutup(vendor, phone, contactId, responseId, survei);
+  await penutupLaluSheets(vendor, phone, contactId, responseId, survei);
+}
+
+// Kata penutup (dan permintaan lokasi), LALU baris Google Sheets — berurutan. Barisnya
+// ditulis setelah permintaan lokasi tercatat atau dibatalkan, jadi kolom lokasinya langsung
+// berisi keadaan akhir ("Tidak dibagikan", atau kosong bila permintaannya tak pernah sampai).
+// Dulu baris diantrekan lebih dulu: job sinkron bisa membaca keadaan di tengah pengiriman,
+// dan perlu job susulan untuk membetulkannya — dua kali jatah tulis Google per responden.
+// finally: kegagalan mengirim penutup tidak boleh membuat barisnya tidak pernah terantre.
+async function penutupLaluSheets(
+  vendor: string,
+  phone: string,
+  contactId: string,
+  responseId: string,
+  survei: Parameters<typeof kirimPenutup>[4],
+): Promise<void> {
+  try {
+    await kirimPenutup(vendor, phone, contactId, responseId, survei);
+  } finally {
+    await enqueueSheetSync(responseId);
+  }
 }
 
 // Kata penutup — dan, bila survei meminta lokasi, permintaan lokasinya dalam pesan yang SAMA.
@@ -1136,7 +1153,12 @@ async function simpanLokasi(
     where: { id: r.id, lokasiDiterimaPada: null },
     data: { lokasiDiterimaPada: new Date(), lokasiLat: bulat.lat, lokasiLng: bulat.lng, kodeProvinsiLokasi },
   });
-  if (count) await reply(vendor, phone, r.survey.balasanLokasi?.trim() || TERIMA_KASIH_LOKASI, contactId);
+  if (count) {
+    // Barisnya di Google Sheets sudah terkirim saat responden selesai — kolom lokasinya
+    // diperbarui sekarang.
+    await enqueueSheetLokasi(r.id);
+    await reply(vendor, phone, r.survey.balasanLokasi?.trim() || TERIMA_KASIH_LOKASI, contactId);
+  }
   return true;
 }
 

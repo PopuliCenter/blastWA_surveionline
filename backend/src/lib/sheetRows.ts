@@ -77,8 +77,14 @@ const FIXED_HEADER = ["Nomor", "Nama", "Sumber Kontak", "Mulai", "Selesai"] as c
 // kolom durasi mendapat judulnya di kanan (ensureTab → judulYangKurang), tanpa menggeser.
 export const TRAILING_HEADER = ["Durasi (menit)", "Asesmen Durasi", "Lama Pengisian"] as const;
 
-export function sheetHeader(questions: SheetQuestion[]): string[] {
-  return [...FIXED_HEADER, ...questions.map((q) => q.text), ...TRAILING_HEADER];
+// Pemeriksaan lokasi, paling belakang — setelah asesmen waktu, dengan alasan yang sama:
+// tab yang sudah berisi data mendapat kedua judulnya di kanan, tanpa menggeser apa pun.
+// Hanya untuk survei yang meminta lokasi; isinya sama persis dengan ekspor Excel
+// (lib/lokasi.ts kolomLokasiSheet).
+export const JUDUL_LOKASI = ["Provinsi Lokasi", "Status Lokasi"] as const;
+
+export function sheetHeader(questions: SheetQuestion[], opsi: { lokasi?: boolean } = {}): string[] {
+  return [...FIXED_HEADER, ...questions.map((q) => q.text), ...TRAILING_HEADER, ...(opsi.lokasi ? JUDUL_LOKASI : [])];
 }
 
 // ===== Asesmen durasi pengisian =====
@@ -104,6 +110,8 @@ export function sheetRow(input: {
   answers: SheetAnswer[];
   // Survey.aturanDurasi; kosong/rusak = aturan bawaan.
   aturanDurasi?: unknown;
+  // [Provinsi Lokasi, Status Lokasi] — hanya bila header-nya memuat JUDUL_LOKASI.
+  lokasi?: readonly [string, string];
 }): (string | number)[] {
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a.value]));
   const menit = durasiMenit(input.startedAt, input.completedAt);
@@ -126,6 +134,7 @@ export function sheetRow(input: {
     // 1 menit 54 detik, bukan 1 menit 53 detik dari detik aslinya — kalau tidak, kolom
     // penjelas justru tampak membantah angka yang dijelaskannya.
     formatLamaPengisian(menit === null ? null : bulatkanMenit(menit)),
+    ...(input.lokasi ?? []),
   ];
 }
 
@@ -146,7 +155,11 @@ export function susunBarisSheet(
   nilai: readonly (string | number)[],
 ): (string | number)[] {
   if (!aktual.length) return [...nilai];
-  const awalBuntut = diharapkan.length - TRAILING_HEADER.length;
+  // Buntutnya mulai di kolom Durasi — dicari dari BELAKANG, supaya pertanyaan yang kebetulan
+  // berjudul sama tidak terkecoh. Jumlah kolom buntut tidak tetap: kolom lokasi hanya ada
+  // pada survei yang meminta lokasi.
+  const iDurasi = diharapkan.lastIndexOf(TRAILING_HEADER[0]);
+  const awalBuntut = iDurasi >= 0 ? iDurasi : diharapkan.length - TRAILING_HEADER.length;
   const baris: (string | number)[] = nilai.slice(0, awalBuntut);
   for (let k = awalBuntut; k < diharapkan.length; k++) {
     const idx = aktual.findIndex((h, i) => i >= awalBuntut && h.trim() === diharapkan[k]);
@@ -156,6 +169,30 @@ export function susunBarisSheet(
   }
   return baris;
 }
+
+// Baris data (0 = baris kedua spreadsheet) milik respons ini: Nomor dan Mulai-nya sama.
+// Dipakai untuk memperbarui kolom lokasi yang datang SETELAH barisnya terkirim. Dicocokkan
+// menurut isi, bukan nomor baris: tim bisa menyortir atau menyisipkan baris sesukanya.
+// Kosong bila kolom Nomor/Mulai tidak ada — tab itu bukan susunan worker.
+export function cariBarisRespons(
+  header: readonly string[],
+  baris: readonly (readonly unknown[])[],
+  phone: string,
+  mulai: string,
+): number[] {
+  const iNomor = header.indexOf(FIXED_HEADER[0]);
+  const iMulai = header.indexOf(FIXED_HEADER[3]);
+  if (iNomor < 0 || iMulai < 0) return [];
+  const hasil: number[] = [];
+  baris.forEach((b, i) => {
+    if (kunciBaris(b[iNomor], b[iMulai]) === kunciBaris(phone, mulai)) hasil.push(i);
+  });
+  return hasil;
+}
+
+// Kunci pengenal baris: Nomor + Mulai (WIB, sampai menit — format fmtJakarta).
+export const kunciBaris = (nomor: unknown, mulai: unknown): string =>
+  `${String(nomor ?? "").trim()}|${String(mulai ?? "").trim()}`;
 
 // Terima ID spreadsheet ATAU URL lengkapnya — orang hampir selalu menyalin URL dari
 // address bar ("https://docs.google.com/spreadsheets/d/<ID>/edit#gid=0").

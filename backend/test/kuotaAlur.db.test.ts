@@ -28,6 +28,7 @@ vi.mock("../src/queue/sheetQueue.js", () => ({
   enqueueSheetSync: async (id: string) => {
     keSheets.push(id);
   },
+  enqueueSheetLokasi: async () => {},
 }));
 vi.mock("../src/services/autoResponder.js", () => ({ findAutoResponse: async () => null }));
 

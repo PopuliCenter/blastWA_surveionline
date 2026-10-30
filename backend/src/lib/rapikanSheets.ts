@@ -19,7 +19,7 @@
 //     label "Aman" dengan label bawaan menghapus data yang benar.
 
 import { asesmenDurasi, bersihkanKodeWilayah, bulatkanMenit, formatLamaPengisian } from "./asesmenDurasi.js";
-import { durasiDariSheet } from "./sheetRows.js";
+import { JUDUL_LOKASI, durasiDariSheet, kunciBaris } from "./sheetRows.js";
 
 export const JUDUL_DURASI = "Durasi (menit)";
 export const JUDUL_ASESMEN = "Asesmen Durasi";
@@ -146,4 +146,67 @@ export function rencanaRapikanTab(input: {
   });
 
   return { judulBaru, sel, hitung, kolomDurasi: iDurasi, kolomWilayah };
+}
+
+// ===== Kolom lokasi =====
+//
+// "Provinsi Lokasi" dan "Status Lokasi" untuk baris yang SUDAH ada. Berbeda dari durasi,
+// nilainya tidak bisa dihitung dari isi spreadsheet: diambil dari basis data, dicocokkan
+// ke baris lewat Nomor + Mulai (`nilai`: kunciBaris → [provinsi, status]; null = lebih dari
+// satu respons berkunci sama, jadi tidak pasti dan dilewati).
+//
+// Nilai yang berbeda DITIMPA, tidak hanya diisi bila kosong: statusnya memang berubah —
+// "Tidak dibagikan" menjadi "Sesuai" begitu lokasinya diterima. Rumus tetap tidak disentuh.
+// `header` = judul tab SETELAH judul kolom durasi yang baru (bila ada) ditambahkan.
+export type RencanaLokasi =
+  | { lewati: string }
+  | {
+      lewati?: undefined;
+      judulBaru: { kolom: number; nilai: string[] } | null;
+      sel: SelBaru[];
+      hitung: { diperbarui: number; takDitemukan: number };
+    };
+
+export function rencanaLokasiTab(input: {
+  header: readonly string[];
+  baris: readonly (readonly unknown[])[];
+  nilai: ReadonlyMap<string, readonly [string, string] | null>;
+}): RencanaLokasi {
+  const { header, baris, nilai } = input;
+  const iNomor = header.indexOf("Nomor");
+  const iMulai = header.indexOf("Mulai");
+  if (iNomor < 0 || iMulai < 0) return { lewati: "tidak ada kolom Nomor/Mulai (bukan tab respons survei)" };
+
+  let iProvinsi = header.lastIndexOf(JUDUL_LOKASI[0]);
+  let iStatus = header.lastIndexOf(JUDUL_LOKASI[1]);
+  let judulBaru: { kolom: number; nilai: string[] } | null = null;
+  if (iProvinsi < 0 && iStatus < 0) {
+    iProvinsi = header.length;
+    iStatus = header.length + 1;
+    judulBaru = { kolom: iProvinsi, nilai: [...JUDUL_LOKASI] };
+    // Sama dengan kolom durasi: kolom yang akan diberi judul harus benar-benar kosong.
+    const terisi = baris.some((b) => teks(b[iProvinsi]).trim() !== "" || teks(b[iStatus]).trim() !== "");
+    if (terisi) return { lewati: `kolom di kanan judul (${JUDUL_LOKASI.join(", ")}) sudah berisi data tanpa judul` };
+  } else if (iProvinsi < 0 || iStatus < 0) {
+    return { lewati: `hanya ada salah satu kolom "${JUDUL_LOKASI[0]}"/"${JUDUL_LOKASI[1]}"` };
+  }
+
+  const sel: SelBaru[] = [];
+  const hitung = { diperbarui: 0, takDitemukan: 0 };
+  baris.forEach((b, i) => {
+    const v = nilai.get(kunciBaris(b[iNomor], b[iMulai]));
+    if (v === undefined) {
+      if (teks(b[iNomor]).trim()) hitung.takDitemukan++;
+      return;
+    }
+    if (v === null) return;
+    let berubah = false;
+    [iProvinsi, iStatus].forEach((k, n) => {
+      if (rumus(b[k]) || teks(b[k]) === v[n]) return;
+      sel.push({ baris: i, kolom: k, nilai: v[n]! });
+      berubah = true;
+    });
+    if (berubah) hitung.diperbarui++;
+  });
+  return { judulBaru, sel, hitung };
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  rencanaLokasiTab,
   rencanaRapikanTab,
   JUDUL_DURASI,
   JUDUL_ASESMEN,
@@ -174,5 +175,74 @@ describe("rencanaRapikanTab — kolom di kanan judul yang sudah berisi", () => {
       pemilik: PENDEK,
     });
     expect(r).toMatchObject({ lewati: expect.stringMatching(/sudah berisi data/) });
+  });
+});
+
+describe("rencanaLokasiTab", () => {
+  const LOKASI = [...HEADER, "Provinsi Lokasi", "Status Lokasi"];
+  const nilai = new Map<string, readonly [string, string] | null>([
+    ["6281|2026-10-01 10:00", ["DKI Jakarta", "Sesuai"]],
+    ["6282|2026-10-01 11:00", ["", "Tidak dibagikan"]],
+    ["6283|2026-10-01 12:00", null], // dua respons berkunci sama
+  ]);
+  const baris = (nomor: string, mulai: string, prov: unknown = "", status: unknown = "") => {
+    const b: unknown[] = new Array(LOKASI.length).fill("");
+    b[0] = nomor;
+    b[3] = mulai;
+    b[10] = prov;
+    b[11] = status;
+    return b;
+  };
+
+  it("menulis hanya sel yang berbeda, dicocokkan lewat Nomor + Mulai", () => {
+    const r = rencanaLokasiTab({
+      header: LOKASI,
+      baris: [
+        baris("6282", "2026-10-01 11:00", "", "Tidak dibagikan"), // sudah benar
+        baris("6281", "2026-10-01 10:00", "", "Tidak dibagikan"), // berubah: lokasinya tiba
+        baris("6283", "2026-10-01 12:00"), // tidak pasti
+        baris("6299", "2026-10-01 13:00"), // tidak ada di basis data
+      ],
+      nilai,
+    });
+    if (r.lewati !== undefined) throw new Error(r.lewati);
+    expect(r.judulBaru).toBeNull();
+    expect(r.sel).toEqual([
+      { baris: 1, kolom: 10, nilai: "DKI Jakarta" },
+      { baris: 1, kolom: 11, nilai: "Sesuai" },
+    ]);
+    expect(r.hitung).toEqual({ diperbarui: 1, takDitemukan: 1 });
+  });
+
+  it("menjalankan dua kali tidak mengubah apa pun; rumus tidak disentuh", () => {
+    const r = rencanaLokasiTab({
+      header: LOKASI,
+      baris: [
+        baris("6281", "2026-10-01 10:00", "DKI Jakarta", "Sesuai"),
+        baris("6282", "2026-10-01 11:00", "=A1", '=IF(A2="";"";"x")'),
+      ],
+      nilai,
+    });
+    if (r.lewati !== undefined) throw new Error(r.lewati);
+    expect(r.sel).toEqual([]);
+  });
+
+  it("tab tanpa judul lokasi: judulnya ditambahkan di kanan, asal kolomnya kosong", () => {
+    const tanpa = baris("6281", "2026-10-01 10:00").slice(0, HEADER.length);
+    const r = rencanaLokasiTab({ header: HEADER, baris: [tanpa], nilai });
+    if (r.lewati !== undefined) throw new Error(r.lewati);
+    expect(r.judulBaru).toEqual({ kolom: HEADER.length, nilai: ["Provinsi Lokasi", "Status Lokasi"] });
+    expect(r.sel).toEqual([
+      { baris: 0, kolom: HEADER.length, nilai: "DKI Jakarta" },
+      { baris: 0, kolom: HEADER.length + 1, nilai: "Sesuai" },
+    ]);
+
+    const terisi = [...tanpa, "data tim"];
+    expect(rencanaLokasiTab({ header: HEADER, baris: [terisi], nilai }).lewati).toMatch(/tanpa judul/);
+  });
+
+  it("bukan tab respons, atau hanya satu kolom lokasi → dilewati", () => {
+    expect(rencanaLokasiTab({ header: ["A", "B"], baris: [], nilai }).lewati).toBeDefined();
+    expect(rencanaLokasiTab({ header: [...HEADER, "Status Lokasi"], baris: [], nilai }).lewati).toMatch(/salah satu/);
   });
 });

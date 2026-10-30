@@ -14,6 +14,7 @@ import { decryptJson } from "../lib/crypto.js";
 import { parseServiceAccount } from "../lib/googleAuth.js";
 import { sheetTabName, sheetHeader, sheetRow, susunBarisSheet } from "../lib/sheetRows.js";
 import { ensureTab, appendRow } from "../services/sheetPush.js";
+import { lokasiDiSheet, nilaiLokasiSheet, perbaruiLokasiDiSheet } from "../services/lokasiSheet.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
 // Pengaman anti-banned: lewati kontak opt-out, batas harian + jitter (warm-up).
@@ -175,6 +176,9 @@ async function main() {
   const sheetWorker = new Worker<SheetJob>(
     SHEET_QUEUE,
     async (job) => {
+      // Lokasi yang datang setelah barisnya terkirim: perbarui dua sel lokasinya saja.
+      if (job.name === "lokasi") return perbaruiLokasiDiSheet(job.data.responseId);
+
       const cfg = await prisma.sheetConfig.findUnique({ where: { id: "default" } });
       if (!cfg?.enabled || !cfg.spreadsheetId || !cfg.serviceAccountJson) return "skip-nonaktif";
       const sa = parseServiceAccount(decryptJson<string>(cfg.serviceAccountJson));
@@ -187,6 +191,7 @@ async function main() {
             select: {
               title: true,
               aturanDurasi: true,
+              mintaLokasi: true,
               // type: pertanyaan Wilayah ditulis tanpa kode resminya ("Jawa Barat", bukan "Jawa Barat (32)").
               questions: { orderBy: { order: "asc" }, select: { id: true, text: true, type: true } },
             },
@@ -203,7 +208,11 @@ async function main() {
       if (r.sheetSyncedAt) return "skip-sudah";
 
       const tab = sheetTabName(r.survey.title);
-      const judul = sheetHeader(r.survey.questions);
+      // Kolom lokasi paling belakang, hanya untuk survei yang meminta lokasi. Ditulis
+      // menurut keadaan SAAT INI; lokasi yang dibagikan belakangan memperbarui selnya
+      // lewat job "lokasi" (enqueueSheetLokasi).
+      const pakaiLokasi = lokasiDiSheet(r.survey.mintaLokasi, r);
+      const judul = sheetHeader(r.survey.questions, { lokasi: pakaiLokasi });
       const judulTab = await ensureTab(sa, cfg.spreadsheetId, tab, judul);
       await appendRow(
         sa,
@@ -221,13 +230,22 @@ async function main() {
             questions: r.survey.questions,
             answers: r.answers,
             aturanDurasi: r.survey.aturanDurasi,
+            lokasi: pakaiLokasi ? await nilaiLokasiSheet(r) : undefined,
           }),
         ),
       );
       await prisma.surveyResponse.update({ where: { id: r.id }, data: { sheetSyncedAt: new Date() } });
       return "ok";
     },
-    { connection: bullConnection, concurrency: 1 },
+    {
+      connection: bullConnection,
+      concurrency: 1,
+      // Kuota Google Sheets: 60 baca dan 60 tulis per menit per service account. Tiap job
+      // memakai satu tulis (plus paling banyak satu baca). Dengan pembatas ini job MENUNGGU
+      // gilirannya saat beban memuncak (mis. sesudah blast besar), alih-alih kena 429 dan
+      // menghabiskan jatah percobaan ulangnya sampai barisnya hilang dari spreadsheet.
+      limiter: { max: 50, duration: 60_000 },
+    },
   );
   sheetWorker.on("failed", (job, err) => logError("worker", err, { scope: "sheetWorker", jobId: job?.id }));
   sheetWorker.on("error", (err) => logGalatBerulang("worker", "sheetWorker", err));
