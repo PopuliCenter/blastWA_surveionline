@@ -241,6 +241,11 @@ describe("rencanaLokasiTab", () => {
     expect(rencanaLokasiTab({ header: HEADER, baris: [terisi], nilai }).lewati).toMatch(/tanpa judul/);
   });
 
+  it("tab tanpa respons yang dimintai lokasi (survei lama) tidak diberi kolom lokasi", () => {
+    const lama = baris("6299", "2026-09-01 10:00").slice(0, HEADER.length);
+    expect(rencanaLokasiTab({ header: HEADER, baris: [lama], nilai }).lewati).toMatch(/tidak ada baris/);
+  });
+
   it("bukan tab respons, atau hanya satu kolom lokasi → dilewati", () => {
     expect(rencanaLokasiTab({ header: ["A", "B"], baris: [], nilai }).lewati).toBeDefined();
     expect(rencanaLokasiTab({ header: [...HEADER, "Status Lokasi"], baris: [], nilai }).lewati).toMatch(/salah satu/);

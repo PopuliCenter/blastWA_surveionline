@@ -153,7 +153,9 @@ export function rencanaRapikanTab(input: {
 // "Provinsi Lokasi" dan "Status Lokasi" untuk baris yang SUDAH ada. Berbeda dari durasi,
 // nilainya tidak bisa dihitung dari isi spreadsheet: diambil dari basis data, dicocokkan
 // ke baris lewat Nomor + Mulai (`nilai`: kunciBaris → [provinsi, status]; null = lebih dari
-// satu respons berkunci sama, jadi tidak pasti dan dilewati).
+// satu respons berkunci sama, jadi tidak pasti dan dilewati). `nilai` memuat respons SEMUA
+// survei yang dimintai lokasi: kuncinya cukup spesifik, dan tab yang judul surveinya sudah
+// diganti tetap terisi.
 //
 // Nilai yang berbeda DITIMPA, tidak hanya diisi bila kosong: statusnya memang berubah —
 // "Tidak dibagikan" menjadi "Sesuai" begitu lokasinya diterima. Rumus tetap tidak disentuh.
@@ -193,12 +195,14 @@ export function rencanaLokasiTab(input: {
 
   const sel: SelBaru[] = [];
   const hitung = { diperbarui: 0, takDitemukan: 0 };
+  let cocok = 0;
   baris.forEach((b, i) => {
     const v = nilai.get(kunciBaris(b[iNomor], b[iMulai]));
     if (v === undefined) {
       if (teks(b[iNomor]).trim()) hitung.takDitemukan++;
       return;
     }
+    cocok++;
     if (v === null) return;
     let berubah = false;
     [iProvinsi, iStatus].forEach((k, n) => {
@@ -208,5 +212,8 @@ export function rencanaLokasiTab(input: {
     });
     if (berubah) hitung.diperbarui++;
   });
+  // Kolom lokasi hanya DITAMBAHKAN ke tab yang memang berisi respons yang dimintai lokasi —
+  // tab survei lama dari sebelum fitur lokasi tidak perlu dua kolom kosong di ujungnya.
+  if (judulBaru && !cocok) return { lewati: "tidak ada baris milik respons yang dimintai lokasi" };
   return { judulBaru, sel, hitung };
 }

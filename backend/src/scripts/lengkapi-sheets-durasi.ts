@@ -31,7 +31,7 @@ import { prisma } from "../db.js";
 import { decryptJson } from "../lib/crypto.js";
 import { parseServiceAccount } from "../lib/googleAuth.js";
 import { fmtJakarta, kunciBaris, sheetTabName } from "../lib/sheetRows.js";
-import { rencanaLokasiTab, rencanaRapikanTab, type PemilikTab, type RencanaLokasi } from "../lib/rapikanSheets.js";
+import { rencanaLokasiTab, rencanaRapikanTab, type PemilikTab } from "../lib/rapikanSheets.js";
 import { PILIH_LOKASI, lokasiDiSheet, nilaiLokasiSheet } from "../services/lokasiSheet.js";
 import {
   readSpreadsheetMeta,
@@ -40,35 +40,39 @@ import {
   writeRange,
   writeCells,
   kolomA1,
+  lebarkanKolom,
 } from "../services/sheetPush.js";
 
-type SurveiTab = { id: string; mintaLokasi: boolean };
-
-// Rencana kolom lokasi satu tab. null = tab ini tidak punya respons yang dimintai lokasi.
-// `header` = judul tab SETELAH judul durasi yang baru (bila ada) — kolom lokasi menyusul di
-// kanannya, sama dengan urutan buatan worker.
-async function rencanaLokasi(
-  survei: readonly SurveiTab[],
-  header: readonly string[],
-  baris: readonly (readonly unknown[])[],
-): Promise<RencanaLokasi | null> {
-  if (!survei.length) return null;
+// Nilai kolom lokasi untuk SEMUA respons yang dimintai lokasi, menurut kunci Nomor + Mulai.
+// Tidak dibatasi per tab: tab yang judul surveinya sudah diganti tidak lagi cocok dengan
+// survei mana pun, padahal barisnya tetap bisa dikenali lewat kuncinya. Dua respons
+// berkunci sama (nomor sama, mulai di menit yang sama) tidak bisa dibedakan di spreadsheet —
+// ditandai null dan dilewati, bukan ditebak.
+async function nilaiLokasiSemua(): Promise<Map<string, [string, string] | null>> {
   const responses = await prisma.surveyResponse.findMany({
-    where: { surveyId: { in: survei.map((s) => s.id) }, completedAt: { not: null }, ditolakKuotaPada: null },
-    select: { ...PILIH_LOKASI, surveyId: true, startedAt: true, contact: { select: { phone: true } } },
+    where: {
+      completedAt: { not: null },
+      ditolakKuotaPada: null,
+      OR: [
+        { lokasiDimintaPada: { not: null } },
+        { lokasiDiterimaPada: { not: null } },
+        { survey: { mintaLokasi: true } },
+      ],
+    },
+    select: {
+      ...PILIH_LOKASI,
+      startedAt: true,
+      contact: { select: { phone: true } },
+      survey: { select: { mintaLokasi: true } },
+    },
   });
-  const minta = new Map(survei.map((s) => [s.id, s.mintaLokasi]));
-  const pakai = responses.filter((x) => lokasiDiSheet(minta.get(x.surveyId) ?? false, x));
-  if (!pakai.length) return null;
-
-  // Dua respons berkunci sama (nomor yang sama, mulai di menit yang sama) tidak bisa
-  // dibedakan di spreadsheet — ditandai null dan dilewati, bukan ditebak.
   const nilai = new Map<string, [string, string] | null>();
-  for (const x of pakai) {
+  for (const x of responses) {
+    if (!lokasiDiSheet(x.survey.mintaLokasi, x)) continue;
     const k = kunciBaris(x.contact.phone, fmtJakarta(x.startedAt));
     nilai.set(k, nilai.has(k) ? null : await nilaiLokasiSheet(x));
   }
-  return rencanaLokasiTab({ header, baris, nilai });
+  return nilai;
 }
 
 async function main(): Promise<void> {
@@ -90,25 +94,20 @@ async function main(): Promise<void> {
   // salah satu sembarang.
   const surveys = await prisma.survey.findMany({
     select: {
-      id: true,
       title: true,
       aturanDurasi: true,
-      mintaLokasi: true,
       questions: { where: { type: "wilayah" }, select: { text: true } },
     },
   });
   const pemilikPerTab = new Map<string, PemilikTab | "ambigu">();
-  // Untuk kolom lokasi SEMUA survei yang berbagi nama tab ikut: barisnya dicocokkan lewat
-  // Nomor + Mulai, jadi tab bersama tidak membuat nilainya tak pasti.
-  const surveiPerTab = new Map<string, SurveiTab[]>();
   for (const s of surveys) {
     const k = sheetTabName(s.title).toLowerCase();
     pemilikPerTab.set(
       k,
       pemilikPerTab.has(k) ? "ambigu" : { aturanDurasi: s.aturanDurasi, teksWilayah: s.questions.map((q) => q.text) },
     );
-    surveiPerTab.set(k, [...(surveiPerTab.get(k) ?? []), { id: s.id, mintaLokasi: s.mintaLokasi }]);
   }
+  const nilaiLokasi = await nilaiLokasiSemua();
 
   let totalSel = 0;
   for (const tab of tabs) {
@@ -121,11 +120,13 @@ async function main(): Promise<void> {
     const baris = header.length ? await readRangeMentah(sa, id, tab, `A2:${kolomA1(header.length + 4)}`) : [];
     const r = rencanaRapikanTab({ header, baris, pemilik });
     const judulDurasi = r.lewati === undefined ? r.judulBaru : null;
-    const rl = await rencanaLokasi(
-      surveiPerTab.get(tab.toLowerCase()) ?? [],
-      judulDurasi ? [...header, ...judulDurasi.nilai] : header,
-      baris,
-    );
+    const rl = nilaiLokasi.size
+      ? rencanaLokasiTab({
+          header: judulDurasi ? [...header, ...judulDurasi.nilai] : header,
+          baris,
+          nilai: nilaiLokasi,
+        })
+      : null;
 
     if (r.lewati !== undefined) {
       console.log(`  ${tab}: dilewati — ${r.lewati}.`);
@@ -157,6 +158,14 @@ async function main(): Promise<void> {
     totalSel += sel.length;
 
     if (!apply) continue;
+    // Grid tab punya jumlah kolom tetap; judul dan sel di kanannya ditolak Google bila grid
+    // belum dilebarkan ("exceeds grid limits").
+    const kolomTerjauh = Math.max(
+      judulDurasi ? judulDurasi.kolom + judulDurasi.nilai.length : 0,
+      lokasi?.judulBaru ? lokasi.judulBaru.kolom + lokasi.judulBaru.nilai.length : 0,
+      ...sel.map((c) => c.kolom + 1),
+    );
+    if (kolomTerjauh) await lebarkanKolom(sa, id, tab, kolomTerjauh);
     if (judulDurasi) await writeRange(sa, id, tab, `${kolomA1(judulDurasi.kolom)}1`, [judulDurasi.nilai]);
     if (lokasi?.judulBaru)
       await writeRange(sa, id, tab, `${kolomA1(lokasi.judulBaru.kolom)}1`, [lokasi.judulBaru.nilai]);

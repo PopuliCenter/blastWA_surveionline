@@ -46,6 +46,31 @@ export async function readSpreadsheetMeta(
   };
 }
 
+// Grid sebuah tab punya jumlah kolom tetap. Menulis ke sel yang MULAI di luar batas itu
+// ditolak Google ("exceeds grid limits") — penulisan nilai tidak menambah kolom sendiri.
+// Kejadian nyata: tab survei 27 pertanyaan berhenti di kolom AI, dan judul kolom berikutnya
+// gagal ditulis di AJ. Tambahkan kolom di kanan bila kurang dari `minKolom`.
+type MetaGrid = {
+  sheets?: { properties?: { sheetId?: number; title?: string; gridProperties?: { columnCount?: number } } }[];
+};
+export async function lebarkanKolom(
+  sa: ServiceAccount,
+  spreadsheetId: string,
+  tab: string,
+  minKolom: number,
+): Promise<void> {
+  const fields = encodeURIComponent("sheets.properties(sheetId,title,gridProperties.columnCount)");
+  const meta = await call<MetaGrid>(sa, "GET", `/${spreadsheetId}?fields=${fields}`);
+  const p = meta.sheets?.find((s) => s.properties?.title === tab)?.properties;
+  // sheetId 0 itu sah (tab pertama) — yang dicek "tidak ada", bukan "falsy".
+  if (!p || p.sheetId === undefined) return;
+  const ada = p.gridProperties?.columnCount ?? 0;
+  if (ada >= minKolom) return;
+  await call(sa, "POST", `/${spreadsheetId}:batchUpdate`, {
+    requests: [{ appendDimension: { sheetId: p.sheetId, dimension: "COLUMNS", length: minKolom - ada } }],
+  });
+}
+
 // Tab yang sudah dipastikan ada, beserta judul kolomnya yang SEBENARNYA — worker berjalan
 // serial (concurrency 1), jadi Map sederhana cukup; kalau tab dihapus orang saat proses
 // berjalan, append gagal dan retry BullMQ memaksa pemeriksaan ulang (cache di-invalidate).
@@ -125,6 +150,7 @@ export async function ensureTab(
     const ada = (r.values?.[0] ?? []).map((v) => String(v ?? ""));
     const kurang = judulYangKurang(ada, header);
     if (kurang) {
+      await lebarkanKolom(sa, spreadsheetId, tab, kurang.mulai + kurang.nilai.length);
       const sel = `${kolomA1(kurang.mulai)}1`;
       await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, sel)}?valueInputOption=RAW`, {
         values: [kurang.nilai],
