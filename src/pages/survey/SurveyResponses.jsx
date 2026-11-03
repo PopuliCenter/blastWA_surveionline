@@ -36,6 +36,8 @@ const STATUS_TABS = [
 ];
 
 const lokasiBeda = (r) => !ditolakKuota(r) && r.statusLokasi === "tidak-sesuai";
+// Asal responden, mis. "Iklan • Form". Saluran tidak ikut selama semuanya masih WhatsApp.
+const asalRingkas = (r) => [r.jalurMasuk, r.metode].filter(Boolean).join(" • ");
 
 // Cocokkan kata kunci ke nama, nomor, atau nilai atribut kontak.
 function matches(r, q) {
@@ -441,17 +443,37 @@ export function SurveyResponses({ survey, onClose }) {
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
+                        minWidth: 90,
                         maxWidth: isMobile ? 130 : 240,
                       }}
                     >
                       {r.name || r.phone}
                     </span>
                     {!isMobile ? (
-                      <span style={{ fontSize: 12, color: theme.textMuted, fontWeight: 500, whiteSpace: "nowrap" }}>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: theme.textMuted,
+                          fontWeight: 500,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          minWidth: 0,
+                        }}
+                      >
                         {r.phone} • {fmtDate(r.startedAt)}
+                        {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                       </span>
                     ) : null}
-                    <span style={{ fontSize: 12, color: theme.textMuted, fontWeight: 500, whiteSpace: "nowrap" }}>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: theme.textMuted,
+                        fontWeight: 500,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
                       {r.answers.length} jawaban
                     </span>
                   </button>
@@ -493,12 +515,18 @@ export function SurveyResponses({ survey, onClose }) {
                   >
                     <span>
                       {r.phone} • {fmtDate(r.startedAt)}
+                      {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                     </span>
                     {lokasiBeda(r) ? <Badge tone="yellow">beda provinsi</Badge> : null}
                   </div>
                 ) : null}
                 {open ? (
                   <div style={{ marginTop: 10, marginLeft: 26 }}>
+                    {r.iklanJudul ? (
+                      <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 8 }}>
+                        Datang dari iklan: {r.iklanJudul}
+                      </div>
+                    ) : null}
                     {r.answers.length ? (
                       r.answers.map((a, i) => (
                         <div

@@ -15,6 +15,7 @@ import { parseServiceAccount } from "../lib/googleAuth.js";
 import { sheetTabName, sheetHeader, sheetRow, susunBarisSheet } from "../lib/sheetRows.js";
 import { ensureTab, appendRow } from "../services/sheetPush.js";
 import { lokasiDiSheet, nilaiLokasiSheet, perbaruiLokasiDiSheet } from "../services/lokasiSheet.js";
+import { labelAsal } from "../lib/jalurRespons.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
 // Pengaman anti-banned: lewati kontak opt-out, batas harian + jitter (warm-up).
@@ -146,7 +147,12 @@ async function main() {
 
       await prisma.blastRecipient.update({
         where: { id: recipientId },
-        data: { status: "sent", vendorMessageId: result.vendorMessageId || null, error: null },
+        data: {
+          status: "sent",
+          terkirimPada: new Date(),
+          vendorMessageId: result.vendorMessageId || null,
+          error: null,
+        },
       });
       await prisma.blast.update({ where: { id: blastId }, data: { sentCount: { increment: 1 } } });
 
@@ -192,6 +198,7 @@ async function main() {
               title: true,
               aturanDurasi: true,
               mintaLokasi: true,
+              mode: true,
               // type: pertanyaan Wilayah ditulis tanpa kode resminya ("Jawa Barat", bukan "Jawa Barat (32)").
               questions: { orderBy: { order: "asc" }, select: { id: true, text: true, type: true } },
             },
@@ -231,6 +238,7 @@ async function main() {
             answers: r.answers,
             aturanDurasi: r.survey.aturanDurasi,
             lokasi: pakaiLokasi ? await nilaiLokasiSheet(r) : undefined,
+            asal: labelAsal(r, r.survey.mode),
           }),
         ),
       );

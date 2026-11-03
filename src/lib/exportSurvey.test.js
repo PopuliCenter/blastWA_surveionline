@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  barisUntukCsv,
   buildResponseRows,
   contactSourceLabel,
   exportFilename,
@@ -40,6 +41,10 @@ describe("buildResponseRows", () => {
       "Nomor",
       "Nama",
       "Sumber Kontak",
+      "Saluran",
+      "Jalur Masuk",
+      "Metode",
+      "ID Iklan",
       "Durasi (menit)",
       "Asesmen Durasi",
       "Lama Pengisian",
@@ -56,19 +61,35 @@ describe("buildResponseRows", () => {
   });
   it("baris cocok kolom; spasi dirapikan; sel kosong = ''", () => {
     // Durasi kosong: contoh ini tanpa stempel waktu, dan yang tak terhitung tidak dinilai.
-    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", "", "", "", "Bandung", "30", "Ya", ""]);
-    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", "", "", "", "Jakarta", "", "Tidak", "mahal"]);
+    const kosong4 = ["", "", "", ""]; // asal responden: contoh ini tidak membawanya
+    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", ...kosong4, "", "", "", "Bandung", "30", "Ya", ""]);
+    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", ...kosong4, "", "", "", "Jakarta", "", "Tidak", "mahal"]);
   });
   it("opts.upper → HURUF KAPITAL", () => {
     const up = buildResponseRows(survey, responses, { upper: true });
-    expect(up.rows[0]).toEqual(["628123", "ANDI SUSANTO", "IMPOR", "", "", "", "BANDUNG", "30", "YA", ""]);
+    expect(up.rows[0]).toEqual([
+      "628123",
+      "ANDI SUSANTO",
+      "IMPOR",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "BANDUNG",
+      "30",
+      "YA",
+      "",
+    ]);
   });
   it("responden tanpa consentSource tetap punya sel terisi", () => {
     // Kontak lama sebelum consentSource dipakai. Sel kosong di kolom ini akan terbaca
     // sebagai data hilang; "(tidak diketahui)" menyatakan keadaannya dengan jujur.
     // Tanpa atribut → tak ada kolom pembobot, jadi tinggal 2 kolom pertanyaan yang kosong.
     const { rows: r } = buildResponseRows(survey, [{ phone: "628777", name: "Budi", answers: [] }]);
-    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", "", ""]);
+    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", "", "", "", "", "", ""]);
   });
 });
 
@@ -148,18 +169,38 @@ describe("asesmen durasi pengisian", () => {
   it("kolomnya muncul di tabel ekspor dengan angka yang bisa dihitung", () => {
     const survey = { title: "S", questions: [{ text: "Q1" }] };
     const { header, rows } = buildResponseRows(survey, [resp(4.26), resp(45), resp(1)]);
-    expect(header.slice(0, 6)).toEqual([
-      "Nomor",
-      "Nama",
-      "Sumber Kontak",
-      "Durasi (menit)",
-      "Asesmen Durasi",
-      "Lama Pengisian",
+    const iDurasi = header.indexOf("Durasi (menit)");
+    expect(header.slice(iDurasi, iDurasi + 3)).toEqual(["Durasi (menit)", "Asesmen Durasi", "Lama Pengisian"]);
+    expect(rows[0][iDurasi]).toBe(4.3); // angka, bukan teks — bisa disortir & dirata-ratakan
+    expect(rows[0][iDurasi + 1]).toBe("Normal");
+    expect(rows[1][iDurasi + 1]).toBe("Terlalu lama");
+    expect(rows[2][iDurasi + 1]).toBe("Terlalu cepat");
+  });
+});
+
+describe("buildResponseRows — asal responden", () => {
+  it("Saluran, Jalur Masuk, Metode, dan ID Iklan ikut ke berkas ekspor", () => {
+    const { header, rows } = buildResponseRows({ title: "S", questions: [{ text: "Q1" }] }, [
+      { phone: "6281", answers: [], saluran: "WhatsApp", jalurMasuk: "Iklan", metode: "Form", iklanId: "238" },
     ]);
-    expect(rows[0][3]).toBe(4.3); // angka, bukan teks — bisa disortir & dirata-ratakan
-    expect(rows[0][4]).toBe("Normal");
-    expect(rows[1][4]).toBe("Terlalu lama");
-    expect(rows[2][4]).toBe("Terlalu cepat");
+    const i = header.indexOf("Saluran");
+    expect(header.slice(i, i + 4)).toEqual(["Saluran", "Jalur Masuk", "Metode", "ID Iklan"]);
+    expect(rows[0].slice(i, i + 4)).toEqual(["WhatsApp", "Iklan", "Form", "238"]);
+  });
+});
+
+describe("barisUntukCsv", () => {
+  it("hanya ID Iklan yang dipaksa teks; sel kosong tetap kosong", () => {
+    const header = ["Nomor", "ID Iklan", "Q1"];
+    expect(
+      barisUntukCsv(header, [
+        ["628123", "120212345678901234", "5"],
+        ["628456", "", "6"],
+      ]),
+    ).toEqual([
+      ["628123", "\t120212345678901234", "5"],
+      ["628456", "", "6"],
+    ]);
   });
 });
 

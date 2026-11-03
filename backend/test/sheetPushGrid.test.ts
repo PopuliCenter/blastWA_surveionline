@@ -70,3 +70,46 @@ describe("ensureTab — judul baru di luar grid", () => {
     expect(iTulis).toBeGreaterThan(iLebar);
   });
 });
+
+describe("ensureTab — kolom sesudah Lama Pengisian", () => {
+  const AWAL = ["Nomor", "Q1", "Durasi (menit)", "Asesmen Durasi", "Lama Pengisian"];
+  const ASAL = ["Saluran", "Jalur Masuk", "Metode", "ID Iklan"];
+  const LOKASI = ["Provinsi Lokasi", "Status Lokasi"];
+
+  it("tab yang sudah punya asal mendapat judul lokasi di ujung kanan", async () => {
+    const lama = [...AWAL, ...ASAL];
+    const p = tiruGoogle(40, lama);
+    expect(await ensureTab(sa, "id", "Tab A", [...AWAL, ...LOKASI, ...ASAL])).toEqual([...lama, ...LOKASI]);
+    const tulis = p.find((x) => x.method === "PUT");
+    expect(tulis?.url).toContain("!J1");
+    expect(tulis?.body).toEqual({ values: [LOKASI] });
+  });
+
+  it("menulis judul gagal → yang dikembalikan judul SEBENARNYA, nilai asal tidak tumpah", async () => {
+    const lama = [...AWAL, "Catatan QC"];
+    const p = tiruGoogle(40, lama);
+    const fetchAsli = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) =>
+      init?.method === "PUT" ? new Response("{}", { status: 403 }) : fetchAsli(url, init),
+    ) as never;
+    expect(await ensureTab(sa, "id", "Tab A", [...AWAL, ...ASAL])).toEqual(lama);
+    // Tidak mencoba lagi pada baris berikutnya sampai cache habis.
+    const sebelum = p.length;
+    expect(await ensureTab(sa, "id", "Tab A", [...AWAL, ...ASAL])).toEqual(lama);
+    expect(p.length).toBe(sebelum);
+  });
+
+  it("membaca judul gagal → kolom sesudah Lama Pengisian dilewati, dan tidak disimpan di cache", async () => {
+    tiruGoogle(40, AWAL);
+    const fetchAsli = globalThis.fetch;
+    let gagal = true;
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) =>
+      gagal && decodeURIComponent(String(url)).includes("!1:1")
+        ? new Response("{}", { status: 500 })
+        : fetchAsli(url, init),
+    ) as never;
+    expect(await ensureTab(sa, "id", "Tab A", [...AWAL, ...ASAL])).toEqual(AWAL);
+    gagal = false;
+    expect(await ensureTab(sa, "id", "Tab A", [...AWAL, ...ASAL])).toEqual([...AWAL, ...ASAL]);
+  });
+});

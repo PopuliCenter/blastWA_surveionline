@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cleanProfileName } from "../lib/profileName.js";
 import { koordinatDari } from "../lib/lokasi.js";
+import { iklanDariReferral } from "../lib/jalurRespons.js";
 import type {
   HasilUnduhMedia,
   MessagingProvider,
@@ -406,6 +407,9 @@ export class MetaCloudAdapter implements MessagingProvider {
           // ia masuk ke mesin survei sebagai balasan kosong dan membuat pertanyaan diulang.
           if (msg?.type === "reaction" || msg?.reaction) continue;
 
+          // Iklan Click-to-WhatsApp yang membawa orang ini, bila ada.
+          const iklan = iklanDariReferral(msg?.referral) ?? undefined;
+
           // Balasan WhatsApp Flow (form terkirim) → parse response_json
           const nfm = msg?.interactive?.type === "nfm_reply" ? msg.interactive.nfm_reply : null;
           let flowResponse: Record<string, unknown> | undefined;
@@ -444,6 +448,7 @@ export class MetaCloudAdapter implements MessagingProvider {
               senderName: nameOf(msg?.from),
               location: { latitude: loc.lat, longitude: loc.lng },
               contextId: typeof msg?.context?.id === "string" ? msg.context.id : undefined,
+              iklan,
               messageId: msg?.id,
               timestamp: tsFromUnix(msg?.timestamp),
               raw: msg,
@@ -476,6 +481,7 @@ export class MetaCloudAdapter implements MessagingProvider {
               media?.caption,
             mediaType: mediaType as NormalizedInbound["mediaType"],
             mediaId: media?.id,
+            iklan,
             messageId: msg?.id,
             timestamp: tsFromUnix(msg?.timestamp),
             raw: msg,

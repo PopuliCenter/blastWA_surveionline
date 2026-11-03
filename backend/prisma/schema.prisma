@@ -168,6 +168,11 @@ model Contact {
   optOutAt      DateTime? // kapan kontak menyatakan berhenti
   consentSource String? // sumber persetujuan: manual | import | inbound | form
   consentAt     DateTime?
+  // Iklan terakhir yang diketuk orang ini. Data iklan hanya ikut pada pesan pertama, padahal
+  // surveinya bisa baru dimulai beberapa pesan kemudian. Berlaku 72 jam (lib/jalurRespons.ts).
+  iklanId       String?
+  iklanJudul    String?
+  iklanPada     DateTime?
   createdAt     DateTime         @default(now())
   segments      SegmentContact[]
   messages      Message[]
@@ -215,6 +220,8 @@ model BlastRecipient {
   vendorMessageId String?         @unique
   status          RecipientStatus @default(queued)
   error           String?
+  // Saat pesannya benar-benar terkirim; createdAt hanya saat penerima masuk antrean.
+  terkirimPada    DateTime?
   updatedAt       DateTime        @updatedAt
   createdAt       DateTime        @default(now())
 
@@ -258,6 +265,13 @@ model SurveyResponse {
   contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   blastId     String?
   blast       Blast?    @relation(fields: [blastId], references: [id], onDelete: SetNull)
+  // Asal responden, dicatat saat dimulai (lib/jalurRespons.ts). jalurMasuk: broadcast |
+  // kata-pemicu | iklan; metode: form | chatbot. null = respons dari sebelum fitur ini ada.
+  saluran     String    @default("whatsapp")
+  jalurMasuk  String?
+  metode      String?
+  iklanId     String?
+  iklanJudul  String?
   currentStep Int       @default(0) // indeks pertanyaan berikutnya (untuk alur chat)
   startedAt   DateTime  @default(now())
   completedAt DateTime?

@@ -193,6 +193,10 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
     "Nomor",
     "Nama",
     "Sumber Kontak",
+    "Saluran",
+    "Jalur Masuk",
+    "Metode",
+    "ID Iklan",
     "Durasi (menit)",
     "Asesmen Durasi",
     "Lama Pengisian",
@@ -213,6 +217,10 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       clean(r.phone),
       clean(r.name || ""),
       clean(contactSourceLabel(r.consentSource)),
+      clean(r.saluran ?? ""),
+      clean(r.jalurMasuk ?? ""),
+      clean(r.metode ?? ""),
+      clean(r.iklanId ?? ""),
       // Angka, bukan teks: supaya bisa langsung disortir dan dirata-ratakan di spreadsheet.
       menit === null ? "" : bulatkanMenit(menit),
       clean(asesmenDurasi(menit, survey.aturanDurasi)),
@@ -240,11 +248,19 @@ export function exportFilename(survey, format, date = new Date()) {
   return `survei-${slug}-${stamp}.${format === "csv" ? "csv" : "xlsx"}`;
 }
 
+// CSV tidak punya tipe sel: Excel membaca ID iklan (17–18 digit) sebagai angka dan membulatkan
+// digit sesudah yang ke-15, sehingga iklan yang berbeda tampak sama. Tab di depan nilainya membuat
+// Excel membacanya sebagai teks. Tidak perlu di .xlsx, karena selnya memang bertipe teks.
+export function barisUntukCsv(header, rows) {
+  const i = header.indexOf("ID Iklan");
+  return rows.map((baris) => baris.map((v, k) => (k === i && v ? `\t${v}` : v)));
+}
+
 // Ekspor respons survei → unduh file .xlsx/.csv.
 export async function exportResponses(survey, responses, format, opts = {}) {
   const XLSX = await import("xlsx");
   const { header, rows } = buildResponseRows(survey, responses, opts);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...(format === "csv" ? barisUntukCsv(header, rows) : rows)]);
   ws["!cols"] = header.map((h) => ({ wch: Math.max(12, Math.min(40, h.length + 2)) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Respons");

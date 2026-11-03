@@ -13,6 +13,7 @@ import {
   parseWaktuSheet,
   susunBarisSheet,
   cariBarisRespons,
+  JUDUL_ASAL,
   JUDUL_LOKASI,
   TRAILING_HEADER,
 } from "../src/lib/sheetRows.js";
@@ -70,6 +71,10 @@ describe("sheetHeader & sheetRow", () => {
       "Durasi (menit)",
       "Asesmen Durasi",
       "Lama Pengisian",
+      "Saluran",
+      "Jalur Masuk",
+      "Metode",
+      "ID Iklan",
     ]);
   });
 
@@ -98,6 +103,10 @@ describe("sheetHeader & sheetRow", () => {
       5,
       "Normal",
       "5 menit",
+      "",
+      "",
+      "",
+      "",
     ]);
     expect(row.length).toBe(sheetHeader(questions).length);
   });
@@ -113,7 +122,18 @@ describe("sheetHeader & sheetRow", () => {
       answers: [{ questionId: "q2", value: "Saja" }],
     });
     // Belum selesai → durasi, asesmen, dan lama pengisiannya kosong, bukan ditebak.
-    expect(row).toEqual(["628999", "", "(tidak diketahui)", "2026-07-31 09:00", "", "", "Saja", "", "", ""]);
+    expect(row.slice(0, 10)).toEqual([
+      "628999",
+      "",
+      "(tidak diketahui)",
+      "2026-07-31 09:00",
+      "",
+      "",
+      "Saja",
+      "",
+      "",
+      "",
+    ]);
   });
 });
 
@@ -166,7 +186,7 @@ describe("asesmen durasi (Sheets)", () => {
       ],
       aturanDurasi: { batas: [{ sampai: 3, label: "Terlalu cepat" }], selebihnya: "Aman" },
     });
-    expect(row.slice(5)).toEqual(["Jawa Barat", "Dua (2)", 2.5, "Terlalu cepat", "2 menit 30 detik"]);
+    expect(row.slice(5, 10)).toEqual(["Jawa Barat", "Dua (2)", 2.5, "Terlalu cepat", "2 menit 30 detik"]);
   });
 
   it("yang tak terhitung tidak dinilai", () => {
@@ -190,6 +210,40 @@ describe("judul kolom yang kurang", () => {
     expect(judulYangKurang(["A", "B", "C"], ["A", "B", "C"])).toBeNull();
     expect(judulYangKurang(["A", "B", "C", "D"], ["A", "B", "C"])).toBeNull();
     expect(judulYangKurang([], ["A", "B"])).toBeNull();
+  });
+
+  describe("kolom sesudah Lama Pengisian ditaruh menurut judul", () => {
+    const BUNTUT = ["Durasi (menit)", "Asesmen Durasi", "Lama Pengisian"];
+    const ASAL = ["Saluran", "Jalur Masuk", "Metode", "ID Iklan"];
+    const LOKASI = ["Provinsi Lokasi", "Status Lokasi"];
+    const AWAL = ["Nomor", "Q1", ...BUNTUT];
+
+    it("tab yang sudah punya asal tetap mendapat judul lokasi saat survei mulai memintanya", () => {
+      const ada = [...AWAL, ...ASAL];
+      expect(judulYangKurang(ada, [...AWAL, ...LOKASI, ...ASAL])).toEqual({ mulai: ada.length, nilai: LOKASI });
+    });
+
+    it("kolom tim atau lokasi lama di kanan Lama Pengisian tidak menghalangi judul asal", () => {
+      const ada = [...AWAL, "Catatan QC", ...LOKASI];
+      expect(judulYangKurang(ada, [...AWAL, ...ASAL])).toEqual({ mulai: ada.length, nilai: ASAL });
+    });
+
+    it("pertanyaan yang sudah diubah pun tetap mendapat judulnya, di ujung kanan", () => {
+      const ada = ["Nomor", "Q1 versi lama", ...BUNTUT];
+      expect(judulYangKurang(ada, [...AWAL, ...ASAL])).toEqual({ mulai: ada.length, nilai: ASAL });
+    });
+
+    it("pertanyaan yang kebetulan berjudul Saluran tidak dianggap kolom asal", () => {
+      const ada = ["Nomor", "Saluran", ...BUNTUT];
+      expect(judulYangKurang(ada, ["Nomor", "Saluran", ...BUNTUT, "Saluran", "Metode"])).toEqual({
+        mulai: ada.length,
+        nilai: ["Saluran", "Metode"],
+      });
+    });
+
+    it("yang judulnya sudah lengkap tidak ditulis lagi, apa pun urutannya", () => {
+      expect(judulYangKurang([...AWAL, ...ASAL, ...LOKASI], [...AWAL, ...LOKASI, ...ASAL])).toBeNull();
+    });
   });
 
   it("kolom A1 benar melewati Z — survei 27 pertanyaan melampauinya", () => {
@@ -241,7 +295,7 @@ describe("kolom Lama Pengisian (Sheets)", () => {
       questions: [],
       answers: [],
     });
-    expect(row.slice(-3)).toEqual([1.9, "Terlalu cepat", "1 menit 54 detik"]);
+    expect(row.slice(-7, -4)).toEqual([1.9, "Terlalu cepat", "1 menit 54 detik"]);
   });
 });
 
@@ -258,6 +312,10 @@ describe("susunBarisSheet — kolom buntut ditaruh menurut judulnya", () => {
     1.9,
     "Terlalu cepat",
     "1 menit 54 detik",
+    "WhatsApp",
+    "Kata pemicu",
+    "Form",
+    "",
   ];
   const awal = ["Nomor", "Nama", "Sumber Kontak", "Mulai", "Selesai", "Umur?"];
 
@@ -298,24 +356,28 @@ describe("kolom lokasi (Sheets)", () => {
   };
 
   it("paling belakang, setelah asesmen waktu — hanya bila diminta", () => {
-    expect(sheetHeader(questions).slice(-3)).toEqual([...TRAILING_HEADER]);
-    expect(sheetHeader(questions, { lokasi: true }).slice(-5)).toEqual([...TRAILING_HEADER, ...JUDUL_LOKASI]);
+    expect(sheetHeader(questions).slice(-7)).toEqual([...TRAILING_HEADER, ...JUDUL_ASAL]);
+    expect(sheetHeader(questions, { lokasi: true }).slice(-9)).toEqual([
+      ...TRAILING_HEADER,
+      ...JUDUL_LOKASI,
+      ...JUDUL_ASAL,
+    ]);
     const baris = sheetRow({ ...dasar, lokasi: ["DKI Jakarta", "Beda provinsi"] });
     expect(baris).toHaveLength(sheetHeader(questions, { lokasi: true }).length);
-    expect(baris.slice(-2)).toEqual(["DKI Jakarta", "Beda provinsi"]);
+    expect(baris.slice(-6, -4)).toEqual(["DKI Jakarta", "Beda provinsi"]);
     expect(sheetRow(dasar)).toHaveLength(sheetHeader(questions).length);
   });
 
   it("tab lama yang belum punya judul lokasi: nilai lokasi dilewati, tidak ada yang bergeser", () => {
     const judul = sheetHeader(questions, { lokasi: true });
-    const lama = sheetHeader(questions);
+    const lama = sheetHeader(questions).slice(0, -JUDUL_ASAL.length);
     const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
     expect(susunBarisSheet(judul, lama, nilai)).toEqual(nilai.slice(0, lama.length));
   });
 
   it("kolom tim di kanan Lama Pengisian tidak terisi lokasi; judul lokasi dicari menurut namanya", () => {
     const judul = sheetHeader(questions, { lokasi: true });
-    const aktual = [...sheetHeader(questions), "Catatan QC", ...JUDUL_LOKASI];
+    const aktual = [...sheetHeader(questions).slice(0, -JUDUL_ASAL.length), "Catatan QC", ...JUDUL_LOKASI];
     const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
     const baris = susunBarisSheet(judul, aktual, nilai);
     expect(baris[aktual.indexOf("Catatan QC")]).toBe("");
@@ -344,5 +406,41 @@ describe("kolom lokasi (Sheets)", () => {
     ];
     expect(cariBarisRespons(header, baris, "6281", mulai)).toEqual([2]);
     expect(cariBarisRespons(["Nama", "Mulai"], baris, "6281", mulai)).toEqual([]);
+  });
+});
+
+describe("kolom asal responden (Sheets)", () => {
+  const dasar = {
+    phone: "6281",
+    name: "Ani",
+    consentSource: null,
+    startedAt: new Date("2026-10-01T03:00:00Z"),
+    completedAt: new Date("2026-10-01T03:05:00Z"),
+    questions,
+    answers: [],
+    asal: { saluran: "WhatsApp", jalurMasuk: "Iklan", metode: "Form", iklanId: "A1" },
+  };
+  const nilaiAsal = ["WhatsApp", "Iklan", "Form", "A1"];
+
+  it("paling akhir, sejajar dengan judulnya", () => {
+    const baris = sheetRow({ ...dasar, lokasi: ["Bali", "Sesuai"] });
+    const judul = sheetHeader(questions, { lokasi: true });
+    expect(baris).toHaveLength(judul.length);
+    expect(baris.slice(-4)).toEqual(nilaiAsal);
+    expect(judul.slice(-4)).toEqual([...JUDUL_ASAL]);
+  });
+
+  it("tab yang sudah punya kolom lokasi: asal ikut terisi menurut judul, lokasi tidak bergeser", () => {
+    const judul = sheetHeader(questions, { lokasi: true });
+    const baris = susunBarisSheet(judul, judul, sheetRow({ ...dasar, lokasi: ["Bali", "Sesuai"] }));
+    expect(baris[judul.indexOf("Provinsi Lokasi")]).toBe("Bali");
+    expect(baris[judul.indexOf("Jalur Masuk")]).toBe("Iklan");
+  });
+
+  it("survei tanpa lokasi pada tab yang punya kolom lokasi: kolom lokasi dibiarkan kosong", () => {
+    const aktual = sheetHeader(questions, { lokasi: true });
+    const baris = susunBarisSheet(sheetHeader(questions), aktual, sheetRow(dasar));
+    expect(baris[aktual.indexOf("Provinsi Lokasi")]).toBe("");
+    expect(baris[aktual.indexOf("Metode")]).toBe("Form");
   });
 });

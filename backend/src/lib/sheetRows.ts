@@ -83,8 +83,19 @@ export const TRAILING_HEADER = ["Durasi (menit)", "Asesmen Durasi", "Lama Pengis
 // (lib/lokasi.ts kolomLokasiSheet).
 export const JUDUL_LOKASI = ["Provinsi Lokasi", "Status Lokasi"] as const;
 
+// Asal responden (lib/jalurRespons.ts), paling akhir dan untuk semua survei — alasan yang
+// sama: tab yang sudah berisi data mendapat judulnya di kanan, tanpa menggeser apa pun, dan
+// baris lamanya sekadar kosong di kolom-kolom ini.
+export const JUDUL_ASAL = ["Saluran", "Jalur Masuk", "Metode", "ID Iklan"] as const;
+
 export function sheetHeader(questions: SheetQuestion[], opsi: { lokasi?: boolean } = {}): string[] {
-  return [...FIXED_HEADER, ...questions.map((q) => q.text), ...TRAILING_HEADER, ...(opsi.lokasi ? JUDUL_LOKASI : [])];
+  return [
+    ...FIXED_HEADER,
+    ...questions.map((q) => q.text),
+    ...TRAILING_HEADER,
+    ...(opsi.lokasi ? JUDUL_LOKASI : []),
+    ...JUDUL_ASAL,
+  ];
 }
 
 // ===== Asesmen durasi pengisian =====
@@ -112,6 +123,8 @@ export function sheetRow(input: {
   aturanDurasi?: unknown;
   // [Provinsi Lokasi, Status Lokasi] — hanya bila header-nya memuat JUDUL_LOKASI.
   lokasi?: readonly [string, string];
+  // Selaras dengan JUDUL_ASAL; lihat labelAsal di lib/jalurRespons.ts.
+  asal?: { saluran: string; jalurMasuk: string; metode: string; iklanId: string };
 }): (string | number)[] {
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a.value]));
   const menit = durasiMenit(input.startedAt, input.completedAt);
@@ -135,6 +148,10 @@ export function sheetRow(input: {
     // penjelas justru tampak membantah angka yang dijelaskannya.
     formatLamaPengisian(menit === null ? null : bulatkanMenit(menit)),
     ...(input.lokasi ?? []),
+    input.asal?.saluran ?? "",
+    input.asal?.jalurMasuk ?? "",
+    input.asal?.metode ?? "",
+    input.asal?.iklanId ?? "",
   ];
 }
 

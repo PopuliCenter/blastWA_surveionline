@@ -31,6 +31,9 @@ export type NormalizedInbound = {
   // Lokasi yang dibagikan responden — lewat tombol "Kirim lokasi" maupun lampiran. Titik
   // ASLI dari vendor; disimpan hanya setelah dibulatkan (lib/lokasi.ts).
   location?: { latitude: number; longitude: number };
+  // Iklan yang membawa orang ini ke WhatsApp (Meta: message.referral). Hanya ada pada pesan
+  // pertama sesudah iklan diketuk; lihat lib/jalurRespons.ts.
+  iklan?: { id: string; judul: string | null };
   // ID pesan kita yang dijawab (Meta: message.context.id) — untuk lokasi lewat tombol
   // "Kirim lokasi", menunjuk pesan permintaannya.
   contextId?: string;

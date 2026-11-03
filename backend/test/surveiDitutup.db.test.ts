@@ -178,7 +178,11 @@ describe.skipIf(!URL_UJI)("survei yang sudah ditutup", () => {
     const hp = nomorBaru();
     const kontak = await prisma.contact.create({ data: { phone: hp } });
     const b = await prisma.blast.create({
-      data: { vendor: "meta", surveyId: s.id, recipients: { create: { contactId: kontak.id, vendor: "meta" } } },
+      data: {
+        vendor: "meta",
+        surveyId: s.id,
+        recipients: { create: { contactId: kontak.id, vendor: "meta", status: "sent" } },
+      },
     });
     blastDibuat.push(b.id);
     await kirim(hp, "ya");
@@ -241,7 +245,11 @@ describe.skipIf(!URL_UJI)("survei yang sudah ditutup", () => {
     const hp = nomorBaru();
     const kontak = await prisma.contact.create({ data: { phone: hp } });
     const b = await prisma.blast.create({
-      data: { vendor: "meta", surveyId: baru.s.id, recipients: { create: { contactId: kontak.id, vendor: "meta" } } },
+      data: {
+        vendor: "meta",
+        surveyId: baru.s.id,
+        recipients: { create: { contactId: kontak.id, vendor: "meta", status: "sent" } },
+      },
     });
     blastDibuat.push(b.id);
 

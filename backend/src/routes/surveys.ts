@@ -16,6 +16,7 @@ const DITOLAK_KARENA_KUOTA = {
   OR: [{ alasanDitolakKuota: null }, { alasanDitolakKuota: { not: ALASAN_DITUTUP } }],
 };
 import { statusLokasi } from "../lib/lokasi.js";
+import { labelAsal } from "../lib/jalurRespons.js";
 import { batasTerpasang, provinsiDariTitik } from "../services/petaProvinsi.js";
 
 // Diekspor agar daftar tipenya bisa diuji terhadap daftar yang ditawarkan UI. Keduanya
@@ -274,6 +275,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
         // (pesan masuk), padahal komposisi itulah yang dilaporkan di metodologi.
         contact: { select: { phone: true, name: true, attributes: true, consentSource: true } },
         answers: { include: { question: { select: { text: true, order: true } } } },
+        survey: { select: { mode: true } },
       },
     });
     // Lokasi yang masuk SEBELUM data batas provinsi dipasang tersimpan tanpa provinsi.
@@ -296,6 +298,10 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
         attributes: r.contact.attributes ?? {},
         startedAt: r.startedAt,
         completedAt: r.completedAt,
+        // Asal responden, sudah berupa label: layar dan berkas ekspor memakai teks yang sama
+        // dengan kolom Google Sheets.
+        ...labelAsal(r, r.survey.mode),
+        iklanJudul: r.iklanJudul,
         // Dikirim, bukan disaring di query: operator perlu MELIHAT respons yang ditolak
         // kuota untuk menjawab "kenapa baris Excel lebih sedikit", dan masih bisa
         // menghapusnya. Ekspor dan analitik di klien yang mengecualikannya.

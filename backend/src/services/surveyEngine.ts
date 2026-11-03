@@ -1,3 +1,4 @@
+import type { RecipientStatus } from "@prisma/client";
 import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound, SendResult } from "../providers/types.js";
@@ -25,6 +26,7 @@ import {
   tutupRespons,
 } from "./kuotaSurvei.js";
 import { findAutoResponse } from "./autoResponder.js";
+import { tentukanJalur, type AsalTercatat } from "../lib/jalurRespons.js";
 import { enqueueSheetLokasi, enqueueSheetSync } from "../queue/sheetQueue.js";
 import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
@@ -44,6 +46,7 @@ import {
   closingText,
   nextStepWithBranch,
   isFlowAbandoned,
+  BLAST_REPLY_WINDOW_MS,
   shouldStartSurveyFromBlast,
   looksLikeQuestion,
   matchesTriggerInSentence,
@@ -162,6 +165,14 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     update: {},
     create: { phone, name: ev.senderName },
   });
+  // Iklan yang diketuk disimpan di kontak, karena datanya hanya ikut pada pesan ini, padahal
+  // surveinya bisa baru dimulai beberapa pesan kemudian.
+  if (ev.iklan) {
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: { iklanId: ev.iklan.id, iklanJudul: ev.iklan.judul, iklanPada: new Date() },
+    });
+  }
   if (ev.senderName && !contact.name) {
     // Predikat `name: null` membuat penulisannya bersyarat di database, jadi dua pesan
     // yang datang bersamaan dari nomor yang sama tidak saling menimpa.
@@ -270,7 +281,15 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       if (again && again.questions.length) {
         // Buang respons menggantung yang BELUM berisi jawaban agar tak menumpuk.
         await prisma.surveyResponse.deleteMany({ where: { id: active.id, answers: { none: {} } } });
-        await startSurvey(again, contact.id, phone, ev.vendor);
+        // Formulir yang sama dikirim ulang: asal respons yang dibuang tadi ikut pindah. Kalau
+        // tidak, penerima blast atau iklan yang meminta ulang tercatat sebagai "Kata pemicu".
+        await startSurvey(
+          again,
+          contact.id,
+          phone,
+          ev.vendor,
+          again.id === active.surveyId ? { warisan: active } : { blast: await blastTerkirimKe(contact.id, again.id) },
+        );
         return;
       }
       // Dulu teks lain DIDIAMKAN TOTAL sampai formulir disubmit. Laporan lapangan:
@@ -323,13 +342,18 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       await reply(ev.vendor, phone, ALREADY_DONE_TEXT, contact.id);
       return;
     }
-    await startSurvey(triggered, contact.id, phone, ev.vendor);
+    // Penerima blast sering membalas dengan kata pemicu atau tombol "Mulai Survei": itu tetap
+    // balasan atas broadcast, walau jalannya lewat sini dan bukan langkah 3.
+    await startSurvey(triggered, contact.id, phone, ev.vendor, {
+      blast: await blastTerkirimKe(contact.id, triggered.id),
+    });
     return;
   }
 
-  // 3) Mulai survei dari blast terkait
+  // 3) Mulai survei dari blast terkait. Hanya blast yang benar-benar terkirim: pesan orang yang
+  // blastnya gagal atau masih mengantre bukan balasan atasnya.
   const recipient = await prisma.blastRecipient.findFirst({
-    where: { contactId: contact.id, blast: { surveyId: { not: null } } },
+    where: { contactId: contact.id, status: { in: STATUS_TERKIRIM }, blast: { surveyId: { not: null } } },
     orderBy: { createdAt: "desc" },
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
@@ -348,9 +372,10 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       where: { surveyId: recipient.blast.survey.id, contactId: contact.id, completedAt: { not: null } },
       select: { id: true },
     });
+    const blastPada = waktuKirimBlast(recipient);
     if (
       shouldStartSurveyFromBlast({
-        blastSentAt: recipient.createdAt,
+        blastSentAt: blastPada,
         alreadyCompleted: Boolean(pernahSelesai),
         text: ev.text ?? "",
       })
@@ -359,7 +384,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       // Hanya survei yang AKTIF yang boleh dimulai. Dulu jalur ini tidak memeriksa status:
       // balasan atas blast yang dikirim sebelum survei ditutup tetap memulai survei itu.
       if (survei.status === "active") {
-        await startSurvey(survei, contact.id, phone, ev.vendor, recipient.blastId);
+        await startSurvey(survei, contact.id, phone, ev.vendor, { blast: { id: recipient.blastId, pada: blastPada } });
         return;
       }
       if (survei.status === "closed") {
@@ -545,13 +570,46 @@ type SurveyLite = {
   questions: QLite[];
 };
 
+const STATUS_TERKIRIM: RecipientStatus[] = ["sent", "delivered", "read"];
+
+// Saat blast benar-benar terkirim. Antrean blast besar bisa berjalan berjam-jam sesudah penerimanya
+// dibuat; penerima dari sebelum kolom ini ada memakai waktu dibuatnya.
+const waktuKirimBlast = (r: { terkirimPada: Date | null; createdAt: Date }): Date => r.terkirimPada ?? r.createdAt;
+
+// Blast survei ini yang sampai ke kontak dan masih dalam jendela balasan. Blast yang lebih lama
+// tidak lagi menjelaskan kenapa ia datang sekarang.
+async function blastTerkirimKe(contactId: string, surveyId: string): Promise<{ id: string; pada: Date } | undefined> {
+  const r = await prisma.blastRecipient.findFirst({
+    where: { contactId, status: { in: STATUS_TERKIRIM }, blast: { surveyId } },
+    orderBy: { createdAt: "desc" },
+    select: { blastId: true, terkirimPada: true, createdAt: true },
+  });
+  if (!r) return undefined;
+  const pada = waktuKirimBlast(r);
+  return Date.now() - pada.getTime() <= BLAST_REPLY_WINDOW_MS ? { id: r.blastId, pada } : undefined;
+}
+
+// Ketukan iklan hanya menjelaskan SATU kedatangan: tanpa ini, survei lain yang diisi orang yang
+// sama dalam 72 jam ikut tercatat dari iklan. Bersyarat pada waktu yang tadi dibaca, supaya
+// ketukan baru yang masuk bersamaan tidak ikut terhapus.
+async function habiskanIklan(contactId: string, iklanPada: Date | null | undefined): Promise<void> {
+  if (!iklanPada) return;
+  await prisma.contact.updateMany({
+    where: { id: contactId, iklanPada },
+    data: { iklanId: null, iklanJudul: null, iklanPada: null },
+  });
+}
+
 // Mulai survei: mode flow → kirim formulir WhatsApp Flow; selain itu → chat per pesan.
 async function startSurvey(
   survey: SurveyLite,
   contactId: string,
   phone: string,
   vendor: string,
-  blastId?: string,
+  opsi: {
+    blast?: { id: string; pada: Date } | undefined;
+    warisan?: (AsalTercatat & { blastId: string | null }) | undefined;
+  } = {},
 ): Promise<void> {
   const provider = getProvider(vendor);
 
@@ -560,7 +618,10 @@ async function startSurvey(
   // tanpa satu pesan survei pun terkirim. Untuk responden organik yang baru pertama kali
   // datang, provinsinya belum diketahui di titik ini — yang berlaku hanya batas global, dan
   // batas provinsinya diperiksa lagi begitu ia menjawab pertanyaan wilayah.
-  const kontak = await prisma.contact.findUnique({ where: { id: contactId }, select: { attributes: true } });
+  const kontak = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: { attributes: true, iklanId: true, iklanJudul: true, iklanPada: true },
+  });
   const kodeProv = await provinsiAwal(survey.id, contactId, kontak?.attributes);
   const kuota = await bolehMulaiSurvei(survey.id, kodeProv);
   if (!kuota.boleh) {
@@ -570,6 +631,10 @@ async function startSurvey(
     return;
   }
 
+  // Asal responden, dicatat sekali saat dimulai (lib/jalurRespons.ts).
+  const asal = tentukanJalur({ kontak, blastPada: opsi.blast?.pada, warisan: opsi.warisan });
+  const blastId = opsi.warisan?.blastId ?? opsi.blast?.id;
+
   if (survey.mode === "flow" && survey.flowId && typeof provider.sendFlow === "function") {
     const resp = await prisma.surveyResponse.create({
       data: {
@@ -578,6 +643,8 @@ async function startSurvey(
         currentStep: 0,
         ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
         ...(blastId ? { blastId } : {}),
+        ...asal,
+        metode: "form",
       },
     });
     const body = survey.description ? `${survey.title}\n\n${survey.description}` : survey.title;
@@ -615,6 +682,7 @@ async function startSurvey(
       await prisma.surveyResponse.delete({ where: { id: resp.id } }).catch(() => {});
       return;
     }
+    await habiskanIklan(contactId, kontak?.iklanPada);
     await prisma.message.create({
       data: {
         contactId,
@@ -636,8 +704,11 @@ async function startSurvey(
       currentStep: 0,
       ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
       ...(blastId ? { blastId } : {}),
+      ...asal,
+      metode: "chatbot",
     },
   });
+  await habiskanIklan(contactId, kontak?.iklanPada);
   const first = formatQuestion(survey.questions[0]!);
   const intro = survey.description ? `${survey.description}\n\n${first}` : first;
 
@@ -741,8 +812,16 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
           await balasKuotaPenuh(vendor, phone, contactId, surveyId, survey.pesanKuotaPenuh);
           return;
         }
+        // Token srv_ hanya ada di tombol formulir pada template blast, jadi asalnya broadcast.
         surveyResponse = await prisma.surveyResponse.create({
-          data: { surveyId, contactId, currentStep: 0, ...(kodeProv ? { kodeProvinsi: kodeProv } : {}) },
+          data: {
+            surveyId,
+            contactId,
+            currentStep: 0,
+            jalurMasuk: "broadcast",
+            metode: "form",
+            ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
+          },
           include: withQuestions,
         });
       }

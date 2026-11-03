@@ -292,7 +292,11 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     const hp = nomorBaru();
     const kontak = await prisma.contact.create({ data: { phone: hp } });
     const b = await prisma.blast.create({
-      data: { vendor: "meta", surveyId, recipients: { create: { contactId: kontak.id, vendor: "meta" } } },
+      data: {
+        vendor: "meta",
+        surveyId,
+        recipients: { create: { contactId: kontak.id, vendor: "meta", status: "sent" } },
+      },
     });
     blastDibuat.push(b.id);
 
@@ -498,7 +502,11 @@ describe.skipIf(!URL_UJI)("alur lokasi responden", () => {
     const hp = nomorBaru();
     const kontak = await prisma.contact.create({ data: { phone: hp } });
     const b = await prisma.blast.create({
-      data: { vendor: "meta", surveyId, recipients: { create: { contactId: kontak.id, vendor: "meta" } } },
+      data: {
+        vendor: "meta",
+        surveyId,
+        recipients: { create: { contactId: kontak.id, vendor: "meta", status: "sent" } },
+      },
     });
     blastDibuat.push(b.id);
     const kirimMedia = (mediaType: "sticker" | "image") =>

@@ -134,7 +134,7 @@ describe.skipIf(!URL_UJI)("perbaruiLokasiDiSheet", () => {
       [phone, "", "", mulai],
     ];
     expect(await L.perbaruiLokasiDiSheet(r.id)).toBe("ok");
-    const iProv = tab.header.length - 2;
+    const iProv = tab.header.indexOf("Provinsi Lokasi");
     expect(tab.tulis).toEqual([
       { a1: `${kolomA1(iProv)}4`, nilai: "DKI Jakarta" }, // baris data ke-3 = baris 4
       { a1: `${kolomA1(iProv + 1)}4`, nilai: "Beda provinsi" },

@@ -1,4 +1,5 @@
 import { getAccessToken, type ServiceAccount } from "../lib/googleAuth.js";
+import { TRAILING_HEADER } from "../lib/sheetRows.js";
 
 // ===== Penulis Google Sheets (REST v4, tanpa dependensi baru) =====
 //
@@ -7,6 +8,7 @@ import { getAccessToken, type ServiceAccount } from "../lib/googleAuth.js";
 // BullMQ me-retry dan penyebabnya terbaca di log — bukan ditelan diam-diam.
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
+const JUDUL_BUNTUT_TERAKHIR = TRAILING_HEADER[TRAILING_HEADER.length - 1]!;
 
 async function call<T>(sa: ServiceAccount, method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
   const token = await getAccessToken(sa);
@@ -77,7 +79,7 @@ export async function lebarkanKolom(
 //
 // Disimpan sebentar saja: skrip lengkapi:sheets bisa menambah judul kolom selagi worker
 // berjalan, dan judul yang basi membuat kolom itu tidak terisi sampai worker dimulai ulang.
-const ensured = new Map<string, { header: string[]; sampai: number }>();
+const ensured = new Map<string, { header: string[]; panjangHarapan: number; sampai: number }>();
 const UMUR_JUDUL_MS = 10 * 60 * 1000;
 
 export function invalidateEnsuredTabs(): void {
@@ -99,10 +101,22 @@ export function kolomA1(i: number): string {
 // header yang diharapkan, berarti tabnya sudah berbeda bentuk (pertanyaan diubah, kolom
 // disusun ulang tim) — dan menulis judul baru di atasnya akan memberi nama salah pada data
 // lama. Kolom tanpa judul jauh lebih tidak berbahaya daripada kolom dengan judul keliru.
+//
+// Kecuali kolom sesudah "Lama Pengisian" (lokasi, asal): nilainya ditaruh menurut JUDUL, bukan
+// urutan (susunBarisSheet), dan judulnya ditulis di ujung kanan yang masih kosong. Jadi aman
+// ditambahkan walau bentuk tabnya berbeda atau urutannya tidak sama dengan yang diharapkan.
 export function judulYangKurang(ada: string[], diharapkan: string[]): { mulai: number; nilai: string[] } | null {
   if (!ada.length) return null; // tab kosong — biarkan; baris pertama akan mengisinya sendiri
+  const rapi = ada.map((v) => (v ?? "").trim());
+  const iAda = rapi.lastIndexOf(JUDUL_BUNTUT_TERAKHIR);
+  const iHarap = diharapkan.lastIndexOf(JUDUL_BUNTUT_TERAKHIR);
+  if (iAda >= 0 && iHarap >= 0) {
+    const sudahAda = new Set(rapi.slice(iAda + 1));
+    const nilai = diharapkan.slice(iHarap + 1).filter((j) => !sudahAda.has(j));
+    return nilai.length ? { mulai: ada.length, nilai } : null;
+  }
   if (ada.length >= diharapkan.length) return null;
-  for (let i = 0; i < ada.length; i++) if ((ada[i] ?? "").trim() !== diharapkan[i]) return null;
+  for (let i = 0; i < ada.length; i++) if (rapi[i] !== diharapkan[i]) return null;
   return { mulai: ada.length, nilai: diharapkan.slice(ada.length) };
 }
 
@@ -119,9 +133,9 @@ export async function ensureTab(
   // Cache dilewati bila header yang diharapkan kini lebih panjang — mis. survei baru mulai
   // meminta lokasi. Tanpa ini judul kolom lokasi baru ditambahkan setelah cache 10 menit
   // habis, dan nilai lokasi di antaranya terlewat karena judulnya belum ada.
-  if (tersimpan && tersimpan.sampai > Date.now() && !judulYangKurang(tersimpan.header, header)) return tersimpan.header;
+  if (tersimpan && tersimpan.sampai > Date.now() && header.length <= tersimpan.panjangHarapan) return tersimpan.header;
   const simpan = (h: string[]): string[] => {
-    ensured.set(key, { header: h, sampai: Date.now() + UMUR_JUDUL_MS });
+    ensured.set(key, { header: h, panjangHarapan: header.length, sampai: Date.now() + UMUR_JUDUL_MS });
     return h;
   };
 
@@ -141,28 +155,36 @@ export async function ensureTab(
   // Tab lama: kolom yang ditambahkan belakangan (asesmen durasi) belum punya judul di
   // sana. Judulnya ditambahkan di kanan — tanpa itu kolomnya terisi tapi tak bernama, dan
   // pembaca spreadsheet tidak punya cara menebak isinya.
+  //
+  // Gagal melengkapi judul TIDAK boleh menggagalkan penulisan barisnya: datanya jauh lebih
+  // penting daripada labelnya, dan baris yang hilang tidak bisa dipulihkan.
+  let ada: string[];
   try {
     const r = await call<{ values?: string[][] }>(
       sa,
       "GET",
       `/${spreadsheetId}/values/${rangeOf(tab, "1:1")}`,
     );
-    const ada = (r.values?.[0] ?? []).map((v) => String(v ?? ""));
-    const kurang = judulYangKurang(ada, header);
-    if (kurang) {
-      await lebarkanKolom(sa, spreadsheetId, tab, kurang.mulai + kurang.nilai.length);
-      const sel = `${kolomA1(kurang.mulai)}1`;
-      await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, sel)}?valueInputOption=RAW`, {
-        values: [kurang.nilai],
-      });
-      return simpan([...ada.slice(0, kurang.mulai), ...kurang.nilai]);
-    }
-    return simpan(ada);
+    ada = (r.values?.[0] ?? []).map((v) => String(v ?? ""));
   } catch {
-    // Gagal melengkapi judul TIDAK boleh menggagalkan penulisan barisnya: datanya jauh
-    // lebih penting daripada labelnya, dan baris yang hilang tidak bisa dipulihkan.
-    // Judul sebenarnya tak diketahui → anggap sesuai harapan (perilaku lama: menurut urutan).
-    return simpan(header);
+    // Judul sebenarnya tak diketahui → anggap sesuai harapan sampai "Lama Pengisian" (perilaku
+    // lama: menurut urutan). Kolom sesudahnya dilewati, karena di tab lama letaknya bisa saja
+    // sudah berisi kolom milik tim. Tidak disimpan di cache: baris berikutnya membaca lagi.
+    const i = header.lastIndexOf(JUDUL_BUNTUT_TERAKHIR);
+    return i < 0 ? header : header.slice(0, i + 1);
+  }
+  const kurang = judulYangKurang(ada, header);
+  if (!kurang) return simpan(ada);
+  try {
+    await lebarkanKolom(sa, spreadsheetId, tab, kurang.mulai + kurang.nilai.length);
+    const sel = `${kolomA1(kurang.mulai)}1`;
+    await call(sa, "PUT", `/${spreadsheetId}/values/${rangeOf(tab, sel)}?valueInputOption=RAW`, {
+      values: [kurang.nilai],
+    });
+    return simpan([...ada.slice(0, kurang.mulai), ...kurang.nilai]);
+  } catch {
+    // Judulnya tetap yang lama: kolom yang belum berjudul dilewati, dicoba lagi saat cache habis.
+    return simpan(ada);
   }
 }
 
