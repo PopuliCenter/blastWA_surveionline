@@ -53,9 +53,19 @@ export default function InstagramAccount() {
     try {
       // Kolom kosong tidak dikirim, sehingga server mempertahankan nilai lamanya: mengganti
       // Verify Token saja tidak boleh menghapus Access Token yang sudah tersimpan.
-      const terisi = Object.fromEntries(Object.entries(form).filter(([, v]) => String(v).trim() !== ""));
+      const terisi = Object.fromEntries(
+        Object.entries(form)
+          .map(([k, v]) => [k, String(v).trim()])
+          .filter(([, v]) => v !== ""),
+      );
       if (!Object.keys(terisi).length) {
         setErr("Belum ada kolom yang diisi.");
+        return;
+      }
+      // Kesalahan yang pernah terjadi: ID Halaman diisikan ke kolom ID Akun Instagram. Server
+      // juga menolaknya (dibandingkan dengan nilai yang tersimpan), ini hanya pesan lebih awal.
+      if (terisi.pageId && terisi.igUserId && terisi.pageId === terisi.igUserId) {
+        setErr("ID Akun Instagram tidak boleh sama dengan ID Halaman Facebook.");
         return;
       }
       await api.setVendorCredentials("instagram", terisi);
@@ -214,7 +224,11 @@ export default function InstagramAccount() {
             value={form.igUserId}
             onChange={(e) => setForm({ ...form, igUserId: e.target.value })}
             placeholder={placeholderTersimpan || "mis. 17841400000000000"}
-            hint="Boleh kosong. Bila diisi, DM untuk akun IG lain di aplikasi yang sama diabaikan. Business Settings › Accounts › Instagram accounts."
+            hint={
+              form.igUserId.trim() && !form.igUserId.trim().startsWith("1784")
+                ? "Periksa lagi: ID akun Instagram profesional biasanya diawali 1784. Jangan isi dengan ID Halaman — DM akan diabaikan."
+                : "Boleh kosong. Bila diisi, DM untuk akun IG lain di aplikasi yang sama diabaikan. Business Settings › Accounts › Instagram accounts."
+            }
           />
           <PasswordInput
             noAutofill

@@ -22,6 +22,7 @@ import {
   pesanSurveiBerakhir,
   provinsiAwal,
   pulihkanRespons,
+  statusKuotaSurveiAktif,
   stempelProvinsi,
   tolakKarenaKuota,
   tutupRespons,
@@ -553,6 +554,75 @@ async function balasOtomatis(vendor: string, phone: string, contactId: string, t
   }
   const auto = await findAutoResponse(contactId, text);
   if (auto) await reply(vendor, phone, auto.text, contactId, auto.source);
+  else if (apakahInstagram(phone) && text.trim()) await balasBawaanInstagram(vendor, phone, contactId);
+}
+
+// Balasan bawaan untuk DM Instagram yang tidak memicu survei dan tidak dijawab Auto Reply
+// maupun Agen AI. Di Instagram, orang datang dari postingan atau iklan dan sering mengetik
+// kata yang sedikit berbeda; kebisuan terbaca seperti akun yang tidak aktif. Sekali per 24
+// jam per kontak, supaya tidak membalas setiap pesan obrolan. Hanya Instagram: di WhatsApp
+// pesan layanan berbayar setelah jatah gratis, dan nomornya sudah punya Auto Reply sendiri.
+//
+// Ajakan mengirim kata kunci hanya bila memang ada survei yang bisa diikuti (aktif, pemicunya
+// menyala, kuotanya belum penuh). Selain itu teks netral: mengajak orang mengetik kata kunci
+// lalu langsung menolaknya karena kuota penuh lebih buruk daripada tidak mengajak.
+export const BALASAN_BAWAAN_IG =
+  "Halo, terima kasih sudah menghubungi Populi Center. 🙏 Untuk ikut survei, kirim kata kunci survei yang tertera di postingan atau iklan kami. Pesan lain akan dibaca tim kami.";
+export const BALASAN_NETRAL_IG = "Halo, terima kasih sudah menghubungi Populi Center. 🙏 Pesan Anda akan dibaca tim kami.";
+const JEDA_BALASAN_BAWAAN_MS = 24 * 60 * 60 * 1000;
+
+async function adaSurveiTerbuka(): Promise<boolean> {
+  const aktif = await prisma.survey.count({
+    where: { status: "active", triggerEnabled: true, triggerKeywords: { isEmpty: false } },
+  });
+  return aktif > 0 && !(await statusKuotaSurveiAktif()).semuaPenuh;
+}
+
+async function balasBawaanInstagram(vendor: string, phone: string, contactId: string): Promise<void> {
+  const sejak = new Date(Date.now() - JEDA_BALASAN_BAWAAN_MS);
+  // Kontak yang sedang/baru dilayani Agen AI tidak disapa ulang: setelah kuota balasan AI
+  // habis, Agen AI sengaja diam karena percakapannya sudah dialihkan ke tim.
+  const dilayaniAi = await prisma.message.findFirst({
+    where: { contactId, direction: "out", source: "ai", createdAt: { gte: sejak } },
+    select: { id: true },
+  });
+  if (dilayaniAi) return;
+  const teks = (await adaSurveiTerbuka()) ? BALASAN_BAWAAN_IG : BALASAN_NETRAL_IG;
+
+  // Diperiksa dan dicatat di bawah kunci per kontak: dua DM beruntun diproses bersamaan, dan
+  // tanpa kunci keduanya lolos pemeriksaan sebelum salah satunya sempat tercatat. Barisnya
+  // ditulis DULU, baru dikirim; kiriman yang gagal ditandai gagal supaya tidak menghalangi
+  // balasan berikutnya setelah masalahnya (token, izin) diperbaiki.
+  const baris = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${`bawaan-ig:${contactId}`}))`;
+    const sudah = await tx.message.findFirst({
+      where: {
+        contactId,
+        direction: "out",
+        text: { in: [BALASAN_BAWAAN_IG, BALASAN_NETRAL_IG] },
+        createdAt: { gte: sejak },
+        OR: [{ deliveryStatus: null }, { deliveryStatus: { not: "failed" } }],
+      },
+      select: { id: true },
+    });
+    if (sudah) return null;
+    return tx.message.create({
+      data: { contactId, direction: "out", vendor, text: teks, isBot: true, source: "autoreply" },
+      select: { id: true },
+    });
+  });
+  if (!baris) return;
+  const hasil = await getProvider(vendor).sendText({ to: phone, text: teks });
+  await prisma.message.update({
+    where: { id: baris.id },
+    data: {
+      vendorMessageId: hasil.vendorMessageId || null,
+      payload: (hasil.raw ?? {}) as object,
+      ...(hasil.status === "failed"
+        ? { deliveryStatus: "failed", failedReason: "Balasan bawaan Instagram gagal dikirim ke Meta." }
+        : {}),
+    },
+  });
 }
 
 // Survei yang sudah ditutup yang paling relevan bagi kontak ini: survei terakhir yang ia isi

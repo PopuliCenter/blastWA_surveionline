@@ -34,18 +34,26 @@ import { baileysGateway } from "./providers/baileys.js";
 import { handleInboundEvents } from "./services/surveyEngine.js";
 import { logError, logErrorSync, installProcessErrorHandlers } from "./lib/errorLog.js";
 import { prisma } from "./db.js";
+import { pasangPenangan404, samarkanUrl, serializerReq } from "./lib/samarkanLog.js";
 
 async function main() {
   // Catat error tingkat proses (unhandledRejection / uncaughtException) ke file log.
   installProcessErrorHandlers("backend");
 
   // trustProxy: di belakang Cloudflare + edge nginx → req.ip = IP klien asli (untuk rate-limit).
-  const app = Fastify({ logger: true, trustProxy: true });
+  // Serializer permintaan sama dengan bawaan Fastify, kecuali URL-nya disamarkan: verifikasi
+  // webhook Meta membawa Verify Token di query string (lib/samarkanLog.ts).
+  const app = Fastify({
+    logger: {
+      serializers: { req: serializerReq },
+    },
+    trustProxy: true,
+  });
 
   // Catat hanya error server (5xx) ke file log — abaikan error klien (400/401/429) agar tidak berisik.
   app.addHook("onError", async (req, _reply, err) => {
     const status = (err as { statusCode?: number }).statusCode ?? 500;
-    if (status >= 500) logError("backend", err, { method: req.method, url: req.url, ip: req.ip });
+    if (status >= 500) logError("backend", err, { method: req.method, url: samarkanUrl(req.url), ip: req.ip });
   });
 
   // Simpan body mentah (rawBody) untuk verifikasi signature webhook.
@@ -57,6 +65,8 @@ async function main() {
       done(err as Error);
     }
   });
+
+  pasangPenangan404(app);
 
   await app.register(cors, { origin: env.FRONTEND_ORIGIN, credentials: true });
   // Security headers. CSP dimatikan (backend hanya sajikan JSON; CSP diatur di edge/nginx frontend).

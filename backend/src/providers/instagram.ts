@@ -30,6 +30,19 @@ export type InstagramConfig = {
   graphVersion: string;
 };
 
+// Galat isian ID di kredensial Instagram, atau null bila aman. Kejadian nyata: ID Halaman
+// diisikan ke kolom ID Akun Instagram. Akibatnya ganda — pesan dikirim lewat jalur yang
+// salah, dan setiap DM dibuang karena ID akunnya tidak cocok (lihat parseInbound).
+export function galatIdInstagram(k: { pageId?: string; igUserId?: string }): string | null {
+  const page = (k.pageId ?? "").trim();
+  const ig = (k.igUserId ?? "").trim();
+  if (page && !/^\d+$/.test(page)) return "ID Halaman Facebook hanya berisi angka.";
+  if (ig && !/^\d+$/.test(ig)) return "ID Akun Instagram hanya berisi angka.";
+  if (page && ig && page === ig)
+    return "ID Akun Instagram tidak boleh sama dengan ID Halaman Facebook. ID akun Instagram profesional biasanya diawali 1784.";
+  return null;
+}
+
 // Batas teks satu pesan Instagram: 1.000 BYTE UTF-8, bukan karakter. Kalimat ber-emoji atau
 // beraksara non-Latin sudah melewatinya jauh sebelum 1.000 karakter.
 export const BATAS_BYTE_IG = 1000;

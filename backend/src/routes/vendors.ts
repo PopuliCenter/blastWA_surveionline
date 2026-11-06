@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { encryptJson, decryptJson } from "../lib/crypto.js";
 import { getProvider, listProviders, loadProviders, vendorsWithDecryptError } from "../providers/registry.js";
-import type { InstagramAdapter } from "../providers/instagram.js";
+import { galatIdInstagram, type InstagramAdapter } from "../providers/instagram.js";
 import { env } from "../env.js";
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
@@ -62,6 +62,13 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     // tanggal dari token LAMA terbawa dan perpanjangan pertama bisa jatuh di hari yang
     // sama — Meta menolak memperpanjang token yang umurnya belum 24 jam.
     if (vendor === "instagram" && parsed.data.accessToken) merged.tokenDiperpanjangPada = new Date().toISOString();
+
+    // Diperiksa setelah digabung: ID yang tersimpan sebelumnya bisa bertabrakan dengan yang
+    // baru dikirim walau formulirnya hanya mengisi salah satu kolom.
+    if (vendor === "instagram") {
+      const galat = galatIdInstagram(merged);
+      if (galat) return reply.code(400).send({ error: galat });
+    }
 
     await prisma.vendorConfig.upsert({
       where: { vendor },

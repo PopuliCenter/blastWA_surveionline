@@ -292,6 +292,45 @@ describe.skipIf(!URL_UJI)("survei lewat DM Instagram", () => {
     expect((await prisma.contact.findUniqueOrThrow({ where: { id: kWa.id } })).phone).toBe(wa);
   });
 
+  it("DM yang tidak memicu apa pun dibalas pesan bawaan, sekali per 24 jam; WhatsApp tetap tidak", async () => {
+    await survei({ mode: "chat" }); // ada survei aktif, tapi pesannya bukan kata pemicu
+    const dari = igsidBaru();
+    await kirim("instagram", dari, "halo kak");
+    await kirim("instagram", dari, "ada info?");
+    const bawaan = terkirim.filter((k) => k.text === engine.BALASAN_BAWAAN_IG);
+    expect(bawaan).toHaveLength(1);
+    expect(bawaan[0]!.vendor).toBe("instagram");
+
+    const sebelum = terkirim.length;
+    await kirim("meta", nomorBaru(), "halo kak");
+    expect(terkirim.slice(sebelum).some((k) => k.text === engine.BALASAN_BAWAAN_IG)).toBe(false);
+  });
+
+  it("balasan bawaan: dua DM bersamaan tetap sekali; kontak yang dilayani Agen AI tidak disapa", async () => {
+    await survei({ mode: "chat" });
+    const dari = igsidBaru();
+    await Promise.all([kirim("instagram", dari, "halo"), kirim("instagram", dari, "kak")]);
+    expect(terkirim.filter((k) => k.text === engine.BALASAN_BAWAAN_IG)).toHaveLength(1);
+
+    const lain = igsidBaru();
+    const kontak = await prisma.contact.create({ data: { phone: `ig:${lain}` } });
+    await prisma.message.create({
+      data: { contactId: kontak.id, direction: "out", vendor: "instagram", text: "dari AI", isBot: true, source: "ai" },
+    });
+    const sebelum = terkirim.length;
+    await kirim("instagram", lain, "halo lagi");
+    expect(terkirim.length).toBe(sebelum);
+  });
+
+  it("balasan bawaan tanpa ajakan kata kunci bila tak ada survei yang bisa diikuti", async () => {
+    const { s } = await survei({ mode: "chat" });
+    await prisma.survey.update({ where: { id: s.id }, data: { triggerEnabled: false } });
+    const dari = igsidBaru();
+    await kirim("instagram", dari, "halo");
+    expect(terkirim.map((k) => k.text)).toContain(engine.BALASAN_NETRAL_IG);
+    expect(terkirim.map((k) => k.text)).not.toContain(engine.BALASAN_BAWAAN_IG);
+  });
+
   it("iklan Instagram → Jalur Masuk Iklan", async () => {
     const { s, kata } = await survei({ mode: "chat" });
     await kirim("instagram", igsidBaru(), kata, { iklan: IKLAN });

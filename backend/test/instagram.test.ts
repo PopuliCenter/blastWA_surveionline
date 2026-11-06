@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import {
   InstagramAdapter,
   bacaSignedRequest,
+  galatIdInstagram,
   bersihkanMarkup,
   pecahTeks,
   BATAS_BYTE_IG,
@@ -391,5 +392,15 @@ describe("verifyWebhook Meta — tantangan hanya lewat GET", () => {
     expect(
       meta(undefined).verifyWebhook(req({}, { method: "GET", query: { ...q, "hub.verify_token": undefined } })),
     ).toBe(false);
+  });
+});
+
+describe("galatIdInstagram", () => {
+  it("menolak ID Halaman yang terisi di kolom ID Akun Instagram, dan ID bukan angka", () => {
+    expect(galatIdInstagram({ pageId: "1408087452808009", igUserId: "17841408846525359" })).toBeNull();
+    expect(galatIdInstagram({ pageId: "1408087452808009", igUserId: "1408087452808009" })).toMatch(/tidak boleh sama/);
+    expect(galatIdInstagram({ igUserId: "@populicenter" })).toMatch(/angka/);
+    expect(galatIdInstagram({ pageId: "Populi Center" })).toMatch(/angka/);
+    expect(galatIdInstagram({})).toBeNull();
   });
 });
