@@ -1,6 +1,7 @@
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { blastQueue } from "../queue/blastQueue.js";
+import { apakahInstagram } from "../lib/saluranKontak.js";
 
 export type CreateBlastInput = {
   surveyId?: string;
@@ -124,6 +125,8 @@ function renderText(messageText: string | undefined, params: string[]): string {
 
 export async function createBlast(input: CreateBlastInput) {
   const vendor = input.vendor ?? env.DEFAULT_VENDOR;
+  // Instagram tidak punya templat maupun broadcast: bisnis tidak bisa memulai percakapan.
+  if (vendor === "instagram") throw new Error("Instagram tidak mendukung templat/broadcast");
   const templateLang = input.templateLang ?? "id";
   // Baileys tak punya template Meta → simpan label saja agar kolom tetap terisi.
   const templateName = input.templateName ?? (vendor === "baileys" ? "(teks langsung)" : "");
@@ -162,8 +165,15 @@ export async function createBlast(input: CreateBlastInput) {
     include: { contacts: { include: { contact: true } } },
   });
   if (!segment) throw new Error("Segmen tidak ditemukan");
-  const allContacts = segment.contacts.map((sc) => sc.contact);
-  if (allContacts.length === 0) throw new Error("Segmen tidak punya kontak");
+  const semuaKontak = segment.contacts.map((sc) => sc.contact);
+  if (semuaKontak.length === 0) throw new Error("Segmen tidak punya kontak");
+  // Kontak Instagram (alamat "ig:<IGSID>") tidak punya nomor WhatsApp — mengirim template ke
+  // alamat itu hanya menghasilkan penerima gagal. Mereka bisa masuk segmen lewat halaman
+  // Kontak, jadi disaring di sini dan dilaporkan terpisah seperti opt-out.
+  const allContacts = semuaKontak.filter((c) => !apakahInstagram(c.phone));
+  const excludedInstagram = semuaKontak.length - allContacts.length;
+  if (allContacts.length === 0)
+    throw new Error("Semua kontak di segmen ini kontak Instagram — Instagram tidak mendukung broadcast");
   // Kecualikan kontak yang sudah opt-out (anti-banned)
   const contacts = allContacts.filter((c) => c.subscribed);
   const excludedOptOut = allContacts.length - contacts.length;
@@ -230,5 +240,5 @@ export async function createBlast(input: CreateBlastInput) {
     }),
   );
 
-  return { ...blast, excludedOptOut };
+  return { ...blast, excludedOptOut, excludedInstagram };
 }

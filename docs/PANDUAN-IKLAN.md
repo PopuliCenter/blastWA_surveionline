@@ -496,12 +496,12 @@ Pertanyaan soal pilihan politik, agama, atau kesehatan **taruh di survei dalam c
 
 ## 8. Tentang menu "Instagram" di aplikasi
 
-Menu **Instagram** di aplikasi masih bertanda **"Segera hadir"**. Belum ada sambungan untuk DM atau komentar Instagram.
+Menu **Akun Instagram** kini tersedia: survei bisa berjalan lewat DM Instagram (mode Chatbot), setelah aplikasi Meta disiapkan dan App Review disetujui. Lihat `docs/RENCANA-INSTAGRAM.md` dan panduan di halaman itu. Membalas komentar belum tersedia.
 
 | Kebutuhan | Bisa sekarang? |
 |---|---|
 | Iklan Instagram yang membuka **WhatsApp**, lalu survei di WhatsApp | **Ya.** Panduan ini. Tidak perlu menghubungkan Instagram ke aplikasi. |
-| Survei lewat **DM Instagram** | Belum. Perlu pengembangan (penerimaan DM, pengenal kontak selain nomor HP, menjalankan mode Chatbot yang sudah ada lewat Instagram; mode Form tidak bisa) dan persetujuan akses dari Meta. Lihat `docs/RENCANA-INSTAGRAM.md`. Tidak bisa blast; hanya bisa membalas orang yang menghubungi lebih dulu. |
+| Survei lewat **DM Instagram** | **Ya, setelah setup Meta dan App Review.** Selalu mode Chatbot (mode Form tidak ada di Instagram). Responden ditandai Sumber Kontak dan Saluran "Instagram". Tidak bisa blast; hanya bisa membalas orang yang menghubungi lebih dulu. |
 | Membalas **komentar** Instagram dari aplikasi | Belum. |
 
 Saran: pakai iklan IG → WhatsApp dulu. Datanya masuk ke survei, kuota, lokasi, dan Google Sheets yang sama. DM Instagram dipertimbangkan setelah hasil uji iklan terlihat.

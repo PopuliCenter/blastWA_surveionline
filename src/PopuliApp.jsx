@@ -32,6 +32,7 @@ const AiAgent = lazy(() => import("./pages/AiAgent"));
 const Sheets = lazy(() => import("./pages/Sheets"));
 const Biaya = lazy(() => import("./pages/Biaya"));
 const WhatsAppAccount = lazy(() => import("./pages/WhatsAppAccount"));
+const InstagramAccount = lazy(() => import("./pages/InstagramAccount"));
 const Webhook = lazy(() => import("./pages/Webhook"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Log = lazy(() => import("./pages/Log"));
@@ -42,7 +43,7 @@ const NAV = [
     items: [
       { id: "dashboard", label: "Dashboard", icon: "dashboard" },
       { id: "wa-account", label: "Akun WhatsApp", icon: "whatsapp" },
-      { id: "instagram", label: "Instagram", icon: "instagram", soon: true },
+      { id: "instagram", label: "Akun Instagram", icon: "instagram" },
       { id: "contacts", label: "Kontak", icon: "contacts" },
     ],
   },
@@ -558,14 +559,9 @@ export default function PopuliApp() {
     () => ({
       dashboard: <Dashboard />,
       "wa-account": <WhatsAppAccount />,
-      instagram: (
-        <ComingSoon
-          title="Instagram"
-          icon="instagram"
-          desc="Kelola DM & komentar Instagram dalam satu inbox bersama WhatsApp."
-          features={["Balas DM Instagram", "Auto reply komentar", "Inbox terpadu"]}
-        />
-      ),
+      // Memegang kredensial Meta, jadi hanya superadmin (SUPERADMIN_PAGES) — sama seperti
+      // wa-account, yang juga tidak dijaga ulang di sini karena canSeePage sudah mengalihkan.
+      instagram: <InstagramAccount />,
       // readOnly diteruskan eksplisit lewat props (bukan global tersembunyi) — hanya dua
       // halaman ini yang boleh dilihat viewer sekaligus punya tombol pengubah data.
       contacts: <Contacts readOnly={currentUser?.role === "viewer"} />,

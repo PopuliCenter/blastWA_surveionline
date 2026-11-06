@@ -11,6 +11,11 @@ import { hitungBiaya, pilihTarif, type JumlahPesan } from "../lib/biaya.js";
 //   • Message arah keluar = pesan SERVICE — balasan bot, pengiriman formulir, kiriman operator.
 //     Semuanya non-template di dalam jendela layanan 24 jam.
 //
+// Hanya pesan lewat vendor "meta" (WhatsApp Cloud API) yang dihitung: itulah satu-satunya
+// jalur yang muncul di invoice Meta milik akun ini. Qontak ditagihkan lewat BSP-nya sendiri,
+// Baileys bukan API resmi, dan DM Instagram tidak ditarif per pesan. Dulu semua pesan keluar
+// dihitung, sehingga estimasi melambung begitu ada balasan lewat vendor lain.
+//
 // Meta menagih per pesan TERKIRIM, jadi yang gagal diantar dikecualikan. Untuk pesan lama
 // yang dikirim sebelum status antar mulai dicatat, deliveryStatus bernilai null dan tetap
 // dihitung — tidak ada cara mengetahui nasibnya, dan menghapusnya diam-diam justru
@@ -171,6 +176,7 @@ export async function biayaRoutes(app: FastifyInstance): Promise<void> {
       SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS bulan, COUNT(*)::int AS n
       FROM "Message"
       WHERE "direction"::text = 'out'
+        AND "vendor" = 'meta'
         AND "createdAt" >= ${dari} AND "createdAt" < ${sampai}
         AND ("deliveryStatus" IS NULL OR "deliveryStatus" <> 'failed')
       GROUP BY 1 ORDER BY 1`;
@@ -180,6 +186,7 @@ export async function biayaRoutes(app: FastifyInstance): Promise<void> {
       SELECT b."templateName" AS nama, COUNT(*)::int AS n
       FROM "BlastRecipient" r JOIN "Blast" b ON b."id" = r."blastId"
       WHERE r."createdAt" >= ${dari} AND r."createdAt" < ${sampai}
+        AND r."vendor" = 'meta'
         AND r."status"::text NOT IN ('queued', 'failed')
       GROUP BY 1`;
 

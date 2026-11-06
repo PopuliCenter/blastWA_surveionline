@@ -38,6 +38,7 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: "Manual",
   inbound: "Pesan masuk",
   form: "Formulir",
+  instagram: "Instagram",
 };
 
 export function sourceLabel(source: string | null | undefined): string {

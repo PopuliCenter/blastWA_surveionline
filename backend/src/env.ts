@@ -58,6 +58,16 @@ const schema = z.object({
   QONTAK_CHANNEL_INTEGRATION_ID: z.string().optional(),
   QONTAK_WEBHOOK_SECRET: z.string().optional(),
 
+  // Instagram (DM lewat Instagram API with Instagram Login). Semuanya opsional — biasanya
+  // diisi lewat halaman Akun Instagram, tersimpan terenkripsi, dan menimpa nilai di sini.
+  // Versi Graph mengikuti META_GRAPH_VERSION.
+  INSTAGRAM_ACCESS_TOKEN: z.string().optional(),
+  INSTAGRAM_USER_ID: z.string().optional(),
+  INSTAGRAM_APP_SECRET: z.string().optional(),
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+
+  // Instagram sengaja tidak termasuk: vendor bawaan dipakai untuk blast dan pesan ke nomor
+  // WhatsApp, dua hal yang tidak bisa dilakukan Instagram.
   DEFAULT_VENDOR: z.enum(["meta", "qontak", "baileys"]).default("qontak"),
 
   // Baileys (gateway WhatsApp tidak resmi via scan QR)

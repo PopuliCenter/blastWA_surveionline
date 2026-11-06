@@ -141,6 +141,7 @@ describe("sourceLabel", () => {
   it("label sama persis dengan ekspor Excel", () => {
     expect(sourceLabel("import")).toBe("Impor");
     expect(sourceLabel("inbound")).toBe("Pesan masuk");
+    expect(sourceLabel("instagram")).toBe("Instagram");
     expect(sourceLabel(null)).toBe("(tidak diketahui)");
     expect(sourceLabel("api")).toBe("api"); // sumber baru harus terlihat, bukan disembunyikan
   });

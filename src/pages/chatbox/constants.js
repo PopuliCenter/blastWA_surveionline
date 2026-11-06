@@ -1,3 +1,5 @@
+import { apakahInstagram } from "../../lib/labelNomor";
+
 // ── Helper sesi & waktu ────────────────────────────────────────────────────
 export function sessionInfo(convo) {
   if (!convo?.sessionExpiresAt)
@@ -10,7 +12,13 @@ export function sessionInfo(convo) {
     const mins = Math.floor((ms % 3600000) / 60000);
     return { active: true, label: "Sesi aktif", detail: `Berakhir dalam ${hrs}j ${mins}m`, tone: "green" };
   }
-  return { active: false, label: "Sesi kedaluwarsa", detail: "Lewat 24 jam — balas via template", tone: "yellow" };
+  return {
+    active: false,
+    label: "Sesi kedaluwarsa",
+    // Instagram tidak punya templat: sesi hanya terbuka lagi saat responden mengirim DM.
+    detail: apakahInstagram(convo.phone) ? "Lewat 24 jam — tunggu DM berikutnya" : "Lewat 24 jam — balas via template",
+    tone: "yellow",
+  };
 }
 
 export function shortTime(d) {

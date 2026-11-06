@@ -552,8 +552,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
             />
             <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: -8, marginBottom: 4, lineHeight: 1.5 }}>
               {mode === "flow"
-                ? "Khusus Meta Cloud API. Tipe Gambar tidak didukung."
-                : "Jalan di semua jalur: Meta, Qontak, dan Baileys."}
+                ? "Khusus Meta Cloud API. Tipe Gambar tidak didukung. Responden dari Instagram tetap mengisi sebagai Chatbot, karena Flow tidak ada di Instagram."
+                : "Jalan di semua jalur: Meta, Qontak, Baileys, dan Instagram."}
             </div>
             {mode === "flow" ? (
               <div style={{ marginTop: 12 }}>

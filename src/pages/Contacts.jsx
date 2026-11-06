@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
+import { apakahInstagram, labelNomor, namaAtauNomor } from "../lib/labelNomor";
+import { contactSourceLabel } from "../lib/exportSurvey";
 import {
   PageHeader,
   Card,
@@ -242,7 +244,7 @@ export default function Contacts({ readOnly = false }) {
                       flexShrink: 0,
                     }}
                   >
-                    {(c.name || c.phone).slice(0, 1).toUpperCase()}
+                    {namaAtauNomor(c).slice(0, 1).toUpperCase()}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div
@@ -267,8 +269,9 @@ export default function Contacts({ readOnly = false }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {c.phone} • ditambah {fmtDate(c.createdAt)}
-                      {c.consentSource ? ` • ${c.consentSource}` : ""}
+                      {labelNomor(c.phone)} • ditambah {fmtDate(c.createdAt)}
+                      {/* Label yang sama dengan kolom "Sumber Kontak" di ekspor & Sheets. */}
+                      {c.consentSource ? ` • ${contactSourceLabel(c.consentSource)}` : ""}
                     </div>
                   </div>
                 </div>
@@ -297,7 +300,7 @@ export default function Contacts({ readOnly = false }) {
                         if (
                           !(await confirmDialog({
                             title: "Hapus kontak",
-                            message: `Hapus ${c.name || c.phone}? Riwayat chat dan jawaban surveinya ikut terhapus permanen.`,
+                            message: `Hapus ${namaAtauNomor(c)}? Riwayat chat dan jawaban surveinya ikut terhapus permanen.`,
                             confirmText: "Hapus",
                             tone: "danger",
                           }))
@@ -414,10 +417,14 @@ function ContactModal({ contact, onClose, onSave }) {
   const [name, setName] = useState(contact?.name || "");
   const [phone, setPhone] = useState(contact?.phone || "");
   const [saving, setSaving] = useState(false);
+  // Alamat kontak Instagram (ig:<ID>) bukan nomor: server menormalkan setiap nomor yang
+  // dikirim ke format 62…, yang akan merusak alamat itu dan memutus kontak dari percakapan
+  // IG-nya. Maka untuk kontak IG hanya nama yang dikirim, dan kolomnya tidak bisa diubah.
+  const kontakIg = apakahInstagram(contact?.phone);
   const submit = async () => {
     setSaving(true);
     try {
-      await onSave({ name, phone });
+      await onSave(kontakIg ? { name } : { name, phone });
     } finally {
       setSaving(false);
     }
@@ -430,13 +437,22 @@ function ContactModal({ contact, onClose, onSave }) {
       dirty={() => name !== (contact?.name || "") || phone !== (contact?.phone || "")}
     >
       <Input label="Nama" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama kontak" />
-      <Input
-        label="Nomor WhatsApp"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        placeholder="08xx / 62xx"
-        hint="Otomatis dinormalisasi ke format 62…"
-      />
+      {kontakIg ? (
+        <Input
+          label="Akun Instagram"
+          value={labelNomor(phone)}
+          readOnly
+          hint="Kontak dari DM Instagram dikenali lewat ID akunnya, bukan nomor HP — tidak bisa diubah."
+        />
+      ) : (
+        <Input
+          label="Nomor WhatsApp"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="08xx / 62xx"
+          hint="Otomatis dinormalisasi ke format 62…"
+        />
+      )}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Button variant="ghost" onClick={onClose}>
           Batal

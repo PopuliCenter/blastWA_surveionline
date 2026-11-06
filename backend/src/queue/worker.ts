@@ -16,6 +16,7 @@ import { sheetTabName, sheetHeader, sheetRow, susunBarisSheet } from "../lib/she
 import { ensureTab, appendRow } from "../services/sheetPush.js";
 import { lokasiDiSheet, nilaiLokasiSheet, perbaruiLokasiDiSheet } from "../services/lokasiSheet.js";
 import { labelAsal } from "../lib/jalurRespons.js";
+import { apakahInstagram } from "../lib/saluranKontak.js";
 
 // Worker pengirim blast. Jalankan terpisah: `npm run dev:worker`.
 // Pengaman anti-banned: lewati kontak opt-out, batas harian + jitter (warm-up).
@@ -27,12 +28,14 @@ async function getPolicy() {
 }
 
 // Total pesan keluar hari ini (blast terkirim + balasan chat/survei) untuk cek batas harian.
+// Balasan DM Instagram tidak dihitung: batas ini pengaman warm-up nomor WhatsApp, dan DM
+// Instagram tidak menyentuh nomor itu sama sekali.
 async function usedToday(): Promise<number> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const [sent, msgs] = await Promise.all([
     prisma.blastRecipient.count({ where: { status: "sent", updatedAt: { gte: start } } }),
-    prisma.message.count({ where: { direction: "out", createdAt: { gte: start } } }),
+    prisma.message.count({ where: { direction: "out", createdAt: { gte: start }, vendor: { not: "instagram" } } }),
   ]);
   return sent + msgs;
 }
@@ -62,6 +65,17 @@ async function main() {
       // di-retry karena error transien), JANGAN kirim ulang → cegah pesan ganda ke pelanggan.
       if (!recipient) return "skip-missing";
       if (recipient.status !== "queued") return `skip-${recipient.status}`;
+
+      // 0b) Alamat Instagram bukan nomor WhatsApp. blastService sudah menyaringnya; pagar ini
+      // untuk job yang dibuat lewat jalan lain.
+      if (apakahInstagram(to)) {
+        await prisma.blastRecipient.update({
+          where: { id: recipientId },
+          data: { status: "failed", error: "dilewati: kontak Instagram tidak bisa di-broadcast" },
+        });
+        await maybeComplete(blastId);
+        return "skip-instagram";
+      }
 
       // 1) Lewati kontak yang sudah opt-out (penting untuk blast terjadwal)
       if (recipient.contact && !recipient.contact.subscribed) {

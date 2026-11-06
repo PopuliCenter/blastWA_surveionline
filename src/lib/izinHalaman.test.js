@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { canSeePage, VIEWER_PAGES, SUPERADMIN_PAGES } from "./izinHalaman";
 
-const PEMEGANG_KUNCI = ["wa-account", "sheets", "invoice"];
+const PEMEGANG_KUNCI = ["wa-account", "instagram", "sheets", "invoice"];
 
 describe("canSeePage", () => {
   it("superadmin membuka semuanya", () => {
@@ -36,7 +36,7 @@ describe("canSeePage", () => {
     for (const id of PEMEGANG_KUNCI) expect(canSeePage(undefined, id)).toBe(false);
   });
 
-  it("ketiga halaman itu memang terdaftar sebagai milik superadmin", () => {
+  it("halaman-halaman itu memang terdaftar sebagai milik superadmin", () => {
     for (const id of PEMEGANG_KUNCI) expect(SUPERADMIN_PAGES.has(id)).toBe(true);
   });
 });

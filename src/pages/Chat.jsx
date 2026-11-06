@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { confirmDialog } from "../lib/confirm";
+import { apakahInstagram, namaAtauNomor } from "../lib/labelNomor";
 import {
   PageHeader,
   Button,
@@ -273,7 +274,7 @@ export default function Chat({ readOnly = false }) {
                         fontSize: 15,
                       }}
                     >
-                      {(c.name || c.phone).slice(0, 1).toUpperCase()}
+                      {namaAtauNomor(c).slice(0, 1).toUpperCase()}
                     </div>
                     {sess.active ? (
                       <span
@@ -302,7 +303,7 @@ export default function Chat({ readOnly = false }) {
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {c.name || c.phone}
+                        {namaAtauNomor(c)}
                       </span>
                       <span style={{ color: theme.textMuted, fontSize: 11, flexShrink: 0 }}>{shortTime(c.lastAt)}</span>
                     </div>
@@ -328,6 +329,8 @@ export default function Chat({ readOnly = false }) {
                         {c.lastMessage || "—"}
                       </span>
                       <span style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+                        {/* Penanda saluran: kontak IG yang sudah bernama tak terbedakan dari kontak WA. */}
+                        {apakahInstagram(c.phone) ? <Badge tone="purple">IG</Badge> : null}
                         {c.resolved ? (
                           <Badge tone="green">selesai</Badge>
                         ) : c.unread > 0 ? (

@@ -12,7 +12,9 @@ export type DeliveryStatus = "sent" | "delivered" | "read" | "failed";
 export type NormalizedInbound = {
   vendor: string;
   kind: "message" | "status";
-  from?: string; // E.164 (tanpa +)
+  // E.164 (tanpa +). Instagram: IGSID polos — awalan alamat "ig:" ditambahkan mesin survei
+  // (lib/saluranKontak.ts), bukan adaptor, supaya adaptor tetap sejajar vendor lain.
+  from?: string;
   // Nama profil WhatsApp pengirim (push name), sudah disaring cleanProfileName.
   // Hanya ada pada pesan MASUK: tak satu pun vendor menyediakan cara menanyakan nama
   // dari sebuah nomor. Diatur sendiri oleh pemilik nomor, jadi tidak terverifikasi.
@@ -49,6 +51,9 @@ export type HasilUnduhMedia =
   | { gagal: "kedaluwarsa" | "terlalu-besar" | "galat-vendor"; status?: number; rincian?: unknown };
 
 export type WebhookRequest = {
+  // Metode HTTP. Tantangan hub.challenge hanya sah lewat GET: tanpa pembeda ini, POST yang
+  // menyertakan parameter hub.* di URL lolos tanpa tanda tangan sama sekali.
+  method?: string;
   rawBody: string; // body mentah, untuk verifikasi signature
   body: unknown; // body terparse
   headers: Record<string, string | string[] | undefined>;
@@ -104,6 +109,11 @@ export interface MessagingProvider {
   downloadMedia?(mediaId: string, maksByte: number): Promise<HasilUnduhMedia>;
   /** Kirim gambar + caption (banner pembuka survei mode chat). Opsional per vendor. */
   sendImage?(input: { to: string; link: string; caption?: string }): Promise<SendResult>;
+  /**
+   * Nama & username pengirim dari ID-nya. Opsional: hanya vendor yang TIDAK menyertakan nama
+   * di webhook tapi menyediakan API profil (Instagram). null = tidak bisa diambil.
+   */
+  ambilProfil?(id: string): Promise<{ name?: string; username?: string } | null>;
 
   /**
    * Verifikasi webhook.

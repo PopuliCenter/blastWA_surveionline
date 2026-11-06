@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cleanProfileName } from "../lib/profileName.js";
 import { koordinatDari } from "../lib/lokasi.js";
 import { iklanDariReferral } from "../lib/jalurRespons.js";
+import { rahasiaCocok } from "../lib/rahasia.js";
 import type {
   HasilUnduhMedia,
   MessagingProvider,
@@ -360,8 +361,8 @@ export class MetaCloudAdapter implements MessagingProvider {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
-    if (mode === "subscribe" && typeof challenge === "string") {
-      return token === this.cfg.verifyToken ? challenge : false;
+    if (req.method !== "POST" && mode === "subscribe" && typeof challenge === "string") {
+      return rahasiaCocok(token, this.cfg.verifyToken) ? challenge : false;
     }
 
     // POST: verifikasi X-Hub-Signature-256 = sha256=<hmac>

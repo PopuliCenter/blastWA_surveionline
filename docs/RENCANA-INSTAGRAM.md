@@ -7,6 +7,8 @@ Tujuan: menjawab apakah menu **Instagram** (sekarang "Segera hadir") bisa disamb
 > - **(belum pasti)**: dari forum developer, blog pihak ketiga, atau kesimpulan kami. Harus diuji sebelum dijadikan pegangan.
 >
 > Keadaan per 6 November 2026. Dokumentasi Meta sering berubah, jadi cek ulang tautan di bagian Sumber sebelum mulai.
+>
+> **Status:** tahap 1 (MVP DM) sudah dibangun di aplikasi — halaman **Akun Instagram**, webhook `/webhook/instagram`, URL privasi `/webhook/instagram/hapus-data` dan `/webhook/instagram/deauthorize`, perpanjangan token otomatis, dan penandaan Sumber Kontak / Saluran "Instagram". Yang tersisa ada di sisi Meta (§3): aplikasi, izin, App Review, mode Live. Tahap 2 dan 3 belum.
 
 ---
 

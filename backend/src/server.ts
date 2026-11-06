@@ -25,6 +25,8 @@ import { uploadRoutes } from "./routes/uploads.js";
 import { biayaRoutes } from "./routes/biaya.js";
 import { sheetRoutes } from "./routes/sheets.js";
 import { logRoutes } from "./routes/log.js";
+import { instagramPrivasiRoutes } from "./routes/instagramPrivasi.js";
+import { jadwalkanPerpanjangTokenInstagram } from "./services/tokenInstagram.js";
 import fastifyStatic from "@fastify/static";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -100,6 +102,7 @@ async function main() {
   await app.register(biayaRoutes);
   await app.register(sheetRoutes);
   await app.register(logRoutes);
+  await app.register(instagramPrivasiRoutes);
 
   // Baileys: proses backend = pemilik socket. Pasang handler pesan masuk (survei/auto-reply)
   // & auto-start bila ada sesi tersimpan (tak perlu scan ulang setelah restart).
@@ -111,6 +114,9 @@ async function main() {
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`Populi WA backend siap di :${env.PORT}`);
+
+  // Token Instagram Login berlaku 60 hari — diperpanjang otomatis (services/tokenInstagram.ts).
+  jadwalkanPerpanjangTokenInstagram();
 
   // Graceful shutdown: pada deploy/restart, tuntaskan request in-flight lalu tutup koneksi
   // (hindari pemutusan mid-write & korupsi state; socket Baileys ditutup rapi saat proses keluar).

@@ -4,6 +4,7 @@ import { decryptJson } from "../lib/crypto.js";
 import { MetaCloudAdapter, type MetaConfig } from "./meta.js";
 import { QontakAdapter, type QontakConfig } from "./qontak.js";
 import { BaileysAdapter } from "./baileys.js";
+import { InstagramAdapter, type InstagramConfig } from "./instagram.js";
 import type { MessagingProvider } from "./types.js";
 
 let providers: Record<string, MessagingProvider> = {};
@@ -30,6 +31,15 @@ function buildFromEnv(): Record<string, MessagingProvider> {
     }),
     // Gateway tidak resmi (scan QR). Tak punya kredensial DB — status dari socket/sesi.
     baileys: new BaileysAdapter(),
+    // DM Instagram. Selalu terdaftar (walau belum dikonfigurasi) supaya halaman Akun
+    // Instagram bisa menampilkan statusnya dan webhook-nya dikenali.
+    instagram: new InstagramAdapter({
+      accessToken: env.INSTAGRAM_ACCESS_TOKEN,
+      igUserId: env.INSTAGRAM_USER_ID,
+      appSecret: env.INSTAGRAM_APP_SECRET,
+      verifyToken: env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+      graphVersion: env.META_GRAPH_VERSION,
+    }),
   };
 }
 
@@ -63,6 +73,14 @@ export async function loadProviders(): Promise<void> {
           channelIntegrationId: creds.channelIntegrationId ?? env.QONTAK_CHANNEL_INTEGRATION_ID,
           webhookSecret: creds.webhookSecret ?? env.QONTAK_WEBHOOK_SECRET,
         } satisfies QontakConfig);
+      } else if (c.vendor === "instagram") {
+        providers.instagram = new InstagramAdapter({
+          accessToken: creds.accessToken ?? env.INSTAGRAM_ACCESS_TOKEN,
+          igUserId: creds.igUserId ?? env.INSTAGRAM_USER_ID,
+          appSecret: creds.appSecret ?? env.INSTAGRAM_APP_SECRET,
+          verifyToken: creds.verifyToken ?? env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
+          graphVersion: creds.graphVersion ?? env.META_GRAPH_VERSION,
+        } satisfies InstagramConfig);
       }
     } catch (err) {
       console.error(`Gagal memuat kredensial vendor ${c.vendor}:`, err);

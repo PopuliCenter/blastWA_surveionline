@@ -4,8 +4,8 @@
 export const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"]);
 
 // Label kolom "Sumber Kontak". Nilai mentahnya dari Contact.consentSource, yang terisi
-// otomatis: "import" saat impor kontak/segmen, "manual" dari dashboard, dan "inbound"
-// saat kontak baru mengirim pesan.
+// otomatis: "import" saat impor kontak/segmen, "manual" dari dashboard, "inbound" saat
+// kontak baru mengirim pesan WhatsApp, dan "instagram" saat kontak baru mengirim DM Instagram.
 //
 // Kolom Nama tidak bisa menjawab pertanyaan ini karena nama impor dan nama profil WA
 // menempati kolom yang sama. Padahal bedanya penting untuk laporan: rekrutan surveyor
@@ -16,6 +16,9 @@ export const CONTACT_SOURCE_LABELS = {
   manual: "Manual",
   inbound: "Pesan masuk",
   form: "Formulir",
+  // Kontak yang datang lewat DM Instagram. Sejajar dengan "Pesan masuk", bukan bagiannya:
+  // responden IG tidak punya nomor HP, jadi laporan perlu memisahkannya dari yang WA.
+  instagram: "Instagram",
 };
 
 // Nilai tak dikenal SENGAJA diteruskan apa adanya, bukan dijadikan "(tidak diketahui)":

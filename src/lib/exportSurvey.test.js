@@ -99,6 +99,7 @@ describe("contactSourceLabel", () => {
     expect(contactSourceLabel("manual")).toBe("Manual");
     expect(contactSourceLabel("inbound")).toBe("Pesan masuk");
     expect(contactSourceLabel("form")).toBe("Formulir");
+    expect(contactSourceLabel("instagram")).toBe("Instagram");
   });
   it("kosong atau bukan string → (tidak diketahui)", () => {
     expect(contactSourceLabel(null)).toBe("(tidak diketahui)");

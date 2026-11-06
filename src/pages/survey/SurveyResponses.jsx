@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { exportResponses, ditolakKuota, ditolakKarenaDitutup, labelStatusLokasi } from "../../lib/exportSurvey";
 import { confirmDialog } from "../../lib/confirm";
+import { labelNomor, namaAtauNomor } from "../../lib/labelNomor";
 import {
   Button,
   Badge,
@@ -36,13 +37,28 @@ const STATUS_TABS = [
 ];
 
 const lokasiBeda = (r) => !ditolakKuota(r) && r.statusLokasi === "tidak-sesuai";
-// Asal responden, mis. "Iklan • Form". Saluran tidak ikut selama semuanya masih WhatsApp.
-const asalRingkas = (r) => [r.jalurMasuk, r.metode].filter(Boolean).join(" • ");
+// Asal responden, mis. "Iklan • Form" atau "Instagram • Kata pemicu • Chatbot". Saluran hanya
+// disebut bila bukan WhatsApp: menuliskan saluran bawaan di setiap baris hanya memenuhi layar.
+const asalRingkas = (r) =>
+  [r.saluran && r.saluran !== "WhatsApp" ? r.saluran : null, r.jalurMasuk, r.metode].filter(Boolean).join(" • ");
 
 // Cocokkan kata kunci ke nama, nomor, atau nilai atribut kontak.
 function matches(r, q) {
   if (!q) return true;
-  const hay = [r.name, r.phone, ...Object.values(r.attributes || {})].filter(Boolean).join(" ").toLowerCase();
+  // Label yang tampil di layar ikut dicari: responden IG tanpa nama hanya terlihat sebagai
+  // "Instagram · …", dan pencarian "instagram" harus menemukannya.
+  const hay = [
+    r.name,
+    r.phone,
+    labelNomor(r.phone),
+    r.saluran,
+    r.jalurMasuk,
+    r.metode,
+    ...Object.values(r.attributes || {}),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return hay.includes(q);
 }
 
@@ -154,7 +170,7 @@ export function SurveyResponses({ survey, onClose }) {
     if (
       !(await confirmDialog({
         title: "Hapus respons",
-        message: `Hapus respons dari ${r.name || r.phone}? Jawabannya terhapus permanen. (mis. tertukar setelah revisi soal)`,
+        message: `Hapus respons dari ${namaAtauNomor(r)}? Jawabannya terhapus permanen. (mis. tertukar setelah revisi soal)`,
         confirmText: "Hapus",
         tone: "danger",
       }))
@@ -447,7 +463,7 @@ export function SurveyResponses({ survey, onClose }) {
                         maxWidth: isMobile ? 130 : 240,
                       }}
                     >
-                      {r.name || r.phone}
+                      {namaAtauNomor(r)}
                     </span>
                     {!isMobile ? (
                       <span
@@ -461,7 +477,7 @@ export function SurveyResponses({ survey, onClose }) {
                           minWidth: 0,
                         }}
                       >
-                        {r.phone} • {fmtDate(r.startedAt)}
+                        {labelNomor(r.phone)} • {fmtDate(r.startedAt)}
                         {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                       </span>
                     ) : null}
@@ -514,7 +530,7 @@ export function SurveyResponses({ survey, onClose }) {
                     }}
                   >
                     <span>
-                      {r.phone} • {fmtDate(r.startedAt)}
+                      {labelNomor(r.phone)} • {fmtDate(r.startedAt)}
                       {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                     </span>
                     {lokasiBeda(r) ? <Badge tone="yellow">beda provinsi</Badge> : null}

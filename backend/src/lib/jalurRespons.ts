@@ -45,6 +45,21 @@ export function iklanDariReferral(referral: unknown): Iklan | null {
   return id ? { id, judul: teksPendek(r.headline, 200) } : null;
 }
 
+// Data iklan dari webhook Instagram (message.referral atau messaging.referral). Bentuknya
+// lain dari WhatsApp: penanda iklannya `source: "ADS"` dan ID-nya `ad_id`, judulnya di
+// ads_context_data. Referral lain — tautan ig.me ber-ref, tombol produk — bukan jalur
+// berbayar, jadi tidak dihitung sebagai iklan. Batas panjangnya sama dengan WhatsApp,
+// supaya kolom ID Iklan di ekspor tidak berbeda perilaku antarsaluran.
+export function iklanDariReferralInstagram(referral: unknown): Iklan | null {
+  if (!referral || typeof referral !== "object") return null;
+  const r = referral as Record<string, unknown>;
+  if (String(r.source ?? "").toUpperCase() !== "ADS") return null;
+  const id = teksPendek(typeof r.ad_id === "number" ? String(r.ad_id) : r.ad_id, 64);
+  if (!id) return null;
+  const konteks = (r.ads_context_data ?? {}) as Record<string, unknown>;
+  return { id, judul: teksPendek(konteks.ad_title, 200) };
+}
+
 export type AsalTercatat = { jalurMasuk: string | null; iklanId: string | null; iklanJudul: string | null };
 
 // Asal sebuah respons saat dimulai. Iklan didahulukan bila diketuk SETELAH broadcast terakhir

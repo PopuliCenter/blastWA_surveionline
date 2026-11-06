@@ -50,7 +50,10 @@ export default function WhatsAppAccount() {
   const [qontakTest, setQontakTest] = useState(null); // { ok, text }
   const [qtesting, setQtesting] = useState(false);
 
-  const vendors = data || [];
+  // /api/vendors juga mendaftar Instagram, yang punya halamannya sendiri. Tanpa saringan ini
+  // banner bisa berbunyi "Siap mengirim via instagram" padahal belum ada jalur WhatsApp sama
+  // sekali — dan Instagram tidak bisa broadcast.
+  const vendors = (data || []).filter((v) => VENDOR_WA.has(v.name));
   const vmeta = vendors.find((v) => v.name === "meta");
   // Default versi Graph API datang dari server supaya hanya ada satu angka di seluruh
   // aplikasi. Tanda hubung dipakai selama data belum termuat, bukan angka tebakan.
@@ -402,3 +405,4 @@ export default function WhatsAppAccount() {
 }
 
 const VENDOR_LABEL = { meta: "Meta Cloud API", qontak: "Qontak", baileys: "WhatsApp Langsung (QR)" };
+const VENDOR_WA = new Set(Object.keys(VENDOR_LABEL));

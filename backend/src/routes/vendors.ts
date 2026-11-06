@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { encryptJson, decryptJson } from "../lib/crypto.js";
-import { listProviders, loadProviders, vendorsWithDecryptError } from "../providers/registry.js";
+import { getProvider, listProviders, loadProviders, vendorsWithDecryptError } from "../providers/registry.js";
+import type { InstagramAdapter } from "../providers/instagram.js";
 import { env } from "../env.js";
 
 export async function vendorRoutes(app: FastifyInstance): Promise<void> {
@@ -27,6 +28,9 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
       // sendiri. Dulu formulir memakai angka berbeda dari backend, sehingga nilai yang
       // dipakai bergantung pada apakah form itu pernah disimpan.
       defaultGraphVersion: env.META_GRAPH_VERSION,
+      ...(p.name === "instagram"
+        ? { webhookSiap: (getProvider("instagram") as unknown as InstagramAdapter).siapWebhook() }
+        : {}),
     }));
   });
 
@@ -34,7 +38,8 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.put("/api/vendors/:vendor/credentials", async (req, reply) => {
     if (req.user.role === "viewer") return reply.code(403).send({ error: "forbidden" });
     const vendor = (req.params as { vendor: string }).vendor;
-    if (!["meta", "qontak"].includes(vendor)) return reply.code(400).send({ error: "vendor tidak dikenal" });
+    if (!["meta", "qontak", "instagram"].includes(vendor))
+      return reply.code(400).send({ error: "vendor tidak dikenal" });
 
     const parsed = z.record(z.string(), z.string()).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "credentials harus object string->string" });
@@ -51,6 +56,12 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
         // kredensial lama tak bisa didekripsi (mis. CREDENTIALS_ENC_KEY berubah) → pakai yang baru saja
       }
     }
+
+    // Token Instagram yang baru ditempel berlaku 60 hari sejak dibuat, jadi jadwal
+    // perpanjangannya (services/tokenInstagram.ts) dihitung ulang dari sekarang. Tanpa ini,
+    // tanggal dari token LAMA terbawa dan perpanjangan pertama bisa jatuh di hari yang
+    // sama — Meta menolak memperpanjang token yang umurnya belum 24 jam.
+    if (vendor === "instagram" && parsed.data.accessToken) merged.tokenDiperpanjangPada = new Date().toISOString();
 
     await prisma.vendorConfig.upsert({
       where: { vendor },

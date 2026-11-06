@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
+import { apakahInstagram } from "../lib/saluranKontak.js";
 
 // Upsert kontak (gabung nama + atribut) lalu link ke segmen. Lewati duplikat & yang sudah ada.
 async function addContactsToSegment(
@@ -13,7 +14,9 @@ async function addContactsToSegment(
   let added = 0;
   let skipped = 0;
   for (const item of items) {
-    const phone = normalizePhone(item.phone);
+    // Segmen dipakai untuk broadcast WhatsApp, yang tidak bisa menjangkau kontak Instagram.
+    // Alamat "ig:…" juga tidak boleh dinormalkan (jadi nomor HP palsu) — dilewati.
+    const phone = apakahInstagram(item.phone) ? "" : normalizePhone(item.phone);
     if (!phone || phone.length < 8 || seen.has(phone)) {
       skipped++;
       continue;

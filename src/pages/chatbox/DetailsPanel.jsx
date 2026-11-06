@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Badge, Button, Loading, theme, fmtDate, useLoader } from "../../lib/ui";
 import { sessionInfo } from "./constants";
+import { ALAMAT_IG, apakahInstagram, labelNomor, namaAtauNomor } from "../../lib/labelNomor";
 
 // ── Panel detail (kanan) ────────────────────────────────────────────────────
 function DetailRow({ label, value }) {
@@ -56,10 +57,10 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft, readOnly = false
             marginBottom: 8,
           }}
         >
-          {(convo.name || convo.phone).slice(0, 1).toUpperCase()}
+          {namaAtauNomor(convo).slice(0, 1).toUpperCase()}
         </div>
         <div style={{ fontWeight: 700, fontSize: 15, color: theme.text }}>{convo.name || "(tanpa nama)"}</div>
-        <div style={{ fontSize: 12.5, color: theme.textMuted }}>{convo.phone}</div>
+        <div style={{ fontSize: 12.5, color: theme.textMuted }}>{labelNomor(convo.phone)}</div>
         <div style={{ marginTop: 8 }}>
           <Badge tone={sess.tone}>{sess.label}</Badge>
         </div>
@@ -79,6 +80,11 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft, readOnly = false
           Detail Percakapan
         </div>
         <DetailRow label="Vendor" value={convo.vendor ? convo.vendor.toUpperCase() : "—"} />
+        {/* ID lengkap hanya di sini: di daftar cukup potongannya, tapi untuk mencocokkan dengan
+            baris di Sheets/ekspor (kolom Nomor = ig:<ID>) operator perlu angka utuhnya. */}
+        {apakahInstagram(convo.phone) ? (
+          <DetailRow label="ID Instagram" value={convo.phone.slice(ALAMAT_IG.length) || "—"} />
+        ) : null}
         <DetailRow label="Dibuat" value={fmtDate(convo.firstAt)} />
         <DetailRow label="Aktivitas terakhir" value={fmtDate(convo.lastAt)} />
         <DetailRow

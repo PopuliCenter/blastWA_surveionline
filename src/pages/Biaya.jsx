@@ -395,7 +395,9 @@ export default function Biaya() {
             </div>
             <div style={{ marginTop: 6 }}>
               Memakai kartu tarif yang berlaku sejak {tanggalSaja(hasil.tarif.berlakuSejak)}. Pesan yang gagal diantar
-              tidak dihitung. Angka ini <strong>estimasi</strong> — yang mengikat tetap invoice resmi Meta.
+              tidak dihitung. Hanya pesan lewat Meta Cloud API yang dihitung — pesan lewat Qontak, WhatsApp Langsung
+              (QR), dan Instagram tidak muncul di invoice Meta. Angka ini <strong>estimasi</strong> — yang mengikat
+              tetap invoice resmi Meta.
             </div>
           </div>
         </Card>

@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { Button, Notice, Loading, Empty, theme, Icon, useLoader } from "../../lib/ui";
 import { sessionInfo, shortTime } from "./constants";
 import { MediaPesan } from "./MediaPesan";
+import { apakahInstagram, labelNomor, namaAtauNomor } from "../../lib/labelNomor";
 
 // Teks pengganti yang disimpan untuk pesan media tanpa keterangan ("[image]", "[sticker]").
 // Untuk gambar/stiker yang bisa dibuka, label ini diganti tombol "Lihat"; keterangan gambar
@@ -127,7 +128,7 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
             flexShrink: 0,
           }}
         >
-          {(convo.name || convo.phone).slice(0, 1).toUpperCase()}
+          {namaAtauNomor(convo).slice(0, 1).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -140,7 +141,7 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
               textOverflow: "ellipsis",
             }}
           >
-            {convo.name || convo.phone}
+            {namaAtauNomor(convo)}
           </div>
           <div
             style={{
@@ -148,7 +149,7 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
               color: typing ? theme.green : sess.tone === "green" ? theme.green : theme.textMuted,
             }}
           >
-            {convo.phone} • {typing ? "sedang menulis…" : sess.label}
+            {labelNomor(convo.phone)} • {typing ? "sedang menulis…" : sess.label}
           </div>
         </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
@@ -320,9 +321,13 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
         >
           <Icon name="autoreply" size={16} />
           <span>
-            {convo.sessionExpiresAt
-              ? "Sesi 24 jam berakhir. Balasan teks bebas tidak bisa dikirim — gunakan template (lewat Broadcast) untuk follow up."
-              : "Kontak belum pernah membalas. Mulai dengan template lewat Broadcast agar sesi terbuka."}
+            {/* Instagram tidak punya templat maupun broadcast: satu-satunya jalan adalah menunggu
+                responden mengirim DM lagi. */}
+            {apakahInstagram(convo.phone)
+              ? "Sesi 24 jam berakhir. Instagram tidak mendukung templat/broadcast — tunggu responden mengirim DM lagi untuk membuka sesi."
+              : convo.sessionExpiresAt
+                ? "Sesi 24 jam berakhir. Balasan teks bebas tidak bisa dikirim — gunakan template (lewat Broadcast) untuk follow up."
+                : "Kontak belum pernah membalas. Mulai dengan template lewat Broadcast agar sesi terbuka."}
           </span>
         </div>
       )}

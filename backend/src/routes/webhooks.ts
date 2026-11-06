@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import { handleInboundEvents } from "../services/surveyEngine.js";
@@ -7,6 +7,7 @@ import { saringLokasi } from "../lib/lokasi.js";
 
 function toWebhookRequest(req: FastifyRequest): WebhookRequest {
   return {
+    method: req.method,
     rawBody: (req as unknown as { rawBody?: string }).rawBody ?? "",
     body: req.body,
     headers: req.headers,
@@ -37,13 +38,16 @@ async function log(vendor: string, event: string, status: string, payload: unkno
 const WEBHOOK_RATE_LIMIT = { config: { rateLimit: { max: 6000, timeWindow: "1 minute" } } };
 
 export async function webhookRoutes(app: FastifyInstance): Promise<void> {
-  // --- Meta: verifikasi GET (hub.challenge) ---
-  app.get("/webhook/meta", WEBHOOK_RATE_LIMIT, async (req, reply) => {
-    const provider = getProvider("meta");
+  // --- Meta & Instagram: verifikasi GET (hub.challenge) ---
+  // Keduanya memakai mekanisme dasbor aplikasi Meta yang sama, dengan Verify Token masing-masing.
+  const verifikasiGet = (vendor: "meta" | "instagram") => async (req: FastifyRequest, reply: FastifyReply) => {
+    const provider = getProvider(vendor);
     const result = provider.verifyWebhook(toWebhookRequest(req));
     if (typeof result === "string") return reply.code(200).send(result); // echo challenge
     return reply.code(403).send("forbidden");
-  });
+  };
+  app.get("/webhook/meta", WEBHOOK_RATE_LIMIT, verifikasiGet("meta"));
+  app.get("/webhook/instagram", WEBHOOK_RATE_LIMIT, verifikasiGet("instagram"));
 
   // --- Meta: pesan & status ---
   app.post("/webhook/meta", WEBHOOK_RATE_LIMIT, async (req, reply) => {
@@ -55,14 +59,19 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     await receive("qontak", req, reply);
   });
 
+  // --- Instagram: DM ---
+  app.post("/webhook/instagram", WEBHOOK_RATE_LIMIT, async (req, reply) => {
+    await receive("instagram", req, reply);
+  });
+
   // --- Pola umum BSP lain ---
   app.post("/webhook/:vendor", WEBHOOK_RATE_LIMIT, async (req, reply) => {
     const vendor = (req.params as { vendor: string }).vendor;
-    if (["meta", "qontak"].includes(vendor)) return; // sudah ditangani di atas
+    if (["meta", "qontak", "instagram"].includes(vendor)) return; // sudah ditangani di atas
     await receive(vendor, req, reply);
   });
 
-  async function receive(vendor: string, req: FastifyRequest, reply: import("fastify").FastifyReply) {
+  async function receive(vendor: string, req: FastifyRequest, reply: FastifyReply) {
     let provider;
     try {
       provider = getProvider(vendor);
@@ -72,8 +81,10 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const wr = toWebhookRequest(req);
+    // Hanya `true` yang sah. String berarti jawaban tantangan GET — untuk POST itu tanda
+    // permintaan palsu yang menyelipkan hub.* di URL agar tanda tangannya tidak diperiksa.
     const valid = provider.verifyWebhook(wr);
-    if (valid === false) {
+    if (valid !== true) {
       await log(vendor, "signature", "failed", req.body, "verifikasi signature gagal");
       return reply.code(401).send({ error: "invalid signature" });
     }

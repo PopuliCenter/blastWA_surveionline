@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { normalizePhone } from "../lib/phone.js";
+import { alamatInstagram, apakahInstagram } from "../lib/saluranKontak.js";
 import { parsePage, parsePageSize, CONTACT_PAGE_SIZES, CONVO_PAGE_SIZES } from "../lib/pageParams.js";
 import { getProvider } from "../providers/registry.js";
 import { bisaUnduhMedia, mediaDariPayload } from "../lib/mediaPesan.js";
@@ -63,6 +64,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/contacts", async (req, reply) => {
     const parsed = z.object({ phone: z.string().min(5), name: z.string().optional() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
+    // Kontak Instagram hanya lahir dari DM yang masuk (IGSID tidak bisa diketahui dari luar).
+    // Tanpa penolakan ini, "ig:…" dinormalkan menjadi nomor HP palsu.
+    if (apakahInstagram(parsed.data.phone))
+      return reply.code(400).send({ error: "Kontak Instagram tidak bisa ditambahkan manual" });
     const phone = normalizePhone(parsed.data.phone);
     const existing = await prisma.contact.findUnique({ where: { phone } });
     if (existing) return reply.code(409).send({ error: "nomor sudah ada" });
@@ -111,7 +116,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const menolak = await suppressedAmong(parsed.data.contacts.map((c) => normalizePhone(c.phone)));
     const seen = new Set<string>();
     for (const item of parsed.data.contacts) {
-      const phone = normalizePhone(item.phone);
+      // Baris berisi alamat Instagram (mis. berkas ekspor kontak yang diimpor ulang) dilewati:
+      // dinormalkan, ia menjadi nomor HP palsu yang lalu ikut blast WhatsApp.
+      const phone = apakahInstagram(item.phone) ? "" : normalizePhone(item.phone);
       if (!phone || phone.length < 8 || seen.has(phone)) {
         skipped++;
         continue;
@@ -164,7 +171,18 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
-    if (parsed.data.phone) data.phone = normalizePhone(parsed.data.phone);
+    // Alamat Instagram ("ig:<IGSID>") hanya lahir dari webhook Instagram dan tidak bisa
+    // diganti: mengubah kontak WA menjadi alamat ig: (atau sebaliknya) memindahkan riwayat dan
+    // respons ke saluran lain, mengeluarkan nomor dari blast diam-diam, dan merutekan Chat ke
+    // vendor yang salah. Formulir sunting bisa mengirim balik alamat yang sama — itu diterima.
+    if (parsed.data.phone) {
+      const lama = await prisma.contact.findUnique({ where: { id }, select: { phone: true } });
+      if (!lama) return reply.code(404).send({ error: "kontak tidak ditemukan" });
+      if (apakahInstagram(lama.phone) || apakahInstagram(parsed.data.phone)) {
+        if (alamatInstagram(parsed.data.phone) !== lama.phone || !apakahInstagram(parsed.data.phone))
+          return reply.code(400).send({ error: "Alamat kontak Instagram tidak bisa diubah atau dibuat manual" });
+      } else data.phone = normalizePhone(parsed.data.phone);
+    }
     if (parsed.data.subscribed !== undefined) {
       data.subscribed = parsed.data.subscribed;
       data.optOutAt = parsed.data.subscribed ? null : new Date();
@@ -436,9 +454,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const contact = await prisma.contact.findUnique({ where: { id } });
     if (!contact) return reply.code(404).send({ error: "kontak tidak ditemukan" });
 
-    // Pilih vendor: vendor pesan terakhir kontak, fallback DEFAULT_VENDOR
+    // Pilih vendor: vendor pesan terakhir kontak, fallback DEFAULT_VENDOR. Kontak Instagram
+    // selalu lewat Instagram — alamatnya bukan nomor yang bisa dikirimi vendor WhatsApp.
     const last = await prisma.message.findFirst({ where: { contactId: id }, orderBy: { createdAt: "desc" } });
-    const vendor = last?.vendor ?? env.DEFAULT_VENDOR;
+    const vendor = apakahInstagram(contact.phone) ? "instagram" : (last?.vendor ?? env.DEFAULT_VENDOR);
 
     const result = await getProvider(vendor).sendText({ to: contact.phone, text: parsed.data.text });
     const msg = await prisma.message.create({

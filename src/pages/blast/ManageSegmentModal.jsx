@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Modal, Notice, Loading, Input, Button, Badge, Empty, useLoader, theme } from "../../lib/ui";
 import { confirmDialog, promptDialog } from "../../lib/confirm";
+import { apakahInstagram } from "../../lib/labelNomor";
 
 // Kelola anggota segmen: opt-out/opt-in, edit nama, keluarkan dari segmen, hapus kontak.
 export function ManageSegmentModal({ segment, onClose }) {
@@ -21,8 +22,9 @@ export function ManageSegmentModal({ segment, onClose }) {
   };
   const checkFormat = () => {
     const map = {};
+    // Kontak Instagram tidak punya nomor HP, jadi tidak dinilai — bukan "format salah".
     (data?.contacts || []).forEach((c) => {
-      map[c.phone] = isPhoneFormatValid(c.phone);
+      if (!apakahInstagram(c.phone)) map[c.phone] = isPhoneFormatValid(c.phone);
     });
     setFmtMap(map);
     const bad = Object.values(map).filter((v) => v === false).length;
@@ -42,7 +44,7 @@ export function ManageSegmentModal({ segment, onClose }) {
   };
 
   const checkWA = async () => {
-    const all = data?.contacts || [];
+    const all = (data?.contacts || []).filter((c) => !apakahInstagram(c.phone));
     if (!all.length) return;
     if (
       !(await confirmDialog({
@@ -213,6 +215,8 @@ export function ManageSegmentModal({ segment, onClose }) {
                         <Badge tone="red">tdk ber-WA</Badge>
                       ) : null}
                       {fmtMap[c.phone] === false ? <Badge tone="yellow">format?</Badge> : null}
+                      {/* Blast melewati kontak Instagram (tidak ada templat/broadcast di IG). */}
+                      {apakahInstagram(c.phone) ? <Badge tone="purple">Instagram · tidak ikut blast</Badge> : null}
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMuted, fontFamily: "monospace" }}>{c.phone}</div>
                   </div>

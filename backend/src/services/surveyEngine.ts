@@ -1,8 +1,9 @@
-import type { RecipientStatus } from "@prisma/client";
+import type { Prisma, RecipientStatus } from "@prisma/client";
 import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound, SendResult } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
+import { alamatInstagram, apakahInstagram, saluranDari } from "../lib/saluranKontak.js";
 import { ALLOWED_FROM, MESSAGE_ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
 import {
   isOptOutExact,
@@ -101,6 +102,35 @@ async function doOptIn(
   await reply(vendor, phone, OPT_IN_REPLY, contact.id, "optout");
 }
 
+// Respons ini berjalan sebagai formulir (WhatsApp Flow)? Ditentukan METODE yang tercatat saat
+// survei dimulai — survei mode Form tetap berjalan sebagai chatbot bila vendornya tidak punya
+// Flow (Instagram, Qontak, Baileys) atau Flow ID-nya belum diisi. Respons dari sebelum metode
+// dicatat (null) memakai mode surveinya, sama dengan lib/jalurRespons.ts labelAsal.
+function caraForm(r: { metode: string | null; survey: { mode: string } }): boolean {
+  return (r.metode ?? (r.survey.mode === "flow" ? "form" : "chatbot")) === "form";
+}
+
+// Isi nama kontak Instagram dari API profil: nama, atau @username bila namanya kosong.
+// Best-effort: dibatasi waktu dan galatnya ditelan — nama hanya untuk tampilan, dan survei
+// tidak boleh tertahan karena API profil lambat atau izinnya belum disetujui. Hanya mengisi
+// kekosongan, dengan predikat yang sama seperti push name WhatsApp di handleMessage.
+const BATAS_WAKTU_PROFIL_MS = 3000;
+async function isiNamaInstagram(contactId: string, vendor: string, igsid: string): Promise<void> {
+  try {
+    const prov = getProvider(vendor);
+    if (typeof prov.ambilProfil !== "function") return;
+    let batas: ReturnType<typeof setTimeout> | undefined;
+    const profil = await Promise.race([
+      prov.ambilProfil(igsid),
+      new Promise<null>((r) => (batas = setTimeout(() => r(null), BATAS_WAKTU_PROFIL_MS))),
+    ]).finally(() => clearTimeout(batas));
+    const nama = profil?.name || (profil?.username ? `@${profil.username}` : undefined);
+    if (nama) await prisma.contact.updateMany({ where: { id: contactId, name: null }, data: { name: nama } });
+  } catch {
+    /* abaikan — lihat catatan di atas */
+  }
+}
+
 export async function handleInboundEvents(events: NormalizedInbound[]): Promise<void> {
   for (const ev of events) {
     try {
@@ -154,16 +184,49 @@ async function handleStatus(ev: NormalizedInbound): Promise<void> {
   if (field) await prisma.blast.update({ where: { id: recipient.blastId }, data: { [field]: { increment: 1 } } });
 }
 
+// Tulis pesan masuk, kecuali pesan dengan ID vendor yang sama sudah pernah tercatat.
+// false = kiriman ganda; jangan diproses lagi. Kunci advisory per ID pesan menjaga agar
+// pemeriksaan dan penulisan tidak disela kiriman kembar yang datang bersamaan — tanpa itu
+// keduanya lolos pemeriksaan sebelum salah satunya sempat menulis.
+async function tulisPesanMasuk(data: Prisma.MessageUncheckedCreateInput): Promise<boolean> {
+  if (!data.vendorMessageId) {
+    await prisma.message.create({ data });
+    return true;
+  }
+  const kunci = `${data.vendor}:${data.vendorMessageId}`;
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(${kunci}))`;
+    const ada = await tx.message.findFirst({
+      where: { vendor: data.vendor, vendorMessageId: data.vendorMessageId, direction: "in" },
+      select: { id: true },
+    });
+    if (ada) return false;
+    await tx.message.create({ data });
+    return true;
+  });
+}
+
 async function handleMessage(ev: NormalizedInbound): Promise<void> {
   if (!ev.from) return;
-  const phone = normalizePhone(ev.from);
+
+  // Kontak Instagram disimpan dengan alamat "ig:<IGSID>" — TIDAK PERNAH lewat normalizePhone,
+  // yang akan mengubah ID-nya menjadi nomor HP palsu (lib/saluranKontak.ts).
+  const instagram = ev.vendor === "instagram";
+  const phone = instagram ? alamatInstagram(ev.from) : normalizePhone(ev.from);
   // Nama profil WhatsApp dipakai HANYA untuk mengisi kekosongan. Nama dari impor atau
   // input manual lebih mungkin akurat, sedangkan push name bisa diubah pemilik nomor
   // kapan saja — jadi `update: {}` sengaja dibiarkan kosong agar tak pernah menimpa.
+  //
+  // Kontak Instagram mencatat asalnya sejak dibuat ("Sumber Kontak = Instagram" di Respons,
+  // ekspor, dan Sheets), karena mereka tidak mungkin datang dari impor atau blast.
   const contact = await prisma.contact.upsert({
     where: { phone },
     update: {},
-    create: { phone, name: ev.senderName },
+    create: {
+      phone,
+      name: ev.senderName,
+      ...(instagram ? { consentSource: "instagram", consentAt: new Date() } : {}),
+    },
   });
   // Iklan yang diketuk disimpan di kontak, karena datanya hanya ikut pada pesan ini, padahal
   // surveinya bisa baru dimulai beberapa pesan kemudian.
@@ -173,11 +236,9 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       data: { iklanId: ev.iklan.id, iklanJudul: ev.iklan.judul, iklanPada: new Date() },
     });
   }
-  if (ev.senderName && !contact.name) {
-    // Predikat `name: null` membuat penulisannya bersyarat di database, jadi dua pesan
-    // yang datang bersamaan dari nomor yang sama tidak saling menimpa.
-    await prisma.contact.updateMany({ where: { id: contact.id, name: null }, data: { name: ev.senderName } });
-  }
+  // Iklan Instagram yang diketuk orang yang SUDAH pernah mengobrol datang sebagai referral
+  // tanpa pesan. Ketukannya sudah dicatat di atas; tidak ada yang perlu dijawab.
+  if (instagram && ev.iklan && !ev.text && !ev.mediaType) return;
 
   const storedText =
     ev.interactiveType === "nfm_reply"
@@ -185,18 +246,29 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       : ev.location
         ? "[lokasi]"
         : (ev.text ?? (ev.mediaType ? `[${ev.mediaType}]` : null));
-  await prisma.message.create({
-    data: {
-      contactId: contact.id,
-      direction: "in",
-      vendor: ev.vendor,
-      vendorMessageId: ev.messageId,
-      text: storedText,
-      // Lokasi di payload disaring (dibulatkan, nama tempat & alamat dibuang) — titik GPS
-      // mentah tidak boleh tersimpan di mana pun, termasuk riwayat pesan.
-      payload: saringLokasi(ev.raw) as object,
-    },
+  // Penyaring pesan ganda. Meta mengirim ulang webhook yang dianggapnya belum diterima —
+  // Instagram sampai 36 jam — dan tanpa penyaring ini jawaban yang sama tercatat dua kali
+  // dan survei maju dua langkah. Kolom vendorMessageId di tabel Message TIDAK unik, jadi
+  // pemeriksaan dan penulisannya dikunci per ID pesan (tulisPesanMasuk): dua kiriman kembar
+  // yang tiba bersamaan pun hanya satu yang lolos.
+  const pesanBaru = await tulisPesanMasuk({
+    contactId: contact.id,
+    direction: "in",
+    vendor: ev.vendor,
+    vendorMessageId: ev.messageId ?? null,
+    text: storedText,
+    // Lokasi di payload disaring (dibulatkan, nama tempat & alamat dibuang) — titik GPS
+    // mentah tidak boleh tersimpan di mana pun, termasuk riwayat pesan.
+    payload: saringLokasi(ev.raw) as object,
   });
+  if (!pesanBaru) return;
+  if (ev.senderName && !contact.name) {
+    // Predikat `name: null` membuat penulisannya bersyarat di database, jadi dua pesan
+    // yang datang bersamaan dari nomor yang sama tidak saling menimpa.
+    await prisma.contact.updateMany({ where: { id: contact.id, name: null }, data: { name: ev.senderName } });
+  }
+  // Webhook Instagram tidak membawa nama pengirim — diambil dari API profilnya.
+  if (instagram && !contact.name) await isiNamaInstagram(contact.id, ev.vendor, ev.from);
 
   // Tandai pesan dibaca (centang biru untuk pelanggan) — best-effort, tak memblokir alur.
   if (ev.messageId) {
@@ -226,9 +298,9 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     const berjalan = await prisma.surveyResponse.findFirst({
       where: { contactId: contact.id, completedAt: null },
       orderBy: { startedAt: "desc" },
-      select: { survey: { select: { mode: true } } },
+      select: { metode: true, survey: { select: { mode: true } } },
     });
-    if (!berjalan || berjalan.survey.mode === "flow") return;
+    if (!berjalan || caraForm(berjalan)) return;
   }
 
   // 0) Opt-out / opt-in (anti-banned) — prioritas tertinggi.
@@ -249,7 +321,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   if (!contact.consentSource) {
     await prisma.contact.update({
       where: { id: contact.id },
-      data: { consentSource: "inbound", consentAt: new Date() },
+      data: { consentSource: instagram ? "instagram" : "inbound", consentAt: new Date() },
     });
   }
 
@@ -257,7 +329,10 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   let active = await prisma.surveyResponse.findFirst({
     where: { contactId: contact.id, completedAt: null },
     orderBy: { startedAt: "desc" },
-    include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } },
+    include: {
+      survey: { include: { questions: { orderBy: { order: "asc" } } } },
+      _count: { select: { answers: true } },
+    },
   });
 
   // Formulir Flow yang tak kunjung diisi TIDAK boleh mengunci kontak selamanya.
@@ -266,15 +341,28 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   // formulirnya tidak lagi ditunggu, dan pesan berikutnya diperlakukan seperti dari orang
   // tanpa sesi — kata pemicu survei itu dijawab pesan berakhirnya (langkah 3a). Formulir
   // yang tetap dikirim nanti ditolak di tutupRespons (ALASAN_DITUTUP).
+  //
+  // Yang diperiksa METODE respons ini, bukan mode surveinya: survei Form bisa berjalan
+  // sebagai chatbot (Instagram, vendor tanpa Flow, survei Form yang belum punya Flow ID).
+  // Dulu dipakai mode survei, sehingga jawaban responden chatbot itu dialihkan ke Auto Reply
+  // seolah formulir masih ditunggu — dan surveinya tidak pernah maju.
+  if (active && caraForm(active) && (isFlowAbandoned(active.startedAt) || active.survey.status === "closed"))
+    active = null;
+  // Survei Form yang terpaksa berjalan sebagai chatbot dan belum dijawab sama sekali
+  // diperlakukan seperti formulirnya: ditinggalkan setelah 24 jam. Termasuk respons yang
+  // tersangkut sebelum perbaikan di atas — tanpa ini, pesan apa pun dari orang itu
+  // (kata pemicu survei lain, "halo") ditelan sebagai jawaban pertanyaan pertamanya.
   if (
     active &&
+    !caraForm(active) &&
     active.survey.mode === "flow" &&
-    (isFlowAbandoned(active.startedAt) || active.survey.status === "closed")
+    active._count.answers === 0 &&
+    isFlowAbandoned(active.startedAt)
   )
     active = null;
 
   if (active) {
-    if (active.survey.mode === "flow") {
+    if (caraForm(active)) {
       // Formulir masih ditunggu. Bila responden mengirim kata kunci pemicu lagi
       // (formulir tak jadi diisi / chat dihapus / pesan hilang), kirim ulang formulirnya.
       const again = await findTriggeredSurvey(ev.text ?? "");
@@ -634,8 +722,14 @@ async function startSurvey(
   // Asal responden, dicatat sekali saat dimulai (lib/jalurRespons.ts).
   const asal = tentukanJalur({ kontak, blastPada: opsi.blast?.pada, warisan: opsi.warisan });
   const blastId = opsi.warisan?.blastId ?? opsi.blast?.id;
+  // Saluran dicatat eksplisit, bukan dari nilai bawaan kolom ("whatsapp"): kontak Instagram
+  // memakai mesin yang sama, dan hanya alamatnya yang membedakan mereka.
+  const saluran = saluranDari(phone);
 
-  if (survey.mode === "flow" && survey.flowId && typeof provider.sendFlow === "function") {
+  // Formulir hanya bila vendornya punya WhatsApp Flow. Instagram tidak punya, jadi survei
+  // mode Form di sana selalu berjalan sebagai chatbot — pemeriksaan alamat di sini hanya
+  // pagar tambahan bila kelak adaptornya berubah.
+  if (survey.mode === "flow" && survey.flowId && typeof provider.sendFlow === "function" && !apakahInstagram(phone)) {
     const resp = await prisma.surveyResponse.create({
       data: {
         surveyId: survey.id,
@@ -644,6 +738,7 @@ async function startSurvey(
         ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
         ...(blastId ? { blastId } : {}),
         ...asal,
+        saluran,
         metode: "form",
       },
     });
@@ -705,6 +800,7 @@ async function startSurvey(
       ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
       ...(blastId ? { blastId } : {}),
       ...asal,
+      saluran,
       metode: "chatbot",
     },
   });
@@ -819,6 +915,7 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
             contactId,
             currentStep: 0,
             jalurMasuk: "broadcast",
+            saluran: saluranDari(phone),
             metode: "form",
             ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
           },
@@ -827,10 +924,16 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
       }
     }
   }
-  // Fallback: respons flow belum selesai milik kontak ini
+  // Fallback: respons FORMULIR belum selesai milik kontak ini. Menurut metode respons, bukan
+  // mode survei: sesi chatbot pada survei mode Form tidak menunggu formulir, dan jawabannya
+  // tidak boleh ditimpa isi formulir yang nyasar (lihat caraForm).
   if (!surveyResponse) {
     surveyResponse = await prisma.surveyResponse.findFirst({
-      where: { contactId, completedAt: null, survey: { mode: "flow" } },
+      where: {
+        contactId,
+        completedAt: null,
+        OR: [{ metode: "form" }, { metode: null, survey: { mode: "flow" } }],
+      },
       orderBy: { startedAt: "desc" },
       include: withQuestions,
     });
@@ -1102,7 +1205,10 @@ async function kirimPenutup(
   if (await botSedangDiam()) return;
   const penutup = closingText(survei.closingMessage);
   const provider = getProvider(vendor);
-  if (!survei.mintaLokasi || typeof provider.sendLocationRequest !== "function") {
+  // Instagram tidak bisa membagikan lokasi sama sekali (lampiran lokasi tidak dikirim ke
+  // webhook), jadi permintaannya — termasuk petunjuk lewat lampiran — tidak dikirim, dan
+  // lokasiDimintaPada tetap kosong: Status Lokasi "tidak diminta", bukan "tidak dibagikan".
+  if (!survei.mintaLokasi || typeof provider.sendLocationRequest !== "function" || apakahInstagram(phone)) {
     await reply(vendor, phone, penutup, contactId);
     return;
   }

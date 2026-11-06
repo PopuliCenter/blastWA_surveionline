@@ -12,13 +12,13 @@
 export const VIEWER_PAGES = new Set(["dashboard", "contacts", "chat", "reports"]);
 
 // Halaman yang hanya boleh dibuka superadmin. Isinya memegang KUNCI atau UANG: kredensial
-// vendor WhatsApp, kunci service account Google beserta tujuan ekspor data responden, serta
-// tarif, margin, dan invoice ke klien.
+// vendor WhatsApp dan Instagram, kunci service account Google beserta tujuan ekspor data
+// responden, serta tarif, margin, dan invoice ke klien.
 //
 // Daftar ini hanya menyembunyikan menu dan mencegah pendaratan. Pembatas sebenarnya ada di
 // server (requireSuperadmin): endpoint-nya tetap bisa dipanggil langsung dengan token admin
 // yang sah, dan kredensial Meta adalah hal paling berharga di aplikasi ini.
-export const SUPERADMIN_PAGES = new Set(["admin", "log", "wa-account", "sheets", "invoice"]);
+export const SUPERADMIN_PAGES = new Set(["admin", "log", "wa-account", "instagram", "sheets", "invoice"]);
 
 export const canSeePage = (role, id) =>
   (role !== "viewer" || VIEWER_PAGES.has(id)) && (!SUPERADMIN_PAGES.has(id) || role === "superadmin");
