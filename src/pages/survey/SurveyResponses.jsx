@@ -45,12 +45,14 @@ const asalRingkas = (r) =>
 // Cocokkan kata kunci ke nama, nomor, atau nilai atribut kontak.
 function matches(r, q) {
   if (!q) return true;
-  // Label yang tampil di layar ikut dicari: responden IG tanpa nama hanya terlihat sebagai
-  // "Instagram · …", dan pencarian "instagram" harus menemukannya.
+  // Label yang tampil di layar ikut dicari: responden IG tanpa nama terlihat sebagai
+  // "@username" atau "Instagram · …", dan pencarian keduanya ("@siti", "instagram") harus
+  // menemukannya.
   const hay = [
     r.name,
     r.phone,
     labelNomor(r.phone),
+    labelNomor(r.phone, r.igUsername),
     r.saluran,
     r.jalurMasuk,
     r.metode,
@@ -477,7 +479,7 @@ export function SurveyResponses({ survey, onClose }) {
                           minWidth: 0,
                         }}
                       >
-                        {labelNomor(r.phone)} • {fmtDate(r.startedAt)}
+                        {labelNomor(r.phone, r.igUsername)} • {fmtDate(r.startedAt)}
                         {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                       </span>
                     ) : null}
@@ -530,7 +532,7 @@ export function SurveyResponses({ survey, onClose }) {
                     }}
                   >
                     <span>
-                      {labelNomor(r.phone)} • {fmtDate(r.startedAt)}
+                      {labelNomor(r.phone, r.igUsername)} • {fmtDate(r.startedAt)}
                       {asalRingkas(r) ? ` • ${asalRingkas(r)}` : ""}
                     </span>
                     {lokasiBeda(r) ? <Badge tone="yellow">beda provinsi</Badge> : null}

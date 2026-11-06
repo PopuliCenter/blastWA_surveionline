@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Modal, Notice, Loading, Input, Button, Badge, Empty, useLoader, theme } from "../../lib/ui";
 import { confirmDialog, promptDialog } from "../../lib/confirm";
-import { apakahInstagram } from "../../lib/labelNomor";
+import { apakahInstagram, labelNomor } from "../../lib/labelNomor";
 
 // Kelola anggota segmen: opt-out/opt-in, edit nama, keluarkan dari segmen, hapus kontak.
 export function ManageSegmentModal({ segment, onClose }) {
@@ -99,7 +99,7 @@ export function ManageSegmentModal({ segment, onClose }) {
   const editName = async (c) => {
     const name = await promptDialog({
       title: "Ubah nama kontak",
-      message: c.phone,
+      message: labelNomor(c.phone, c.igUsername),
       label: "Nama",
       value: c.name || "",
       placeholder: "Nama kontak",
@@ -113,7 +113,7 @@ export function ManageSegmentModal({ segment, onClose }) {
     if (
       !(await confirmDialog({
         title: "Keluarkan dari segmen",
-        message: `Keluarkan ${c.phone} dari segmen ini? (kontak tetap ada di sistem)`,
+        message: `Keluarkan ${labelNomor(c.phone, c.igUsername)} dari segmen ini? (kontak tetap ada di sistem)`,
         confirmText: "Keluarkan",
         tone: "danger",
       }))
@@ -126,7 +126,7 @@ export function ManageSegmentModal({ segment, onClose }) {
     if (
       !(await confirmDialog({
         title: "Hapus kontak permanen",
-        message: `HAPUS kontak ${c.phone} permanen dari SEMUA segmen & riwayat? Tindakan ini tidak bisa dibatalkan.`,
+        message: `HAPUS kontak ${labelNomor(c.phone, c.igUsername)} permanen dari SEMUA segmen & riwayat? Tindakan ini tidak bisa dibatalkan.`,
         confirmText: "Hapus permanen",
         tone: "danger",
       }))
@@ -137,7 +137,10 @@ export function ManageSegmentModal({ segment, onClose }) {
   };
 
   const list = (data?.contacts || []).filter(
-    (c) => !q || c.phone.includes(q) || (c.name || "").toLowerCase().includes(q.toLowerCase()),
+    (c) =>
+      !q ||
+      c.phone.includes(q) ||
+      [c.name, labelNomor(c.phone, c.igUsername)].some((v) => (v || "").toLowerCase().includes(q.toLowerCase())),
   );
   const optedOut = (data?.contacts || []).filter((c) => !c.subscribed).length;
 
@@ -218,7 +221,15 @@ export function ManageSegmentModal({ segment, onClose }) {
                       {/* Blast melewati kontak Instagram (tidak ada templat/broadcast di IG). */}
                       {apakahInstagram(c.phone) ? <Badge tone="purple">Instagram · tidak ikut blast</Badge> : null}
                     </div>
-                    <div style={{ fontSize: 12, color: theme.textMuted, fontFamily: "monospace" }}>{c.phone}</div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: theme.textMuted,
+                        fontFamily: apakahInstagram(c.phone) ? "inherit" : "monospace",
+                      }}
+                    >
+                      {labelNomor(c.phone, c.igUsername)}
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     <Button

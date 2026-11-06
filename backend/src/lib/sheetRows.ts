@@ -89,6 +89,12 @@ export const JUDUL_LOKASI = ["Provinsi Lokasi", "Status Lokasi"] as const;
 // baris lamanya sekadar kosong di kolom-kolom ini.
 export const JUDUL_ASAL = ["Saluran", "Jalur Masuk", "Metode", "ID Iklan"] as const;
 
+// Username Instagram ("@username"), paling akhir dan untuk semua survei — alasan yang sama
+// dengan JUDUL_ASAL: tab lama mendapat judulnya di kanan tanpa menggeser apa pun. Kolom
+// Nomor kontak IG hanya berisi alamat "ig:<IGSID>" yang tak terbaca manusia; username-lah
+// yang dikenali tim. Kosong untuk WhatsApp dan untuk kontak IG yang profilnya belum terbaca.
+export const JUDUL_USERNAME_IG = "Username IG";
+
 export function sheetHeader(questions: SheetQuestion[], opsi: { lokasi?: boolean } = {}): string[] {
   return [
     ...FIXED_HEADER,
@@ -96,6 +102,7 @@ export function sheetHeader(questions: SheetQuestion[], opsi: { lokasi?: boolean
     ...TRAILING_HEADER,
     ...(opsi.lokasi ? JUDUL_LOKASI : []),
     ...JUDUL_ASAL,
+    JUDUL_USERNAME_IG,
   ];
 }
 
@@ -126,6 +133,8 @@ export function sheetRow(input: {
   lokasi?: readonly [string, string];
   // Selaras dengan JUDUL_ASAL; lihat labelAsal di lib/jalurRespons.ts.
   asal?: { saluran: string; jalurMasuk: string; metode: string; iklanId: string };
+  // Contact.igUsername, disimpan tanpa "@".
+  igUsername?: string | null;
 }): (string | number)[] {
   const byQuestion = new Map(input.answers.map((a) => [a.questionId, a.value]));
   const menit = durasiMenit(input.startedAt, input.completedAt);
@@ -153,6 +162,7 @@ export function sheetRow(input: {
     input.asal?.jalurMasuk ?? "",
     input.asal?.metode ?? "",
     input.asal?.iklanId ?? "",
+    input.igUsername ? `@${input.igUsername}` : "",
   ];
 }
 

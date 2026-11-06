@@ -26,10 +26,11 @@ function aman(v) {
 export function buildContactRows(contacts, { date = new Date() } = {}) {
   void date;
   const atribut = kolomAtribut(contacts);
-  const header = ["Nomor", "Nama", "Berlangganan", "Sumber consent", "Opt-out", "Dibuat", ...atribut];
+  const header = ["Nomor", "Nama", "Username IG", "Berlangganan", "Sumber consent", "Opt-out", "Dibuat", ...atribut];
   const rows = contacts.map((c) => [
     aman(c.phone),
     aman(c.name ?? ""),
+    aman(c.igUsername ? `@${String(c.igUsername).replace(/^@/, "")}` : ""),
     c.subscribed ? "Ya" : "Tidak",
     aman(c.consentSource ?? ""),
     c.optOutAt ? new Date(c.optOutAt).toISOString().slice(0, 10) : "",

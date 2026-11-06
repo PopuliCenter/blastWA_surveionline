@@ -12,8 +12,12 @@ let nomorPesan = 0;
 const idUnik = () => `uji-${Date.now()}-${++nomorPesan}-${Math.random().toString(36).slice(2, 8)}`;
 // igPunya*: meniru adaptor Instagram yang (kelak, keliru) memiliki Flow atau permintaan
 // lokasi — mesin survei harus tetap tidak memakainya untuk kontak Instagram.
+type Profil = null | { name?: string; username?: string };
 const tiruan = {
-  profil: null as null | { name?: string; username?: string },
+  profil: null as Profil,
+  // Profil per IGSID (didahulukan dari `profil`), dan jumlah panggilan API profil.
+  profilPer: new Map<string, Profil>(),
+  panggilProfil: 0,
   igPunyaFlow: false,
   igPunyaLokasi: false,
 };
@@ -36,8 +40,9 @@ vi.mock("../src/providers/registry.js", () => ({
       return {
         name: "instagram",
         sendText,
-        async ambilProfil() {
-          return tiruan.profil;
+        async ambilProfil(igsid: string) {
+          tiruan.panggilProfil++;
+          return tiruan.profilPer.has(igsid) ? tiruan.profilPer.get(igsid)! : tiruan.profil;
         },
         ...(tiruan.igPunyaFlow ? { sendFlow } : {}),
         ...(tiruan.igPunyaLokasi ? { sendLocationRequest } : {}),
@@ -88,6 +93,8 @@ describe.skipIf(!URL_UJI)("survei lewat DM Instagram", () => {
     terkirim.length = 0;
     antreBlast.length = 0;
     tiruan.profil = null;
+    tiruan.profilPer.clear();
+    tiruan.panggilProfil = 0;
     tiruan.igPunyaFlow = false;
     tiruan.igPunyaLokasi = false;
     // Survei uji lain tidak boleh ikut menjawab kata pemicu.
@@ -410,5 +417,193 @@ describe.skipIf(!URL_UJI)("survei lewat DM Instagram", () => {
     await expect(createBlast({ segmentId: seg.id, vendor: "instagram", templateName: "x" })).rejects.toThrow(
       "Instagram tidak mendukung templat/broadcast",
     );
+  });
+
+  describe("profil Instagram: username tersimpan, diperbarui, dan dilengkapi", () => {
+    const kontakIg = (igsid: string) => prisma.contact.findUniqueOrThrow({ where: { phone: `ig:${igsid}` } });
+    const JAM = 3600_000;
+
+    it("(a) DM pertama menyimpan username dan waktu cek; nama terisi; baris Sheets memuat @username", async () => {
+      const { s, kata } = await survei({ mode: "chat" });
+      const igsid = igsidBaru();
+      tiruan.profil = { name: "Siti Instagram", username: "siti.ig" };
+      const sebelum = Date.now();
+      await kirim("instagram", igsid, kata);
+      const k = await kontakIg(igsid);
+      expect(k).toMatchObject({ name: "Siti Instagram", igUsername: "siti.ig" });
+      expect(k.igProfilPada!.getTime()).toBeGreaterThanOrEqual(sebelum - 1000);
+      // Sekali saja: startSurvey tidak mengecek lagi profil yang baru dicek.
+      expect(tiruan.panggilProfil).toBe(1);
+      expect(await respons(s.id)).toMatchObject({ saluran: "instagram" });
+
+      const { sheetRow, sheetHeader, JUDUL_USERNAME_IG } = await import("../src/lib/sheetRows.js");
+      const judul = sheetHeader([]);
+      const baris = sheetRow({
+        phone: k.phone,
+        name: k.name,
+        consentSource: k.consentSource,
+        startedAt: new Date(),
+        completedAt: new Date(),
+        questions: [],
+        answers: [],
+        igUsername: k.igUsername,
+      });
+      expect(baris[judul.indexOf(JUDUL_USERNAME_IG)]).toBe("@siti.ig");
+    });
+
+    it("(b) profil gagal → waktu cek tetap tercatat, dan DM berikutnya TIDAK memanggil API lagi", async () => {
+      const igsid = igsidBaru();
+      tiruan.profil = null;
+      await kirim("instagram", igsid, "halo");
+      const k = await kontakIg(igsid);
+      expect(k.igProfilPada).not.toBeNull();
+      expect(k).toMatchObject({ name: null, igUsername: null });
+      expect(tiruan.panggilProfil).toBe(1);
+      tiruan.profil = { username: "telat" };
+      await kirim("instagram", igsid, "halo lagi");
+      expect(tiruan.panggilProfil).toBe(1);
+      expect((await kontakIg(igsid)).igUsername).toBeNull();
+    });
+
+    it("kontak lama yang belum pernah dicek terlengkapi saat DM lagi", async () => {
+      const igsid = igsidBaru();
+      await prisma.contact.create({ data: { phone: `ig:${igsid}`, name: "@budi_lama", consentSource: "instagram" } });
+      tiruan.profil = { username: "budi_lama" };
+      await kirim("instagram", igsid, "halo");
+      expect(await kontakIg(igsid)).toMatchObject({ name: "@budi_lama", igUsername: "budi_lama" });
+      expect(tiruan.panggilProfil).toBe(1);
+    });
+
+    it("(c) startSurvey memperbarui profil > 24 jam: @lama → @baru, nama suntingan tetap", async () => {
+      const { s, kata } = await survei({ mode: "chat" });
+      const [igOto, igSunting, igSegar, igTanpa] = [igsidBaru(), igsidBaru(), igsidBaru(), igsidBaru()];
+      const lama = new Date(Date.now() - 25 * JAM);
+      await prisma.contact.createMany({
+        data: [
+          { phone: `ig:${igOto}`, name: "@lama", igUsername: "lama", igProfilPada: lama },
+          { phone: `ig:${igSunting}`, name: "Bu Siti (RT 3)", igUsername: "lama2", igProfilPada: lama },
+          { phone: `ig:${igSegar}`, name: "@segar", igUsername: "segar", igProfilPada: new Date(Date.now() - JAM) },
+          { phone: `ig:${igTanpa}`, name: "@tetap", igUsername: "tetap", igProfilPada: lama },
+        ],
+      });
+      tiruan.profilPer.set(igOto, { username: "baru" });
+      tiruan.profilPer.set(igSunting, { name: "Siti Nurhaliza", username: "baru2" });
+      tiruan.profilPer.set(igSegar, { username: "tak_dipakai" });
+      // Respons tanpa username tidak menghapus username lama.
+      tiruan.profilPer.set(igTanpa, { name: "Hanya Nama" });
+
+      const sebelum = Date.now();
+      await kirim("instagram", igOto, kata);
+      const oto = await kontakIg(igOto);
+      expect(oto).toMatchObject({ name: "@baru", igUsername: "baru" });
+      expect(oto.igProfilPada!.getTime()).toBeGreaterThanOrEqual(sebelum - 1000);
+      expect(await prisma.surveyResponse.count({ where: { surveyId: s.id, contactId: oto.id } })).toBe(1);
+
+      await kirim("instagram", igSunting, kata);
+      expect(await kontakIg(igSunting)).toMatchObject({ name: "Bu Siti (RT 3)", igUsername: "baru2" });
+
+      await kirim("instagram", igTanpa, kata);
+      expect(await kontakIg(igTanpa)).toMatchObject({ name: "@tetap", igUsername: "tetap" });
+
+      const n = tiruan.panggilProfil;
+      await kirim("instagram", igSegar, kata);
+      expect(tiruan.panggilProfil).toBe(n); // dicek < 24 jam lalu → tidak dipanggil
+      expect(await kontakIg(igSegar)).toMatchObject({ name: "@segar", igUsername: "segar" });
+    });
+
+    it("nama yang berubah di antara pembacaan dan penulisan tidak ditimpa", async () => {
+      const { perbaruiProfilInstagram } = await import("../src/services/profilInstagram.js");
+      const igsid = igsidBaru();
+      const k = await prisma.contact.create({ data: { phone: `ig:${igsid}`, name: "Disunting operator" } });
+      tiruan.profil = { name: "Nama Profil", username: "uname" };
+      // Pemanggil masih memegang nama kosong — operator menyuntingnya sebelum profil tiba.
+      expect(await perbaruiProfilInstagram(k.id, "instagram", igsid, { name: null, igUsername: null })).toBe(
+        "berhasil",
+      );
+      expect(await kontakIg(igsid)).toMatchObject({ name: "Disunting operator", igUsername: "uname" });
+    });
+
+    it("(d) pelengkap kontak lama: rencana tidak menulis; --apply mengisi username", async () => {
+      const { lengkapiProfilKontakLama } = await import("../src/services/profilInstagram.js");
+      const [igA, igB, igC, igD, igE] = [igsidBaru(), igsidBaru(), igsidBaru(), igsidBaru(), igsidBaru()];
+      // Kontak ig: tanpa username dari uji lain ikut diproses skrip; dibuat berhasil supaya
+      // tidak memicu penghentian dini karena gagal beruntun.
+      tiruan.profil = { username: "lain_lain" };
+      const dicek = new Date(Date.now() - 48 * JAM);
+      await prisma.contact.createMany({
+        data: [
+          { phone: `ig:${igA}`, name: null },
+          { phone: `ig:${igB}`, name: "Pak Operator" },
+          { phone: `ig:${igC}`, name: null, igProfilPada: dicek }, // dulu gagal terbaca
+          { phone: `ig:${igD}`, name: null },
+          { phone: `ig:${igE}`, name: "@e_lama" }, // dulu diisi otomatis, sebelum username disimpan
+        ],
+      });
+      tiruan.profilPer.set(igE, { username: "e_baru" });
+      tiruan.profilPer.set(igA, { username: "a_baru" });
+      tiruan.profilPer.set(igB, { name: "Profil B", username: "b_baru" });
+      tiruan.profilPer.set(igC, { name: "Profil C" });
+      tiruan.profilPer.set(igD, null);
+
+      const rencana = await lengkapiProfilKontakLama({ apply: false });
+      expect(rencana.tanpaUsername).toBeGreaterThanOrEqual(4);
+      expect(rencana.belumDicek).toBeGreaterThanOrEqual(3);
+      expect(rencana.diproses).toBe(0);
+      expect(tiruan.panggilProfil).toBe(0);
+      expect((await kontakIg(igA)).igProfilPada).toBeNull();
+
+      const hasil = await lengkapiProfilKontakLama({ apply: true, jedaMs: 0 });
+      expect(hasil.diproses).toBeGreaterThanOrEqual(4);
+      expect(hasil.berhasil).toBeGreaterThanOrEqual(2);
+      expect(hasil.tanpaUsernameDariApi).toBeGreaterThanOrEqual(1);
+      expect(hasil.gagal).toBeGreaterThanOrEqual(1);
+      expect(await kontakIg(igA)).toMatchObject({ name: "@a_baru", igUsername: "a_baru" });
+      expect(await kontakIg(igB)).toMatchObject({ name: "Pak Operator", igUsername: "b_baru" });
+      const c = await kontakIg(igC);
+      expect(c).toMatchObject({ name: "Profil C", igUsername: null });
+      expect(c.igProfilPada!.getTime()).toBeGreaterThan(dicek.getTime());
+      const d = await kontakIg(igD);
+      expect(d.igUsername).toBeNull();
+      // Kegagalan di skrip tidak dicatat: kontak ini tetap dilengkapi otomatis saat DM lagi.
+      expect(d.igProfilPada).toBeNull();
+      // Nama "@lama" dari masa sebelum username disimpan ikut berganti.
+      expect(await kontakIg(igE)).toMatchObject({ name: "@e_baru", igUsername: "e_baru" });
+    });
+
+    it("pelengkap berhenti dini saat gagal beruntun (batas laju), tanpa menandai kontak", async () => {
+      const { lengkapiProfilKontakLama } = await import("../src/services/profilInstagram.js");
+      const ids = Array.from({ length: 16 }, () => igsidBaru());
+      await prisma.contact.createMany({ data: ids.map((id) => ({ phone: `ig:${id}` })) });
+      tiruan.profil = null; // semua gagal
+      const hasil = await lengkapiProfilKontakLama({ apply: true, jedaMs: 0 });
+      expect(hasil.berhentiDini).toBe(true);
+      expect(hasil.gagal).toBe(15);
+      const ditandai = await prisma.contact.count({
+        where: { phone: { in: ids.map((id) => `ig:${id}`) }, igProfilPada: { not: null } },
+      });
+      expect(ditandai).toBe(0);
+    });
+
+    it("rute kontak & percakapan mengembalikan igUsername, dan pencarian @username menemukannya", async () => {
+      const Fastify = (await import("fastify")).default;
+      const { contactRoutes } = await import("../src/routes/contacts.js");
+      const app = Fastify();
+      app.decorate("authenticate", async () => {});
+      app.decorate("requireWriter", async () => {});
+      await app.register(contactRoutes);
+      const igsid = igsidBaru();
+      const uname = `cari_${Math.random().toString(36).slice(2, 8)}`;
+      tiruan.profil = { username: uname };
+      await kirim("instagram", igsid, "halo");
+
+      const cari = encodeURIComponent(`@${uname}`);
+      const daftar = await app.inject({ method: "GET", url: `/api/contacts?page=1&search=${cari}` });
+      expect(daftar.json().items).toEqual([expect.objectContaining({ phone: `ig:${igsid}`, igUsername: uname })]);
+      const ekspor = await app.inject({ method: "POST", url: "/api/contacts/export", payload: { search: uname } });
+      expect(ekspor.json()).toEqual([expect.objectContaining({ igUsername: uname })]);
+      const obrolan = await app.inject({ method: "GET", url: `/api/conversations?page=1&search=${cari}` });
+      expect(obrolan.json().items).toEqual([expect.objectContaining({ phone: `ig:${igsid}`, igUsername: uname })]);
+      await app.close();
+    });
   });
 });

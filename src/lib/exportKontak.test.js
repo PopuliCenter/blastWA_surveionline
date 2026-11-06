@@ -39,10 +39,20 @@ describe("buildContactRows", () => {
       kontak({ attributes: { Provinsi: "Bali" } }),
       kontak({ phone: "628999", name: null, subscribed: false, attributes: { Umur: "30" } }),
     ]);
-    expect(header).toEqual(["Nomor", "Nama", "Berlangganan", "Sumber consent", "Opt-out", "Dibuat", "Provinsi", "Umur"]);
-    expect(rows[0]).toEqual(["628123456789", "Budi", "Ya", "impor", "", "2026-10-01", "Bali", ""]);
+    expect(header).toEqual([
+      "Nomor",
+      "Nama",
+      "Username IG",
+      "Berlangganan",
+      "Sumber consent",
+      "Opt-out",
+      "Dibuat",
+      "Provinsi",
+      "Umur",
+    ]);
+    expect(rows[0]).toEqual(["628123456789", "Budi", "", "Ya", "impor", "", "2026-10-01", "Bali", ""]);
     // Kontak kedua tidak punya Provinsi: selnya kosong, kolom berikutnya TIDAK bergeser.
-    expect(rows[1]).toEqual(["628999", "", "Tidak", "impor", "", "2026-10-01", "", "30"]);
+    expect(rows[1]).toEqual(["628999", "", "", "Tidak", "impor", "", "2026-10-01", "", "30"]);
   });
 
   it("nomor berawalan + tidak terbaca Excel sebagai rumus", () => {
@@ -54,13 +64,13 @@ describe("buildContactRows", () => {
   it("teks berawalan = tidak jadi rumus saat berkasnya dibuka orang lain", () => {
     // Nama kontak berasal dari impor pihak luar; sel berawalan "=" adalah jalan masuk
     // injeksi rumus ke komputer siapa pun yang membuka berkas hasil unduhan.
-    const { rows } = buildContactRows([kontak({ name: "=HYPERLINK(\"http://jahat\",\"klik\")" })]);
+    const { rows } = buildContactRows([kontak({ name: '=HYPERLINK("http://jahat","klik")' })]);
     expect(rows[0][1].startsWith("'=")).toBe(true);
   });
 
   it("tanggal disederhanakan jadi YYYY-MM-DD", () => {
     const { rows } = buildContactRows([kontak({ optOutAt: "2026-09-20T10:11:12.000Z" })]);
-    expect(rows[0][4]).toBe("2026-09-20");
+    expect(rows[0][5]).toBe("2026-09-20");
   });
 });
 
@@ -69,5 +79,18 @@ describe("exportKontakFilename", () => {
     const d = new Date(2026, 9, 4, 21, 37);
     expect(exportKontakFilename("xlsx", 5011, d)).toBe("kontak-5011-2026-10-04_2137.xlsx");
     expect(exportKontakFilename("csv", 12, d)).toBe("kontak-12-2026-10-04_2137.csv");
+  });
+});
+
+describe("buildContactRows — kontak Instagram", () => {
+  it("username IG ikut, dilindungi dari pembacaan rumus; kontak tanpa username kosong", () => {
+    const { header, rows } = buildContactRows([
+      { phone: "ig:17841400000000001", name: "@siti.ig", igUsername: "siti.ig", subscribed: true },
+      { phone: "6281234567890", name: "Budi", subscribed: true },
+    ]);
+    const i = header.indexOf("Username IG");
+    expect(rows[0][i]).toBe("'@siti.ig");
+    expect(rows[0][header.indexOf("Nama")]).toBe("'@siti.ig");
+    expect(rows[1][i]).toBe("");
   });
 });

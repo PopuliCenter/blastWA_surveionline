@@ -3,7 +3,7 @@ import { prisma } from "../db.js";
 import { getProvider } from "../providers/registry.js";
 import type { NormalizedInbound, SendResult } from "../providers/types.js";
 import { normalizePhone } from "../lib/phone.js";
-import { alamatInstagram, apakahInstagram, saluranDari } from "../lib/saluranKontak.js";
+import { alamatInstagram, apakahInstagram, idInstagram, saluranDari } from "../lib/saluranKontak.js";
 import { ALLOWED_FROM, MESSAGE_ALLOWED_FROM, counterField } from "../lib/deliveryStatus.js";
 import {
   isOptOutExact,
@@ -42,6 +42,7 @@ import {
 } from "../lib/lokasi.js";
 import { provinsiDariTitik } from "./petaProvinsi.js";
 import { botSedangDiam } from "./modeBot.js";
+import { perbaruiProfilInstagram, profilKedaluwarsa } from "./profilInstagram.js";
 import {
   validateAnswer,
   formatQuestion,
@@ -109,27 +110,6 @@ async function doOptIn(
 // dicatat (null) memakai mode surveinya, sama dengan lib/jalurRespons.ts labelAsal.
 function caraForm(r: { metode: string | null; survey: { mode: string } }): boolean {
   return (r.metode ?? (r.survey.mode === "flow" ? "form" : "chatbot")) === "form";
-}
-
-// Isi nama kontak Instagram dari API profil: nama, atau @username bila namanya kosong.
-// Best-effort: dibatasi waktu dan galatnya ditelan — nama hanya untuk tampilan, dan survei
-// tidak boleh tertahan karena API profil lambat atau izinnya belum disetujui. Hanya mengisi
-// kekosongan, dengan predikat yang sama seperti push name WhatsApp di handleMessage.
-const BATAS_WAKTU_PROFIL_MS = 3000;
-async function isiNamaInstagram(contactId: string, vendor: string, igsid: string): Promise<void> {
-  try {
-    const prov = getProvider(vendor);
-    if (typeof prov.ambilProfil !== "function") return;
-    let batas: ReturnType<typeof setTimeout> | undefined;
-    const profil = await Promise.race([
-      prov.ambilProfil(igsid),
-      new Promise<null>((r) => (batas = setTimeout(() => r(null), BATAS_WAKTU_PROFIL_MS))),
-    ]).finally(() => clearTimeout(batas));
-    const nama = profil?.name || (profil?.username ? `@${profil.username}` : undefined);
-    if (nama) await prisma.contact.updateMany({ where: { id: contactId, name: null }, data: { name: nama } });
-  } catch {
-    /* abaikan — lihat catatan di atas */
-  }
 }
 
 export async function handleInboundEvents(events: NormalizedInbound[]): Promise<void> {
@@ -268,8 +248,18 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     // yang datang bersamaan dari nomor yang sama tidak saling menimpa.
     await prisma.contact.updateMany({ where: { id: contact.id, name: null }, data: { name: ev.senderName } });
   }
-  // Webhook Instagram tidak membawa nama pengirim — diambil dari API profilnya.
-  if (instagram && !contact.name) await isiNamaInstagram(contact.id, ev.vendor, ev.from);
+  // Webhook Instagram tidak membawa nama pengirim — nama & username diambil dari API
+  // profilnya, sekali untuk kontak yang profilnya belum pernah dicek: kontak baru, dan
+  // kontak lama dari sebelum username disimpan (terlengkapi sendiri saat mereka DM lagi).
+  // Selanjutnya diperbarui paling sering sehari sekali — termasuk saat orangnya memulai survei
+  // baru, karena itu pun datang lewat pesan ini. Sengaja di sini, SEBELUM sesi berjalan
+  // diperiksa: menunggu API profil di antara pemeriksaan itu dan pembuatan respons memberi
+  // celah bagi pesan kedua untuk memulai survei yang sama dua kali.
+  if (instagram && profilKedaluwarsa(contact.igProfilPada))
+    await perbaruiProfilInstagram(contact.id, ev.vendor, ev.from, {
+      name: contact.name,
+      igUsername: contact.igUsername,
+    });
 
   // Tandai pesan dibaca (centang biru untuk pelanggan) — best-effort, tak memblokir alur.
   if (ev.messageId) {
@@ -778,7 +768,12 @@ async function startSurvey(
   // batas provinsinya diperiksa lagi begitu ia menjawab pertanyaan wilayah.
   const kontak = await prisma.contact.findUnique({
     where: { id: contactId },
-    select: { attributes: true, iklanId: true, iklanJudul: true, iklanPada: true },
+    select: {
+      attributes: true,
+      iklanId: true,
+      iklanJudul: true,
+      iklanPada: true,
+    },
   });
   const kodeProv = await provinsiAwal(survey.id, contactId, kontak?.attributes);
   const kuota = await bolehMulaiSurvei(survey.id, kodeProv);

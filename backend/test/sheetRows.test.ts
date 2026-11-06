@@ -15,6 +15,7 @@ import {
   cariBarisRespons,
   JUDUL_ASAL,
   JUDUL_LOKASI,
+  JUDUL_USERNAME_IG,
   TRAILING_HEADER,
 } from "../src/lib/sheetRows.js";
 import { judulYangKurang, kolomA1 } from "../src/services/sheetPush.js";
@@ -75,6 +76,7 @@ describe("sheetHeader & sheetRow", () => {
       "Jalur Masuk",
       "Metode",
       "ID Iklan",
+      "Username IG",
     ]);
   });
 
@@ -103,6 +105,7 @@ describe("sheetHeader & sheetRow", () => {
       5,
       "Normal",
       "5 menit",
+      "",
       "",
       "",
       "",
@@ -296,7 +299,7 @@ describe("kolom Lama Pengisian (Sheets)", () => {
       questions: [],
       answers: [],
     });
-    expect(row.slice(-7, -4)).toEqual([1.9, "Terlalu cepat", "1 menit 54 detik"]);
+    expect(row.slice(-8, -5)).toEqual([1.9, "Terlalu cepat", "1 menit 54 detik"]);
   });
 });
 
@@ -317,6 +320,7 @@ describe("susunBarisSheet — kolom buntut ditaruh menurut judulnya", () => {
     "Kata pemicu",
     "Form",
     "",
+    "@budi.ig",
   ];
   const awal = ["Nomor", "Nama", "Sumber Kontak", "Mulai", "Selesai", "Umur?"];
 
@@ -346,6 +350,9 @@ describe("susunBarisSheet — kolom buntut ditaruh menurut judulnya", () => {
 });
 
 describe("kolom lokasi (Sheets)", () => {
+  // Kolom sesudah Lama Pengisian pada survei tanpa lokasi: asal + Username IG. Dipotong
+  // untuk meniru tab dari sebelum kolom-kolom itu ada.
+  const SESUDAH_LAMA = JUDUL_ASAL.length + 1;
   const dasar = {
     phone: "6281",
     name: "Ani",
@@ -357,28 +364,29 @@ describe("kolom lokasi (Sheets)", () => {
   };
 
   it("paling belakang, setelah asesmen waktu — hanya bila diminta", () => {
-    expect(sheetHeader(questions).slice(-7)).toEqual([...TRAILING_HEADER, ...JUDUL_ASAL]);
-    expect(sheetHeader(questions, { lokasi: true }).slice(-9)).toEqual([
+    expect(sheetHeader(questions).slice(-8)).toEqual([...TRAILING_HEADER, ...JUDUL_ASAL, JUDUL_USERNAME_IG]);
+    expect(sheetHeader(questions, { lokasi: true }).slice(-10)).toEqual([
       ...TRAILING_HEADER,
       ...JUDUL_LOKASI,
       ...JUDUL_ASAL,
+      JUDUL_USERNAME_IG,
     ]);
     const baris = sheetRow({ ...dasar, lokasi: ["DKI Jakarta", "Beda provinsi"] });
     expect(baris).toHaveLength(sheetHeader(questions, { lokasi: true }).length);
-    expect(baris.slice(-6, -4)).toEqual(["DKI Jakarta", "Beda provinsi"]);
+    expect(baris.slice(-7, -5)).toEqual(["DKI Jakarta", "Beda provinsi"]);
     expect(sheetRow(dasar)).toHaveLength(sheetHeader(questions).length);
   });
 
   it("tab lama yang belum punya judul lokasi: nilai lokasi dilewati, tidak ada yang bergeser", () => {
     const judul = sheetHeader(questions, { lokasi: true });
-    const lama = sheetHeader(questions).slice(0, -JUDUL_ASAL.length);
+    const lama = sheetHeader(questions).slice(0, -SESUDAH_LAMA);
     const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
     expect(susunBarisSheet(judul, lama, nilai)).toEqual(nilai.slice(0, lama.length));
   });
 
   it("kolom tim di kanan Lama Pengisian tidak terisi lokasi; judul lokasi dicari menurut namanya", () => {
     const judul = sheetHeader(questions, { lokasi: true });
-    const aktual = [...sheetHeader(questions).slice(0, -JUDUL_ASAL.length), "Catatan QC", ...JUDUL_LOKASI];
+    const aktual = [...sheetHeader(questions).slice(0, -SESUDAH_LAMA), "Catatan QC", ...JUDUL_LOKASI];
     const nilai = sheetRow({ ...dasar, lokasi: ["Jawa Barat", "Sesuai"] });
     const baris = susunBarisSheet(judul, aktual, nilai);
     expect(baris[aktual.indexOf("Catatan QC")]).toBe("");
@@ -427,8 +435,8 @@ describe("kolom asal responden (Sheets)", () => {
     const baris = sheetRow({ ...dasar, lokasi: ["Bali", "Sesuai"] });
     const judul = sheetHeader(questions, { lokasi: true });
     expect(baris).toHaveLength(judul.length);
-    expect(baris.slice(-4)).toEqual(nilaiAsal);
-    expect(judul.slice(-4)).toEqual([...JUDUL_ASAL]);
+    expect(baris.slice(-5, -1)).toEqual(nilaiAsal);
+    expect(judul.slice(-5, -1)).toEqual([...JUDUL_ASAL]);
   });
 
   it("tab yang sudah punya kolom lokasi: asal ikut terisi menurut judul, lokasi tidak bergeser", () => {
@@ -443,5 +451,49 @@ describe("kolom asal responden (Sheets)", () => {
     const baris = susunBarisSheet(sheetHeader(questions), aktual, sheetRow(dasar));
     expect(baris[aktual.indexOf("Provinsi Lokasi")]).toBe("");
     expect(baris[aktual.indexOf("Metode")]).toBe("Form");
+  });
+});
+
+describe("kolom Username IG (Sheets)", () => {
+  const dasar = {
+    phone: "ig:8123456789",
+    name: "Siti",
+    consentSource: "instagram",
+    startedAt: new Date("2026-11-01T03:00:00Z"),
+    completedAt: new Date("2026-11-01T03:05:00Z"),
+    questions,
+    answers: [],
+    asal: { saluran: "Instagram", jalurMasuk: "Kata pemicu", metode: "Chatbot", iklanId: "" },
+  };
+
+  it("paling akhir untuk semua survei, berisi @username — kosong bila tak diketahui", () => {
+    for (const lokasi of [false, true]) {
+      const judul = sheetHeader(questions, { lokasi });
+      expect(judul.at(-1)).toBe(JUDUL_USERNAME_IG);
+      expect(judul.at(-2)).toBe("ID Iklan");
+      const baris = sheetRow({ ...dasar, igUsername: "siti.ig", ...(lokasi ? { lokasi: ["Bali", "Sesuai"] } : {}) });
+      expect(baris).toHaveLength(judul.length);
+      expect(baris.at(-1)).toBe("@siti.ig");
+    }
+    expect(sheetRow({ ...dasar, igUsername: null }).at(-1)).toBe("");
+    expect(sheetRow({ ...dasar, phone: "6281" }).at(-1)).toBe(""); // WhatsApp
+  });
+
+  it("tab lama yang sudah punya kolom asal: judulnya menyusul di kanan, tidak ada yang bergeser", () => {
+    const judul = sheetHeader(questions);
+    const lama = judul.slice(0, -1);
+    expect(judulYangKurang(lama, judul)).toEqual({ mulai: lama.length, nilai: [JUDUL_USERNAME_IG] });
+    const nilai = sheetRow({ ...dasar, igUsername: "siti.ig" });
+    // Sebelum judulnya tertulis: nilainya dilewati, kolom lain persis di tempatnya.
+    expect(susunBarisSheet(judul, lama, nilai)).toEqual(nilai.slice(0, -1));
+  });
+
+  it("kolom tim di kanan ID Iklan tidak terisi username; ditaruh menurut judulnya", () => {
+    const judul = sheetHeader(questions);
+    const aktual = [...judul.slice(0, -1), "Catatan QC", JUDUL_USERNAME_IG];
+    const baris = susunBarisSheet(judul, aktual, sheetRow({ ...dasar, igUsername: "siti.ig" }));
+    expect(baris[aktual.indexOf("Catatan QC")]).toBe("");
+    expect(baris[aktual.indexOf(JUDUL_USERNAME_IG)]).toBe("@siti.ig");
+    expect(baris[aktual.indexOf("Saluran")]).toBe("Instagram");
   });
 });

@@ -135,6 +135,7 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
         id: sc.contact.id,
         phone: sc.contact.phone,
         name: sc.contact.name,
+        igUsername: sc.contact.igUsername,
         subscribed: sc.contact.subscribed,
         optOutAt: sc.contact.optOutAt,
         attributes: sc.contact.attributes,

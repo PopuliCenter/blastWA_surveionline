@@ -269,7 +269,7 @@ export default function Contacts({ readOnly = false }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {labelNomor(c.phone)} • ditambah {fmtDate(c.createdAt)}
+                      {labelNomor(c.phone, c.igUsername)} • ditambah {fmtDate(c.createdAt)}
                       {/* Label yang sama dengan kolom "Sumber Kontak" di ekspor & Sheets. */}
                       {c.consentSource ? ` • ${contactSourceLabel(c.consentSource)}` : ""}
                     </div>
@@ -440,7 +440,7 @@ function ContactModal({ contact, onClose, onSave }) {
       {kontakIg ? (
         <Input
           label="Akun Instagram"
-          value={labelNomor(phone)}
+          value={labelNomor(phone, contact?.igUsername)}
           readOnly
           hint="Kontak dari DM Instagram dikenali lewat ID akunnya, bukan nomor HP — tidak bisa diubah."
         />

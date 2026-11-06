@@ -45,6 +45,7 @@ describe("buildResponseRows", () => {
       "Jalur Masuk",
       "Metode",
       "ID Iklan",
+      "Username IG",
       "Durasi (menit)",
       "Asesmen Durasi",
       "Lama Pengisian",
@@ -61,9 +62,10 @@ describe("buildResponseRows", () => {
   });
   it("baris cocok kolom; spasi dirapikan; sel kosong = ''", () => {
     // Durasi kosong: contoh ini tanpa stempel waktu, dan yang tak terhitung tidak dinilai.
-    const kosong4 = ["", "", "", ""]; // asal responden: contoh ini tidak membawanya
-    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", ...kosong4, "", "", "", "Bandung", "30", "Ya", ""]);
-    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", ...kosong4, "", "", "", "Jakarta", "", "Tidak", "mahal"]);
+    // Asal responden + Username IG: contoh ini tidak membawanya.
+    const kosong5 = ["", "", "", "", ""];
+    expect(rows[0]).toEqual(["628123", "Andi Susanto", "Impor", ...kosong5, "", "", "", "Bandung", "30", "Ya", ""]);
+    expect(rows[1]).toEqual(["628999", "", "Pesan masuk", ...kosong5, "", "", "", "Jakarta", "", "Tidak", "mahal"]);
   });
   it("opts.upper → HURUF KAPITAL", () => {
     const up = buildResponseRows(survey, responses, { upper: true });
@@ -71,6 +73,7 @@ describe("buildResponseRows", () => {
       "628123",
       "ANDI SUSANTO",
       "IMPOR",
+      "",
       "",
       "",
       "",
@@ -89,7 +92,7 @@ describe("buildResponseRows", () => {
     // sebagai data hilang; "(tidak diketahui)" menyatakan keadaannya dengan jujur.
     // Tanpa atribut → tak ada kolom pembobot, jadi tinggal 2 kolom pertanyaan yang kosong.
     const { rows: r } = buildResponseRows(survey, [{ phone: "628777", name: "Budi", answers: [] }]);
-    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", "", "", "", "", "", ""]);
+    expect(r[0]).toEqual(["628777", "Budi", "(tidak diketahui)", "", "", "", "", "", "", "", "", "", ""]);
   });
 });
 
@@ -190,7 +193,39 @@ describe("buildResponseRows — asal responden", () => {
   });
 });
 
+describe("buildResponseRows — Username IG", () => {
+  it("tepat setelah ID Iklan, berisi @username atau kosong", () => {
+    const { header, rows } = buildResponseRows({ title: "S", questions: [{ text: "Q1" }] }, [
+      { phone: "ig:8123456789", answers: [], saluran: "Instagram", igUsername: "siti.ig" },
+      { phone: "ig:8123456780", answers: [], saluran: "Instagram", igUsername: null },
+      { phone: "6281", answers: [], saluran: "WhatsApp" },
+    ]);
+    const i = header.indexOf("Username IG");
+    expect(header[i - 1]).toBe("ID Iklan");
+    expect(rows.map((r) => r[i])).toEqual(["@siti.ig", "", ""]);
+    expect(rows[0]).toHaveLength(header.length);
+  });
+});
+
 describe("barisUntukCsv", () => {
+  it("Username IG dipaksa teks agar '@' tidak terbaca sebagai rumus", () => {
+    const header = ["Nomor", "ID Iklan", "Username IG", "Q1"];
+    expect(barisUntukCsv(header, [["ig:1", "", "@siti.ig", "5"]])).toEqual([["ig:1", "", "\t@siti.ig", "5"]]);
+  });
+
+  it("Nama berawalan '@' (nama otomatis dari username) ikut dilindungi; nama biasa tidak", () => {
+    const header = ["Nomor", "Nama", "Username IG"];
+    expect(
+      barisUntukCsv(header, [
+        ["ig:1", "@siti.ig", "@siti.ig"],
+        ["628", "Siti", ""],
+      ]),
+    ).toEqual([
+      ["ig:1", "\t@siti.ig", "\t@siti.ig"],
+      ["628", "Siti", ""],
+    ]);
+  });
+
   it("hanya ID Iklan yang dipaksa teks; sel kosong tetap kosong", () => {
     const header = ["Nomor", "ID Iklan", "Q1"];
     expect(

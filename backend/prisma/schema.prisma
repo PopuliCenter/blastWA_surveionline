@@ -173,6 +173,10 @@ model Contact {
   iklanId       String?
   iklanJudul    String?
   iklanPada     DateTime?
+  // Profil Instagram (kontak "ig:"): username terakhir yang diketahui, dan kapan profil
+  // terakhir DICEK — berhasil atau tidak — supaya API yang gagal tidak dipanggil tiap pesan.
+  igUsername    String?
+  igProfilPada  DateTime?
   createdAt     DateTime         @default(now())
   segments      SegmentContact[]
   messages      Message[]

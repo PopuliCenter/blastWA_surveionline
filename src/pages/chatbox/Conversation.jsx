@@ -149,7 +149,7 @@ export function Conversation({ convo, onBack, onReload, onResolve, onShowDetails
               color: typing ? theme.green : sess.tone === "green" ? theme.green : theme.textMuted,
             }}
           >
-            {labelNomor(convo.phone)} • {typing ? "sedang menulis…" : sess.label}
+            {labelNomor(convo.phone, convo.igUsername)} • {typing ? "sedang menulis…" : sess.label}
           </div>
         </div>
         <div style={{ display: "flex", gap: 7, alignItems: "center" }}>

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "../../lib/api";
 import { Badge, Button, Loading, theme, fmtDate, useLoader } from "../../lib/ui";
 import { sessionInfo } from "./constants";
-import { ALAMAT_IG, apakahInstagram, labelNomor, namaAtauNomor } from "../../lib/labelNomor";
+import { ALAMAT_IG, apakahInstagram, labelNomor, labelUsername, namaAtauNomor } from "../../lib/labelNomor";
 
 // ── Panel detail (kanan) ────────────────────────────────────────────────────
 function DetailRow({ label, value }) {
@@ -60,7 +60,7 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft, readOnly = false
           {namaAtauNomor(convo).slice(0, 1).toUpperCase()}
         </div>
         <div style={{ fontWeight: 700, fontSize: 15, color: theme.text }}>{convo.name || "(tanpa nama)"}</div>
-        <div style={{ fontSize: 12.5, color: theme.textMuted }}>{labelNomor(convo.phone)}</div>
+        <div style={{ fontSize: 12.5, color: theme.textMuted }}>{labelNomor(convo.phone, convo.igUsername)}</div>
         <div style={{ marginTop: 8 }}>
           <Badge tone={sess.tone}>{sess.label}</Badge>
         </div>
@@ -82,6 +82,11 @@ export function DetailsPanel({ convo, onResolve, bare, onDraft, readOnly = false
         <DetailRow label="Vendor" value={convo.vendor ? convo.vendor.toUpperCase() : "—"} />
         {/* ID lengkap hanya di sini: di daftar cukup potongannya, tapi untuk mencocokkan dengan
             baris di Sheets/ekspor (kolom Nomor = ig:<ID>) operator perlu angka utuhnya. */}
+        {/* Username bisa diganti pemiliknya kapan saja (diperbarui saat survei baru dimulai),
+            jadi ID tetap ditampilkan di sampingnya sebagai pengenal yang stabil. */}
+        {apakahInstagram(convo.phone) && labelUsername(convo.igUsername) ? (
+          <DetailRow label="Username Instagram" value={labelUsername(convo.igUsername)} />
+        ) : null}
         {apakahInstagram(convo.phone) ? (
           <DetailRow label="ID Instagram" value={convo.phone.slice(ALAMAT_IG.length) || "—"} />
         ) : null}

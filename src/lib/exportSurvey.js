@@ -1,4 +1,5 @@
 // xlsx (SheetJS) dimuat lewat dynamic import saat ekspor saja (code-splitting).
+import { labelUsername } from "./labelNomor";
 
 // Atribut internal chat yang tidak ikut diekspor sebagai kolom pembobot
 export const INTERNAL_ATTRS = new Set(["chatResolved", "chatResolvedAt", "notes"]);
@@ -200,6 +201,9 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
     "Jalur Masuk",
     "Metode",
     "ID Iklan",
+    // "@username" kontak Instagram: kolom Nomor-nya hanya "ig:<ID>" yang tak terbaca manusia.
+    // Kosong untuk WhatsApp dan untuk kontak IG yang profilnya belum terbaca.
+    "Username IG",
     "Durasi (menit)",
     "Asesmen Durasi",
     "Lama Pengisian",
@@ -224,6 +228,7 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       clean(r.jalurMasuk ?? ""),
       clean(r.metode ?? ""),
       clean(r.iklanId ?? ""),
+      clean(labelUsername(r.igUsername)),
       // Angka, bukan teks: supaya bisa langsung disortir dan dirata-ratakan di spreadsheet.
       menit === null ? "" : bulatkanMenit(menit),
       clean(asesmenDurasi(menit, survey.aturanDurasi)),
@@ -254,9 +259,20 @@ export function exportFilename(survey, format, date = new Date()) {
 // CSV tidak punya tipe sel: Excel membaca ID iklan (17–18 digit) sebagai angka dan membulatkan
 // digit sesudah yang ke-15, sehingga iklan yang berbeda tampak sama. Tab di depan nilainya membuat
 // Excel membacanya sebagai teks. Tidak perlu di .xlsx, karena selnya memang bertipe teks.
+// Username IG ikut: teks berawalan "@" di CSV dibaca Excel sebagai rumus ("@siti.ig" → #NAME?).
+const KOLOM_TEKS_CSV = ["ID Iklan", "Username IG"];
+// Nama kontak Instagram sering berbentuk "@username" (diisi otomatis dari profil), dan Excel
+// membaca teks berawalan = + - @ di CSV sebagai rumus. Kolom Nama dilindungi hanya bila
+// awalannya memang berbahaya, supaya nama biasa tetap bersih.
+const KOLOM_TEKS_BILA_RUMUS = ["Nama"];
+const AWALAN_RUMUS = /^[=+\-@]/;
 export function barisUntukCsv(header, rows) {
-  const i = header.indexOf("ID Iklan");
-  return rows.map((baris) => baris.map((v, k) => (k === i && v ? `\t${v}` : v)));
+  const indeks = (daftar) => new Set(daftar.map((j) => header.indexOf(j)).filter((i) => i >= 0));
+  const selalu = indeks(KOLOM_TEKS_CSV);
+  const bilaRumus = indeks(KOLOM_TEKS_BILA_RUMUS);
+  return rows.map((baris) =>
+    baris.map((v, k) => (v && (selalu.has(k) || (bilaRumus.has(k) && AWALAN_RUMUS.test(String(v)))) ? `\t${v}` : v)),
+  );
 }
 
 // Ekspor respons survei → unduh file .xlsx/.csv.

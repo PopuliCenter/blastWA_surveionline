@@ -10,6 +10,18 @@ import { suppressNumber, unsuppressNumber, suppressedSince, suppressedAmong } fr
 import { logError } from "../lib/errorLog.js";
 import { env } from "../env.js";
 
+// Pencarian kontak: nomor/alamat, nama, dan username Instagram. Layar menampilkan kontak IG
+// sebagai "@username", jadi operator akan mengetik persis itu — awalan "@" dibuang untuk
+// kolom username, yang disimpan tanpa "@".
+function cariKontak(q: string) {
+  const username = q.replace(/^@+/, "");
+  return [
+    { phone: { contains: q } },
+    { name: { contains: q, mode: "insensitive" as const } },
+    ...(username ? [{ igUsername: { contains: username, mode: "insensitive" as const } }] : []),
+  ];
+}
+
 export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   app.addHook("onRequest", app.requireWriter); // viewer = hanya-baca
@@ -21,13 +33,12 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/contacts", async (req) => {
     const qs = req.query as { search?: string; page?: string; pageSize?: string };
     const q = qs.search?.trim();
-    const where = q
-      ? { OR: [{ phone: { contains: q } }, { name: { contains: q, mode: "insensitive" as const } }] }
-      : undefined;
+    const where = q ? { OR: cariKontak(q) } : undefined;
     const shape = (c: {
       id: string;
       phone: string;
       name: string | null;
+      igUsername: string | null;
       attributes: unknown;
       subscribed: boolean;
       optOutAt: Date | null;
@@ -37,6 +48,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       id: c.id,
       phone: c.phone,
       name: c.name,
+      igUsername: c.igUsername,
       attributes: c.attributes,
       subscribed: c.subscribed,
       optOutAt: c.optOutAt,
@@ -224,11 +236,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "input tidak valid" });
     const { ids, search } = parsed.data;
     const q = search?.trim();
-    const where = ids?.length
-      ? { id: { in: ids } }
-      : q
-        ? { OR: [{ phone: { contains: q } }, { name: { contains: q, mode: "insensitive" as const } }] }
-        : {};
+    const where = ids?.length ? { id: { in: ids } } : q ? { OR: cariKontak(q) } : {};
     // Batas atas supaya satu permintaan tidak menarik tabel sebesar apa pun ke memori.
     // Bila kena, klien diberi tahu — unduhan yang diam-diam terpotong jauh lebih buruk
     // daripada unduhan yang gagal.
@@ -240,6 +248,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       id: c.id,
       phone: c.phone,
       name: c.name,
+      igUsername: c.igUsername,
       attributes: c.attributes,
       subscribed: c.subscribed,
       optOutAt: c.optOutAt,
@@ -283,8 +292,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         ? {
             OR: [
               { text: { contains: q, mode: "insensitive" as const } },
-              { contact: { phone: { contains: q } } },
-              { contact: { name: { contains: q, mode: "insensitive" as const } } },
+              ...cariKontak(q).map((syarat) => ({ contact: syarat })),
             ],
           }
         : {}),
@@ -337,6 +345,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
           id: c.id,
           phone: c.phone,
           name: c.name,
+          igUsername: c.igUsername,
           lastMessage: c.messages[0]?.text ?? "",
           lastDirection: c.messages[0]?.direction ?? null,
           lastAt: c.messages[0]?.createdAt ?? c.createdAt,

@@ -206,7 +206,7 @@ async function main() {
       const r = await prisma.surveyResponse.findUnique({
         where: { id: job.data.responseId },
         include: {
-          contact: { select: { phone: true, name: true, consentSource: true } },
+          contact: { select: { phone: true, name: true, igUsername: true, consentSource: true } },
           survey: {
             select: {
               title: true,
@@ -253,6 +253,7 @@ async function main() {
             aturanDurasi: r.survey.aturanDurasi,
             lokasi: pakaiLokasi ? await nilaiLokasiSheet(r) : undefined,
             asal: labelAsal(r, r.survey.mode),
+            igUsername: r.contact.igUsername,
           }),
         ),
       );
