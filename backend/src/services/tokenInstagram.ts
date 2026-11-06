@@ -15,6 +15,9 @@ import { loadProviders } from "../providers/registry.js";
 // di blob kredensial (`tokenDiperpanjangPada`), bukan di kolom baru, karena hanya tugas
 // ini yang membacanya.
 //
+// Hanya untuk cara Instagram Login. Lewat Facebook Login (pageId terisi) yang dipakai token
+// Halaman, yang tidak kedaluwarsa dan tidak bisa diperpanjang di endpoint ini.
+//
 // Hanya kredensial yang tersimpan di basis data (halaman Akun Instagram). Token dari env
 // tidak bisa ditulis balik, jadi pemakainya bertanggung jawab memperbaruinya sendiri.
 
@@ -23,7 +26,8 @@ const SEHARI_MS = 24 * 60 * 60 * 1000;
 
 type Kredensial = Record<string, string>;
 
-export type HasilPerpanjang = "tidak-ada-kredensial" | "belum-waktunya" | "diperpanjang" | "gagal" | "berubah";
+export type HasilPerpanjang =
+  "tidak-ada-kredensial" | "tidak-perlu" | "belum-waktunya" | "diperpanjang" | "gagal" | "berubah";
 
 export async function perpanjangTokenInstagram(
   opsi: { sekarang?: Date; fetchFn?: typeof fetch } = {},
@@ -37,6 +41,7 @@ export async function perpanjangTokenInstagram(
   if (!baris?.credentials) return "tidak-ada-kredensial";
   const lama = decryptJson<Kredensial>(baris.credentials);
   if (!lama.accessToken) return "tidak-ada-kredensial";
+  if (lama.pageId) return "tidak-perlu";
 
   const terakhir = Date.parse(lama.tokenDiperpanjangPada ?? "");
   if (Number.isFinite(terakhir) && sekarang.getTime() - terakhir < JEDA_PERPANJANG_MS) return "belum-waktunya";

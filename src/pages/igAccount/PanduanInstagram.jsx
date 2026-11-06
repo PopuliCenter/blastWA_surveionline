@@ -1,7 +1,7 @@
 import { Card, Icon, theme } from "../../lib/ui";
 
-// Langkah menyambungkan DM Instagram lewat "Instagram API with Instagram Login" (tanpa
-// Halaman Facebook). Urutannya mengikuti docs/RENCANA-INSTAGRAM.md §3. Langkah App Review
+// Langkah menyambungkan DM Instagram lewat Facebook Login (akun IG terhubung ke Halaman
+// Facebook) — cara yang tersedia untuk aplikasi Meta baru. Urutannya mengikuti docs/RENCANA-INSTAGRAM.md §3. Langkah App Review
 // sengaja ditulis tegas: tanpa itu webhook hanya mengirim DM dari akun yang berperan di
 // aplikasi, sehingga uji coba tampak berhasil tapi DM responden sungguhan tidak pernah masuk.
 export function PanduanInstagram() {
@@ -21,61 +21,57 @@ export function PanduanInstagram() {
   };
   const steps = [
     [
-      "Siapkan akun Instagram profesional",
-      "Akun milik lembaga harus bertipe Bisnis atau Kreator (Pengaturan › Jenis akun dan alat). Akun pribadi tidak bisa memakai API pesan.",
-      null,
+      "Hubungkan akun Instagram ke Halaman Facebook",
+      "Akun Instagram lembaga harus akun profesional (Bisnis atau Kreator) dan terhubung ke Halaman Facebook Populi Center: Meta Business Suite › Settings › Accounts › Instagram accounts. Di aplikasi Instagram: Pengaturan › Pesan dan balasan cerita › Kontrol pesan › Alat yang terhubung › aktifkan Izinkan akses ke pesan.",
+      "https://business.facebook.com/settings",
     ],
     [
-      "Izinkan akses ke pesan",
-      "Di aplikasi Instagram: Pengaturan › Pesan dan balasan cerita › Kontrol pesan › Alat yang terhubung › aktifkan Izinkan akses ke pesan. Periksa lagi setelah menghubungkan ulang akun, karena pengaturan ini bisa mati sendiri.",
-      null,
-    ],
-    [
-      "Buat aplikasi Meta tipe Business dengan produk Instagram",
-      "developers.facebook.com › My Apps › Create App › tipe Business, hubungkan ke portofolio bisnis lembaga. Sebaiknya aplikasi terpisah dari aplikasi WhatsApp, supaya urusan App Review Instagram tidak ikut menyeret WhatsApp. Tambahkan produk Instagram › API setup with Instagram login.",
+      "Buat aplikasi Meta dengan use case Instagram",
+      "developers.facebook.com › My Apps › Create App › use case Manage messaging & content on Instagram › portofolio Populi Center. Sebaiknya aplikasi terpisah dari aplikasi WhatsApp. Lalu Use cases › Customize › API setup with Facebook login.",
       "https://developers.facebook.com/apps/",
     ],
     [
-      "Hubungkan akun & buat Access Token",
-      "Di API setup with Instagram login › Generate access tokens › Add account › masuk dengan akun Instagram tadi › Generate token. Salin token ke kolom Access Token, dan ID akun yang tertera ke kolom ID Akun Instagram. Token berlaku 60 hari; server memperpanjangnya otomatis selama masih berlaku.",
+      "Tambahkan izin pesan",
+      "Di Permissions and features, tambahkan instagram_basic, instagram_manage_messages, pages_manage_metadata, pages_show_list, dan business_management, serta fitur Business Asset User Profile Access (supaya nama dan username responden terbaca). Label di layar Meta bisa sedikit berbeda.",
       null,
     ],
     [
-      "Salin App Secret",
-      "Salin Instagram app secret yang tertera di halaman API setup with Instagram login ke kolom App Secret. Dipakai untuk memeriksa tanda tangan webhook dan permintaan penghapusan data dari Meta.",
+      "Ambil token Halaman, ID Halaman, dan App Secret",
+      "Di API setup with Facebook login › Generate access tokens: hubungkan Halaman Populi Center dan akun IG-nya, lalu salin token Halaman ke kolom Access Token. Token yang tidak kedaluwarsa bisa dibuat lewat Business Settings › Users › System users › Generate token (pilih aplikasi ini dan aset Halaman). ID Halaman: Business Settings › Accounts › Pages. App Secret: App settings › Basic.",
       null,
     ],
     [
       "Simpan kredensial di sini dulu",
-      "Isi Access Token, ID Akun Instagram, App Secret, dan Webhook Verify Token (klik Buat acak bila perlu) › Simpan Instagram. Server baru bisa menjawab verifikasi webhook dari Meta setelah Verify Token dan App Secret tersimpan.",
+      "Isi Access Token, ID Halaman Facebook, App Secret, dan Webhook Verify Token (klik Buat acak bila perlu) › Simpan Instagram. Server baru bisa menjawab verifikasi webhook dari Meta setelah Verify Token dan App Secret tersimpan.",
       null,
     ],
     [
       "Pasang webhook & berlangganan field messages",
-      "Configure webhooks › tempel Callback URL dan Verify Token yang SUDAH DISIMPAN › Verify and save › berlangganan field messages. Lalu nyalakan Webhook subscription untuk akun Instagram Anda di daftar akun: menyimpan callback saja belum membuat DM akun itu terkirim.",
+      "Configure webhooks › tempel Callback URL dan Verify Token yang SUDAH DISIMPAN › Verify and save › berlangganan field messages. Pastikan Halaman juga berlangganan aplikasi ini (Webhook subscription di daftar akun pada langkah token): tanpa itu DM tidak dikirim ke server.",
       null,
     ],
     [
       "Isi URL privasi",
-      "Di pengaturan Business login: isi Deauthorize callback URL dan Data deletion request URL dengan URL di kartu di samping, serta URL kebijakan privasi publik yang menjelaskan cara meminta penghapusan data.",
+      "App settings › Basic: Privacy Policy URL (halaman publik yang menyebut Instagram) dan Data deletion › callback URL. Deauthorize callback URL ada di pengaturan Facebook Login for Business. Pakai URL di kartu di samping.",
+      null,
+    ],
+    [
+      "Uji coba dengan akun berperan",
+      "Sebelum App Review, hanya DM dari orang yang punya peran di aplikasi (admin, developer, tester) yang masuk. Tambahkan peran di App roles › Roles, lalu kirim DM berisi kata pemicu survei dari akun Instagram orang itu: survei harus berjalan sebagai chatbot, dan responnya muncul di halaman Respons dengan Saluran Instagram.",
       null,
     ],
     [
       "App Review, lalu mode Live",
-      "Ajukan Advanced Access untuk izin instagram_business_manage_messages (perlu Business Verification dan video layar alur survei). Sebelum disetujui, hanya DM dari akun yang berperan di aplikasi yang masuk. Setelah disetujui, ubah aplikasi ke mode Live. Tinjauan bisa makan beberapa hari sampai beberapa minggu, jadi mulai jauh sebelum survei.",
-      null,
-    ],
-    [
-      "Uji coba",
-      "Dari akun Instagram LAIN, kirim DM berisi kata pemicu survei: survei harus berjalan sebagai chatbot dan responnya muncul di halaman Respons dengan Saluran Instagram.",
+      "Ajukan Advanced Access untuk instagram_manage_messages dan izin lain di langkah 3 (perlu Business Verification dan video layar alur survei). Setelah disetujui, ubah aplikasi ke mode Live. Tinjauan bisa makan beberapa hari sampai beberapa minggu, jadi mulai jauh sebelum survei.",
       null,
     ],
   ];
   return (
     <Card title="Panduan Menyambungkan Instagram" style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 12.5, color: theme.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
-        <strong style={{ color: theme.text }}>Perlu disiapkan:</strong> akun Instagram profesional milik lembaga, akses
-        ke portofolio bisnis Meta (Business Verification), dan kebijakan privasi publik. Ikuti langkah berurutan.
+        <strong style={{ color: theme.text }}>Perlu disiapkan:</strong> akun Instagram profesional milik lembaga yang
+        terhubung ke Halaman Facebook, akses ke portofolio bisnis Meta (Business Verification), dan kebijakan privasi
+        publik. Ikuti langkah berurutan.
       </div>
       <div style={{ display: "grid", gap: 13 }}>
         {steps.map((s, i) => (

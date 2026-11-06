@@ -17,7 +17,7 @@ import {
 import { CopyField } from "./waAccount/CopyField";
 import { PanduanInstagram } from "./igAccount/PanduanInstagram";
 
-const FORM_KOSONG = { accessToken: "", igUserId: "", appSecret: "", verifyToken: "" };
+const FORM_KOSONG = { accessToken: "", pageId: "", igUserId: "", appSecret: "", verifyToken: "" };
 
 // Verify Token hanya perlu sama persis di dua tempat (di sini dan di Meta), bukan diingat
 // orang. Dibuat acak supaya tidak ada yang memakai kata mudah ditebak seperti "populi".
@@ -200,14 +200,21 @@ export default function InstagramAccount() {
             value={form.accessToken}
             onChange={(e) => setForm({ ...form, accessToken: e.target.value })}
             placeholder={placeholderTersimpan || "IGAA..."}
-            hint="API setup with Instagram login › Generate access tokens. Berlaku 60 hari, diperpanjang otomatis oleh server."
+            hint="Token Halaman Facebook yang terhubung ke akun IG (API setup with Facebook login, atau system user di Business Settings)."
+          />
+          <Input
+            label="ID Halaman Facebook"
+            value={form.pageId}
+            onChange={(e) => setForm({ ...form, pageId: e.target.value })}
+            placeholder={placeholderTersimpan || "mis. 102345678901234"}
+            hint="Wajib untuk cara Facebook login: pesan dikirim lewat Halaman ini. Business Settings › Accounts › Pages."
           />
           <Input
             label="ID Akun Instagram"
             value={form.igUserId}
             onChange={(e) => setForm({ ...form, igUserId: e.target.value })}
             placeholder={placeholderTersimpan || "mis. 17841400000000000"}
-            hint="Tertera di samping akun pada halaman yang sama. Boleh kosong — server memakai akun pemilik token."
+            hint="Boleh kosong. Bila diisi, DM untuk akun IG lain di aplikasi yang sama diabaikan. Business Settings › Accounts › Instagram accounts."
           />
           <PasswordInput
             noAutofill
@@ -215,7 +222,7 @@ export default function InstagramAccount() {
             value={form.appSecret}
             onChange={(e) => setForm({ ...form, appSecret: e.target.value })}
             placeholder={placeholderTersimpan}
-            hint="Instagram app secret. Wajib: tanpa ini webhook dan permintaan hapus data dari Meta ditolak."
+            hint="App settings › Basic › App secret. Wajib: tanpa ini webhook dan permintaan hapus data dari Meta ditolak."
           />
           <PasswordInput
             noAutofill

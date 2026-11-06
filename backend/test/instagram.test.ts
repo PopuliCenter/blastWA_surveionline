@@ -282,6 +282,25 @@ describe("sendText Instagram", () => {
     });
   });
 
+  it("lewat Halaman Facebook: graph.facebook.com/{PAGE_ID}/messages, profil di host yang sama", async () => {
+    const url: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (u: string) => {
+        url.push(u);
+        return new Response(JSON.stringify({ message_id: "m", name: "Siti", username: "siti" }), { status: 200 });
+      }),
+    );
+    const a = adaptor({ pageId: "1122", igUserId: AKUN });
+    expect(a.lewatHalaman()).toBe(true);
+    await a.sendText({ to: `ig:${ORANG}`, text: "halo" });
+    await a.ambilProfil(ORANG);
+    expect(url).toEqual([
+      "https://graph.facebook.com/v25.0/1122/messages",
+      `https://graph.facebook.com/v25.0/${ORANG}?fields=name,username`,
+    ]);
+  });
+
   it("teks panjang dikirim berurutan; vendorMessageId = potongan terakhir", async () => {
     let n = 0;
     const isi: string[] = [];

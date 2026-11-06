@@ -8,7 +8,7 @@ Tujuan: menjawab apakah menu **Instagram** (sekarang "Segera hadir") bisa disamb
 >
 > Keadaan per 6 November 2026. Dokumentasi Meta sering berubah, jadi cek ulang tautan di bagian Sumber sebelum mulai.
 >
-> **Status:** tahap 1 (MVP DM) sudah dibangun di aplikasi — halaman **Akun Instagram**, webhook `/webhook/instagram`, URL privasi `/webhook/instagram/hapus-data` dan `/webhook/instagram/deauthorize`, perpanjangan token otomatis, dan penandaan Sumber Kontak / Saluran "Instagram". Yang tersisa ada di sisi Meta (§3): aplikasi, izin, App Review, mode Live. Tahap 2 dan 3 belum.
+> **Status:** tahap 1 (MVP DM) sudah dibangun di aplikasi, tersambung lewat **Facebook Login** (akun IG terhubung ke Halaman Facebook; izin `instagram_basic`, `instagram_manage_messages`, `pages_manage_metadata`) — halaman **Akun Instagram**, webhook `/webhook/instagram`, URL privasi `/webhook/instagram/hapus-data` dan `/webhook/instagram/deauthorize`, perpanjangan token otomatis, dan penandaan Sumber Kontak / Saluran "Instagram". Yang tersisa ada di sisi Meta (§3): aplikasi, izin, App Review, mode Live. Tahap 2 dan 3 belum.
 
 ---
 
@@ -165,7 +165,7 @@ Perkiraan total MVP (baris Penyambung Instagram sampai Privasi Meta, tanpa Setup
 
 | Keputusan | Pilihan | Saran kami |
 |---|---|---|
-| Cara login | **Instagram Login** (tanpa Halaman FB, token 60 hari) · **Halaman Facebook** (perlu Halaman, token Halaman, membuka jalan ke Messenger) · **Unified Login** (disarankan Meta, rinciannya masih tipis) | Instagram Login untuk MVP: paling sederhana untuk satu akun sendiri, dan pindah setup nanti sebagian besar hanya soal host dan token **(belum pasti)**. Label "untuk integrasi yang sudah ada" bisa berarti jalur ini akan dipensiunkan |
+| Cara login | **Instagram Login** (tanpa Halaman FB, token 60 hari) · **Halaman Facebook** (perlu Halaman, token Halaman, membuka jalan ke Messenger) · **Unified Login** (disarankan Meta, rinciannya masih tipis) | **Diputuskan: Facebook Login (Halaman).** Per November 2026 menu "API setup with Instagram login" tidak lagi muncul untuk aplikasi baru, dan Unified Login belum terdokumentasi. Aplikasi mendukung keduanya: kolom ID Halaman terisi = Facebook Login (graph.facebook.com, token Halaman, tanpa perpanjangan); kosong = Instagram Login |
 | Tanya nomor HP di survei IG? | Ya (cegah ganda, tambah data pribadi dan friksi) · Tidak (tandai calon ganda saat audit) | Tergantung tujuan: bila menggabungkan sampel WA dan IG untuk satu angka, tanyakan; bila IG dianalisis terpisah, tidak perlu |
 | Aplikasi Meta terpisah? | Satu aplikasi dengan WhatsApp · Aplikasi khusus Instagram | Aplikasi terpisah, supaya App Review Instagram tidak berisiko untuk WA produksi |
 | Ikut tahap 2 (komentar)? | Ajukan izin komentar sekaligus · Nanti | Sekaligus, karena App Review memakan waktu kalender yang sama |

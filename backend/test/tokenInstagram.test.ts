@@ -93,6 +93,13 @@ describe("perpanjangTokenInstagram", () => {
     expect(kredensial().accessToken).toBe("baru");
   });
 
+  it("lewat Halaman Facebook (token Halaman) → tidak diperpanjang", async () => {
+    simpan({ accessToken: "lama", pageId: "1122" });
+    const f = jawab({});
+    expect(await perpanjangTokenInstagram({ sekarang: SEKARANG, fetchFn: f })).toBe("tidak-perlu");
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it("Meta menolak → gagal, token lama tetap", async () => {
     simpan({ accessToken: "lama" });
     const f = jawab({ error: { message: "Session has expired", code: 190 } }, 400);

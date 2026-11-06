@@ -5,8 +5,12 @@ import { idInstagram } from "../lib/saluranKontak.js";
 import { rahasiaCocok } from "../lib/rahasia.js";
 import type { MessagingProvider, NormalizedInbound, SendResult, SendTemplateInput, WebhookRequest } from "./types.js";
 
-// Penyambung DM Instagram lewat "Instagram API with Instagram Login" (graph.instagram.com).
-// Lihat docs/RENCANA-INSTAGRAM.md.
+// Penyambung DM Instagram. Dua cara sambung, dipilih dari ada-tidaknya `pageId`:
+//  - Facebook Login (pageId terisi): akun IG terhubung ke Halaman Facebook; kirim lewat
+//    graph.facebook.com/{PAGE_ID}/messages dengan token Halaman. Inilah cara yang tersedia
+//    untuk aplikasi Meta baru — menu "API setup with Instagram login" sudah tidak muncul.
+//  - Instagram Login (pageId kosong): graph.instagram.com dengan token akun IG (60 hari).
+// Bentuk webhook dan User Profile API sama untuk keduanya. Lihat docs/RENCANA-INSTAGRAM.md.
 //
 // Yang SENGAJA tidak ada: sendFlow (Flow hanya ada di WhatsApp — karena metode inilah yang
 // tidak ada, mesin survei otomatis memakai mode chatbot untuk Instagram), sendLocationRequest
@@ -19,6 +23,8 @@ export type InstagramConfig = {
   // ID akun Instagram profesional. Boleh kosong: token Instagram Login milik akun itu
   // sendiri, jadi "me" menunjuk akun yang sama.
   igUserId?: string;
+  // ID Halaman Facebook yang terhubung ke akun IG. Terisi = cara Facebook Login.
+  pageId?: string;
   appSecret?: string;
   verifyToken?: string;
   graphVersion: string;
@@ -43,13 +49,23 @@ export class InstagramAdapter implements MessagingProvider {
     return Boolean(this.cfg.appSecret && this.cfg.verifyToken);
   }
 
+  // Lewat Halaman Facebook? Token Halaman ditolak graph.instagram.com, dan sebaliknya.
+  lewatHalaman(): boolean {
+    return Boolean(this.cfg.pageId);
+  }
+
   private base(): string {
-    return `https://graph.instagram.com/${this.cfg.graphVersion}`;
+    const host = this.lewatHalaman() ? "graph.facebook.com" : "graph.instagram.com";
+    return `https://${host}/${this.cfg.graphVersion}`;
+  }
+
+  private jalurKirim(): string {
+    return this.lewatHalaman() ? `/${this.cfg.pageId}/messages` : `/${this.cfg.igUserId || "me"}/messages`;
   }
 
   private async kirimSatu(to: string, text: string): Promise<SendResult> {
     try {
-      const res = await fetch(`${this.base()}/${this.cfg.igUserId || "me"}/messages`, {
+      const res = await fetch(`${this.base()}${this.jalurKirim()}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${this.cfg.accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ recipient: { id: to }, message: { text } }),

@@ -36,6 +36,7 @@ function buildFromEnv(): Record<string, MessagingProvider> {
     instagram: new InstagramAdapter({
       accessToken: env.INSTAGRAM_ACCESS_TOKEN,
       igUserId: env.INSTAGRAM_USER_ID,
+      pageId: env.INSTAGRAM_PAGE_ID,
       appSecret: env.INSTAGRAM_APP_SECRET,
       verifyToken: env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
       graphVersion: env.META_GRAPH_VERSION,
@@ -77,6 +78,7 @@ export async function loadProviders(): Promise<void> {
         providers.instagram = new InstagramAdapter({
           accessToken: creds.accessToken ?? env.INSTAGRAM_ACCESS_TOKEN,
           igUserId: creds.igUserId ?? env.INSTAGRAM_USER_ID,
+          pageId: creds.pageId ?? env.INSTAGRAM_PAGE_ID,
           appSecret: creds.appSecret ?? env.INSTAGRAM_APP_SECRET,
           verifyToken: creds.verifyToken ?? env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN,
           graphVersion: creds.graphVersion ?? env.META_GRAPH_VERSION,

@@ -63,6 +63,8 @@ const schema = z.object({
   // Versi Graph mengikuti META_GRAPH_VERSION.
   INSTAGRAM_ACCESS_TOKEN: z.string().optional(),
   INSTAGRAM_USER_ID: z.string().optional(),
+  // ID Halaman Facebook — terisi berarti tersambung lewat Facebook Login (providers/instagram.ts).
+  INSTAGRAM_PAGE_ID: z.string().optional(),
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
 
