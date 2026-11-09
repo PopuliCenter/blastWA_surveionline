@@ -50,6 +50,17 @@ function Panel({ title, note, children }) {
  * Pertanyaan bisa banyak dan pengaturannya bercabang, jadi butuh ruang: kolom utama
  * untuk isi survei, kolom samping untuk pengaturan, dan bilah simpan yang selalu terlihat.
  */
+// Contoh pembuka untuk responden Instagram (hanya placeholder, tidak tersimpan): di sana survei
+// selalu chatbot, jadi cara menjawabnya perlu dijelaskan di pesan pertama.
+const CONTOH_PEMBUKA_IG = [
+  "Halo! Terima kasih mau ikut survei Populi Center (±5 menit).",
+  "",
+  "Cara mengisi:",
+  "• Pertanyaan dikirim satu per satu — balas tiap pesan.",
+  "• Untuk pilihan, balas dengan NOMOR pilihannya (mis. 2).",
+  "• Ketik BERHENTI kapan saja untuk berhenti.",
+].join("\n");
+
 export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   const isMobile = useIsMobile();
   const [title, setTitle] = useState(survey?.title || "");
@@ -69,6 +80,9 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
   const [privacyUrl, setPrivacyUrl] = useState(survey?.privacyUrl || "");
   const [bannerUrl, setBannerUrl] = useState(survey?.bannerUrl || "");
   const [closingMessage, setClosingMessage] = useState(survey?.closingMessage || "");
+  // Kosong = Instagram memakai deskripsi & kata penutup yang sama dengan WhatsApp.
+  const [pembukaInstagram, setPembukaInstagram] = useState(survey?.pembukaInstagram || "");
+  const [penutupInstagram, setPenutupInstagram] = useState(survey?.penutupInstagram || "");
   // Kosong = teks bawaan backend. Sengaja TIDAK diisi teks bawaan sebagai nilai awal:
   // survei lama akan menyimpan salinannya, lalu perbaikan teks bawaan tak lagi berlaku.
   const [pesanKuotaPenuh, setPesanKuotaPenuh] = useState(survey?.pesanKuotaPenuh || "");
@@ -160,6 +174,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       privacyUrl,
       bannerUrl,
       closingMessage,
+      pembukaInstagram,
+      penutupInstagram,
       pesanKuotaPenuh,
       pesanSurveiBerakhir,
       mintaLokasi,
@@ -183,6 +199,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
       privacyUrl,
       bannerUrl,
       closingMessage,
+      pembukaInstagram,
+      penutupInstagram,
       pesanKuotaPenuh,
       pesanSurveiBerakhir,
       mintaLokasi,
@@ -277,6 +295,8 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
         privacyUrl: mode === "flow" ? privacyUrl.trim() || null : null,
         bannerUrl: bannerUrl.trim() || null, // berlaku di kedua mode
         closingMessage: closingMessage.trim() || null,
+        pembukaInstagram: pembukaInstagram.trim() || null,
+        penutupInstagram: penutupInstagram.trim() || null,
         pesanKuotaPenuh: pesanKuotaPenuh.trim() || null,
         pesanSurveiBerakhir: pesanSurveiBerakhir.trim() || null,
         mintaLokasi,
@@ -766,6 +786,31 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
               onChange={(e) => setClosingMessage(e.target.value)}
               placeholder={PENUTUP_BAWAAN}
               style={{ minHeight: 70 }}
+            />
+          </Panel>
+
+          <Panel
+            title="Pesan khusus Instagram"
+            note="Responden Instagram selalu mengisi sebagai chatbot (tanya-jawab per pesan), jadi petunjuknya bisa dibuat lebih rinci. Kosongkan untuk memakai Deskripsi dan Kata penutup yang sama dengan WhatsApp."
+          >
+            <Textarea
+              label="Pembuka Instagram"
+              value={pembukaInstagram}
+              onChange={(e) => setPembukaInstagram(e.target.value)}
+              placeholder={CONTOH_PEMBUKA_IG}
+              maxLength={2000}
+              style={{ minHeight: 120 }}
+              hint="Dikirim bersama pertanyaan pertama. Pengganti Deskripsi untuk responden Instagram."
+            />
+            <div style={{ height: 12 }} />
+            <Textarea
+              label="Penutup Instagram"
+              value={penutupInstagram}
+              onChange={(e) => setPenutupInstagram(e.target.value)}
+              placeholder={closingMessage.trim() || PENUTUP_BAWAAN}
+              maxLength={2000}
+              style={{ minHeight: 70 }}
+              hint="Dikirim saat responden Instagram menyelesaikan survei. Pengganti Kata penutup."
             />
           </Panel>
 

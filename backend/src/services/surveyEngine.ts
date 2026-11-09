@@ -715,6 +715,7 @@ type SurveyLite = {
   flowCta: string | null;
   bannerUrl: string | null; // gambar pembuka (header pesan flow / caption di mode chat)
   pesanKuotaPenuh: string | null; // balasan saat kuota penuh (null = teks umum bawaan)
+  pembukaInstagram: string | null; // pengganti description untuk responden Instagram
   questions: QLite[];
 };
 
@@ -871,7 +872,11 @@ async function startSurvey(
   });
   await habiskanIklan(contactId, kontak?.iklanPada);
   const first = formatQuestion(survey.questions[0]!);
-  const intro = survey.description ? `${survey.description}\n\n${first}` : first;
+  // Responden Instagram boleh mendapat pembuka sendiri: di sana survei selalu chatbot, dan
+  // petunjuk menjawabnya perlu lebih rinci daripada deskripsi untuk formulir WhatsApp.
+  const pembuka =
+    apakahInstagram(phone) && survey.pembukaInstagram?.trim() ? survey.pembukaInstagram : survey.description;
+  const intro = pembuka ? `${pembuka}\n\n${first}` : first;
 
   // Banner: kirim sebagai gambar ber-caption supaya tetap SATU pesan (bukan gambar
   // lalu teks terpisah). Vendor tanpa dukungan gambar → jatuh ke teks biasa.
@@ -1131,6 +1136,7 @@ async function advanceSurvey(
   survei: {
     id: string;
     closingMessage: string | null;
+    penutupInstagram: string | null;
     pesanKuotaPenuh: string | null;
     pesanSurveiBerakhir: string | null;
     mintaLokasi: boolean;
@@ -1259,6 +1265,7 @@ async function kirimPenutup(
   responseId: string,
   survei: {
     closingMessage: string | null;
+    penutupInstagram: string | null;
     mintaLokasi: boolean;
     pesanMintaLokasi: string | null;
     lokasiPesanTerpisah: boolean;
@@ -1268,7 +1275,9 @@ async function kirimPenutup(
   // lewat reply(). Biasanya tidak pernah terjadi saat bot diam (penutup hanya untuk respons
   // yang DITERIMA), kecuali formulir lama yang dipulihkan setelah semua survei ditutup.
   if (await botSedangDiam()) return;
-  const penutup = closingText(survei.closingMessage);
+  const penutup = closingText(
+    apakahInstagram(phone) && survei.penutupInstagram?.trim() ? survei.penutupInstagram : survei.closingMessage,
+  );
   const provider = getProvider(vendor);
   // Instagram tidak bisa membagikan lokasi sama sekali (lampiran lokasi tidak dikirim ke
   // webhook), jadi permintaannya — termasuk petunjuk lewat lampiran — tidak dikirim, dan

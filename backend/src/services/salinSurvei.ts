@@ -58,6 +58,8 @@ export async function gandakanSurvei(id: string) {
           privacyUrl: asli.privacyUrl,
           bannerUrl: asli.bannerUrl,
           closingMessage: asli.closingMessage,
+          pembukaInstagram: asli.pembukaInstagram,
+          penutupInstagram: asli.penutupInstagram,
           pesanKuotaPenuh: asli.pesanKuotaPenuh,
           pesanSurveiBerakhir: asli.pesanSurveiBerakhir,
           mintaLokasi: asli.mintaLokasi,

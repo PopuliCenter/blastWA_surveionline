@@ -71,6 +71,11 @@ model Survey {
   privacyUrl      String? // tautan kebijakan privasi (EmbeddedLink di layar pertama flow)
   bannerUrl       String? // gambar banner di pesan pembuka survei (header pesan Flow / caption di mode chat)
   closingMessage  String? // kata penutup custom saat survei selesai (kosong = pakai default)
+  // Pembuka & penutup khusus responden Instagram. Di sana survei selalu berjalan sebagai
+  // chatbot, jadi petunjuknya perlu lebih rinci daripada formulir WhatsApp. Kosong = memakai
+  // description / closingMessage yang sama dengan WhatsApp.
+  pembukaInstagram String?
+  penutupInstagram String?
   // Batas jumlah responden SELESAI untuk seluruh survei. null = tanpa batas.
   // Begitu tercapai, survei berhenti menerima responden baru — pemicu ditolak halus dan
   // blast melewati sisa penerimanya. Ini pengendali biaya: tiap responden berbiaya pesan.

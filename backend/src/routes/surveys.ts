@@ -51,6 +51,8 @@ export const surveySchema = z.object({
   privacyUrl: z.string().url().or(z.literal("")).optional().nullable(),
   bannerUrl: z.string().url().or(z.literal("")).optional().nullable(),
   closingMessage: z.string().max(2000).optional().nullable(),
+  pembukaInstagram: z.string().max(2000).optional().nullable(),
+  penutupInstagram: z.string().max(2000).optional().nullable(),
   // Wajib terdaftar di sini: z.object membuang kunci yang tak dikenal TANPA galat, jadi
   // tanpa baris ini builder menyimpan dengan HTTP 200 dan pesannya tak pernah tersimpan.
   pesanKuotaPenuh: z.string().max(1000).optional().nullable(),

@@ -338,6 +338,36 @@ describe.skipIf(!URL_UJI)("survei lewat DM Instagram", () => {
     expect(terkirim.map((k) => k.text)).not.toContain(engine.BALASAN_BAWAAN_IG);
   });
 
+  it("pembuka & penutup khusus Instagram; WhatsApp tetap memakai deskripsi & kata penutup umum", async () => {
+    const { s, kata } = await survei({ mode: "chat" });
+    await prisma.survey.update({
+      where: { id: s.id },
+      data: {
+        description: "Deskripsi umum",
+        closingMessage: "Penutup umum",
+        pembukaInstagram: "Pembuka IG: balas dengan nomor pilihan.",
+        penutupInstagram: "Penutup IG: terima kasih!",
+      },
+    });
+    const ig = igsidBaru();
+    await kirim("instagram", ig, kata);
+    await kirim("instagram", ig, "Siti");
+    await kirim("instagram", ig, "Bandung");
+    const keIg = terkirim.filter((k) => k.vendor === "instagram").map((k) => k.text ?? "");
+    expect(keIg[0]!.startsWith("Pembuka IG: balas dengan nomor pilihan.\n\n")).toBe(true);
+    expect(keIg.some((t) => t.includes("Deskripsi umum"))).toBe(false);
+    expect(keIg).toContain("Penutup IG: terima kasih!");
+
+    const sebelum = terkirim.length;
+    const wa = nomorBaru();
+    await kirim("meta", wa, kata);
+    await kirim("meta", wa, "Budi");
+    await kirim("meta", wa, "Medan");
+    const keWa = terkirim.slice(sebelum).map((k) => k.text ?? "");
+    expect(keWa[0]!.startsWith("Deskripsi umum\n\n")).toBe(true);
+    expect(keWa).toContain("Penutup umum");
+  });
+
   it("iklan Instagram → Jalur Masuk Iklan", async () => {
     const { s, kata } = await survei({ mode: "chat" });
     await kirim("instagram", igsidBaru(), kata, { iklan: IKLAN });
