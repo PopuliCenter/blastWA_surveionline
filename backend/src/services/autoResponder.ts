@@ -4,7 +4,7 @@ import { env } from "../env.js";
 import { generateReply, type AiMessage } from "../lib/ai.js";
 import { decideAiReply, AI_QUOTA_WINDOW_MS, AI_QUOTA_REACHED_REPLY } from "../lib/aiLimits.js";
 import { logError } from "../lib/errorLog.js";
-import { buildContactFacts } from "../lib/aiContext.js";
+import { buildContactFacts, samarkanNomor } from "../lib/aiContext.js";
 import { ALASAN_DITUTUP, statusKuotaSurveiAktif } from "./kuotaSurvei.js";
 
 // Mencari balasan otomatis untuk pesan masuk yang TIDAK terkait survei.
@@ -122,7 +122,9 @@ export async function findAutoResponse(
     })),
   );
 
-  // Konteks: ambil beberapa pesan terakhir kontak ini, urut lama→baru.
+  // Konteks: ambil beberapa pesan terakhir kontak ini, urut lama→baru. Nomor yang tertulis
+  // di isi pesan (jawaban pertanyaan nomor HP / e-wallet survei) disamarkan dulu — kebijakan
+  // privasi menjanjikan nomor telepon tidak ikut dikirim ke penyedia AI.
   const history = await prisma.message.findMany({
     where: { contactId },
     orderBy: { createdAt: "desc" },
@@ -131,9 +133,9 @@ export async function findAutoResponse(
   const messages: AiMessage[] = history
     .reverse()
     .filter((m) => m.text)
-    .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.text as string }));
+    .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", content: samarkanNomor(m.text as string) }));
   if (!messages.length || messages[messages.length - 1]!.role !== "user") {
-    messages.push({ role: "user", content: trimmed });
+    messages.push({ role: "user", content: samarkanNomor(trimmed) });
   }
 
   try {

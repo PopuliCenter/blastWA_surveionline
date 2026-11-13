@@ -19,6 +19,8 @@ import {
 import {
   QTYPE_OPTIONS,
   HAS_CHOICES,
+  SALURAN_OPTIONS,
+  denganSaluran,
   PESAN_KUOTA_PENUH_BAWAAN,
   PESAN_SURVEI_BERAKHIR_BAWAAN,
   PESAN_MINTA_LOKASI_BAWAAN,
@@ -155,6 +157,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
     minLabel: "",
     maxLabel: "",
     choices: "",
+    saluran: "semua",
   });
   const setCk = (k, v) => setC({ ...c, [k]: v });
 
@@ -248,11 +251,22 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
           .map((s) => s.trim())
           .filter(Boolean),
       };
+    options = denganSaluran(options, c.saluran);
     setQuestions([
       ...questions,
       { id: `t${Date.now()}`, text: c.text.trim(), type: c.type, required: c.required, options },
     ]);
-    setC({ text: "", type: "text", required: true, min: 1, max: 5, minLabel: "", maxLabel: "", choices: "" });
+    setC({
+      text: "",
+      type: "text",
+      required: true,
+      min: 1,
+      max: 5,
+      minLabel: "",
+      maxLabel: "",
+      choices: "",
+      saluran: "semua",
+    });
   };
 
   // Susunan daftar berubah → aturan percabangan ikut dipetakan ulang (lihat daftarPertanyaan.js).
@@ -456,6 +470,7 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
                     qtypeOptions={qtypeOptions}
                     allQuestions={questions}
                     flowMode={mode === "flow"}
+                    sumberProvinsiDitunjuk={Boolean(survey?.questionProvinsiId) && q.id === survey.questionProvinsiId}
                     mulaiEdit={q.id === salinanBaru}
                     onSunting={(buka) => tandaiSunting(q.id, buka)}
                     onChange={(nq) => setQuestions(questions.map((x, j) => (j === i ? nq : x)))}
@@ -537,6 +552,14 @@ export function SurveyBuilder({ survey, error, info, onClose, onSave }) {
                 placeholder={"Sangat puas\nPuas\nBiasa\nTidak puas"}
               />
             ) : null}
+            {/* Mis. nomor HP/e-wallet untuk imbalan: cukup ditanyakan ke responden Instagram,
+                karena nomor responden WhatsApp sudah diketahui. Bisa diubah lewat Edit. */}
+            <Select
+              label="Ditanyakan ke"
+              value={c.saluran}
+              onChange={(e) => setCk("saluran", e.target.value)}
+              options={SALURAN_OPTIONS}
+            />
             <Button icon="plus" onClick={addQuestion} disabled={!c.text.trim()}>
               Tambah Pertanyaan
             </Button>

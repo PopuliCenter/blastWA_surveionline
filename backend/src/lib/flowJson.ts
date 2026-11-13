@@ -17,6 +17,8 @@ import {
   readWilayahAnswer,
   tingkatWilayah,
 } from "./wilayah.js";
+import { pertanyaanBerlaku } from "./saluranPertanyaan.js";
+import { nomorHpSurvei } from "./phone.js";
 
 export type FlowQuestion = { id: string; text: string; type: string; required?: boolean; options?: any };
 export type FlowSurvey = {
@@ -64,9 +66,18 @@ function choiceList(q: FlowQuestion): string[] {
 
 // Pertanyaan yang punya kontrol input di flow (image tidak didukung di flow → dilewati).
 export function flowSupported(q: FlowQuestion): boolean {
-  return ["text", "number", "rating", "choice", "boolean", "multichoice", "date", "consent", "wilayah"].includes(
+  return ["text", "number", "rating", "choice", "boolean", "multichoice", "date", "consent", "wilayah", "phone"].includes(
     q.type,
   );
+}
+
+// Pertanyaan yang MASUK formulir: tipenya didukung Flow DAN berlaku untuk WhatsApp. Flow
+// hanya ada di WhatsApp, jadi pertanyaan "Instagram saja" (options.saluran,
+// lib/saluranPertanyaan.ts) tidak pernah ikut — dan karena itu juga tidak dicari saat
+// balasan formulir diproses, sehingga ketiadaannya tidak membuat Flow tampak tak sinkron.
+// Survei lama tidak punya options.saluran, jadi susunan formulirnya tidak berubah.
+export function masukFlow(q: FlowQuestion): boolean {
+  return flowSupported(q) && pertanyaanBerlaku(q, "whatsapp");
 }
 
 // Tipe data field saat diteruskan antar layar (dideklarasikan di `data` tiap layar).
@@ -82,13 +93,27 @@ function fieldDataType(q: FlowQuestion, _field?: string): Record<string, unknown
 // tiap `perScreen`. Selalu mengembalikan minimal 1 layar (bila ada pertanyaan).
 export function splitScreens(questions: FlowQuestion[], perScreen?: number | null): FlowQuestion[][] {
   const n = Math.max(1, Math.min(20, Number(perScreen) || DEFAULT_PER_SCREEN));
-  const supported = questions.filter(flowSupported);
 
-  // 1) Potong di penanda seksi manual.
+  // 1) Potong di penanda seksi manual. Penanda "layar baru" (dan judulnya) milik pertanyaan
+  // yang tidak masuk formulir — mis. "Instagram saja" — dipindahkan ke pertanyaan berikutnya
+  // yang masuk: tanpa itu batas layar dan judul seksinya lenyap dari Flow, padahal builder
+  // tetap menampilkannya.
   const sections: FlowQuestion[][] = [];
-  for (const q of supported) {
-    if (!sections.length || q.options?.newScreen === true) sections.push([]);
-    sections[sections.length - 1]!.push(q);
+  let tertunda = null as { judul?: unknown } | null;
+  for (const q of questions) {
+    if (!masukFlow(q)) {
+      if (flowSupported(q) && q.options?.newScreen === true) tertunda = { judul: tertunda?.judul ?? q.options.screenTitle };
+      continue;
+    }
+    let item = q;
+    if (tertunda) {
+      if (!q.options?.screenTitle && tertunda.judul)
+        item = { ...q, options: { ...(q.options ?? {}), newScreen: true, screenTitle: tertunda.judul } };
+      else if (q.options?.newScreen !== true) item = { ...q, options: { ...(q.options ?? {}), newScreen: true } };
+    }
+    if (!sections.length || item.options?.newScreen === true) sections.push([]);
+    sections[sections.length - 1]!.push(item);
+    tertunda = null;
   }
   // 2) Pecah tiap seksi yang lebih panjang dari n.
   const screens: FlowQuestion[][] = [];
@@ -169,7 +194,8 @@ function visibilityConditions(
   const terms: string[] = [];
   for (const src of all) {
     if (src.index >= target.index) continue;
-    if (!flowSupported(src.q)) continue;
+    // Pemicu yang tidak ada di formulir tidak punya field untuk dirujuk.
+    if (!masukFlow(src.q)) continue;
     for (const b of branchesOf(src.q)) {
       if (!branchSkips(src.index, b, target.index)) continue;
       const val = flowBranchValue(src.q, b.value);
@@ -196,6 +222,10 @@ function questionChildren(q: FlowQuestion, number: number): any[] {
 
   if (q.type === "text") {
     out.push({ type: "TextArea", name, label: "Jawaban", required });
+  } else if (q.type === "phone") {
+    // "phone" memunculkan papan angka telepon di ponsel; bentuknya tetap diperiksa server
+    // saat balasan diproses (toAnswer), karena Flow tidak bisa mewajibkan format nomor.
+    out.push({ type: "TextInput", name, label: "Nomor HP", "input-type": "phone", required });
   } else if (q.type === "number") {
     out.push({ type: "TextInput", name, label: "Jawaban (angka)", "input-type": "number", required });
   } else if (q.type === "date") {
@@ -390,6 +420,13 @@ function toAnswer(q: FlowQuestion, raw: unknown): { questionId: string; value: s
       .filter(Boolean);
     return mapped.length ? { questionId: q.id, value: mapped.join(", ") } : null;
   }
+  // Nomor HP diperiksa dengan aturan yang SAMA dengan mode chat. Nomor yang tidak sah
+  // dianggap tidak dijawab: menyimpan "0812" atau "-" sebagai nomor imbalan hanya
+  // menunda kegagalannya sampai imbalan hendak dikirim.
+  if (q.type === "phone") {
+    const n = nomorHpSurvei(String(raw));
+    return n ? { questionId: q.id, value: n } : null;
+  }
   let value = String(raw);
   if (q.type === "choice") {
     const opts = choiceList(q);
@@ -410,11 +447,21 @@ function answerKeys(response: Record<string, unknown>): string[] {
 export function flowOutOfSync(response: Record<string, unknown>, questions: FlowQuestion[]): boolean {
   const keys = answerKeys(response);
   if (!keys.length) return false;
-  const supported = questions.filter(flowSupported);
+  const supported = questions.filter(masukFlow);
   // Memeriksa SEMUA field milik tiap pertanyaan, bukan hanya q_<id>. Survei yang pertanyaan
   // wilayahnya tidak memakai nama field itu akan selalu tampak tak sinkron bila diperiksa
   // dengan nama dasarnya saja.
   return !supported.some((q) => fieldNamesOf(q).some((f) => Object.prototype.hasOwnProperty.call(response, f)));
+}
+
+const adaDiResponse = (q: FlowQuestion, response: Record<string, unknown>): boolean =>
+  fieldNamesOf(q).some((f) => Object.prototype.hasOwnProperty.call(response, f));
+
+// Pertanyaan yang kini TIDAK untuk WhatsApp (mis. diubah ke "Instagram saja") tetapi masih ada
+// di formulir yang terbit di Meta — Flow-nya belum diterbitkan ulang. Jawabannya tetap
+// disimpan (parseFlowAnswers), dan daftar ini dipakai untuk memperingatkan operator.
+export function pertanyaanTakBerlakuDiFormulir(response: Record<string, unknown>, questions: FlowQuestion[]): string[] {
+  return questions.filter((q) => flowSupported(q) && !masukFlow(q) && adaDiResponse(q, response)).map((q) => q.id);
 }
 
 // Petakan response_json flow balik ke jawaban per pertanyaan.
@@ -422,11 +469,14 @@ export function parseFlowAnswers(
   response: Record<string, unknown>,
   questions: FlowQuestion[],
 ): { questionId: string; value: string }[] {
-  const supported = questions.filter(flowSupported);
+  const supported = questions.filter(masukFlow);
 
-  // Jalur normal: cocokkan berdasarkan nama field (q_<id pertanyaan>).
+  // Jalur normal: cocokkan berdasarkan nama field (q_<id pertanyaan>). Pertanyaan yang kini
+  // bukan untuk WhatsApp ikut dibaca BILA field-nya memang ada: formulir lama yang belum
+  // diterbitkan ulang masih memuatnya, dan responden sudah mengisinya — membuangnya diam-diam
+  // juga menghilangkan stempel provinsi bila pertanyaan itu Wilayah.
   const byId: { questionId: string; value: string }[] = [];
-  for (const q of supported) {
+  for (const q of questions.filter((x) => masukFlow(x) || (flowSupported(x) && adaDiResponse(x, response)))) {
     if (q.type === "wilayah") {
       // Wilayah memakai beberapa field sekaligus, jadi dibaca dari seluruh response.
       const v = readWilayahAnswer(fieldName(q.id), response);
@@ -480,6 +530,8 @@ function plausible(q: FlowQuestion, raw: unknown): boolean {
     }
     case "number":
       return Number.isFinite(Number(s));
+    case "phone":
+      return nomorHpSurvei(s) !== null;
     case "choice": {
       const n = Number(s);
       return Number.isInteger(n) && n >= 0 && n < choiceList(q).length;

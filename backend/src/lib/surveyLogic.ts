@@ -2,7 +2,12 @@
 // Dipisah dari services/surveyEngine.ts agar mudah diuji unit. Lihat surveyLogic.test.ts.
 import { normalizeMessage } from "./optOut.js";
 import { cariWilayah, cariProvinsi, tingkatWilayah } from "./wilayah.js";
+import { nomorHpSurvei } from "./phone.js";
+import { langkahBerlaku } from "./saluranPertanyaan.js";
+import type { Saluran } from "./saluranKontak.js";
 import type { NormalizedInbound } from "../providers/types.js";
+
+export { pertanyaanBerlaku, langkahBerlaku, adaPertanyaanBerlaku } from "./saluranPertanyaan.js";
 
 export type QLite = { id: string; text: string; type: string; required: boolean; options: any };
 
@@ -178,6 +183,21 @@ export function nextStepWithBranch(current: QLite, step: number, savedValue: str
   return langkahBerikut(current.options, step, savedValue, total);
 }
 
+// Langkah berikutnya bagi responden di saluran tertentu: percabangan dulu, lalu pertanyaan
+// yang tidak berlaku bagi salurannya dilewati (lib/saluranPertanyaan.ts). Cabang yang
+// mendarat di pertanyaan "Instagram saja" pada responden WhatsApp diteruskan ke pertanyaan
+// berlaku sesudahnya, persis seolah pertanyaan itu tidak ada. questions.length = selesai.
+export function langkahBerikutUntuk(
+  questions: readonly QLite[],
+  step: number,
+  savedValue: string,
+  saluran: Saluran,
+): number {
+  const current = questions[step];
+  const dasar = current ? nextStepWithBranch(current, step, savedValue, questions.length) : step + 1;
+  return langkahBerlaku(questions, dasar, saluran);
+}
+
 export function ratingRange(q: QLite): { min: number; max: number } {
   const min = Number(q.options?.min ?? 1);
   const max = Number(q.options?.max ?? 5);
@@ -308,6 +328,13 @@ export function validateAnswer(
         error: q.type === "consent" ? "Mohon balas: Ya (setuju) atau Tidak." : "Mohon balas: Ya atau Tidak.",
       };
     }
+    case "phone": {
+      // Nomor HP / e-wallet (mis. untuk imbalan). Disimpan baku "62…" supaya satu nomor
+      // selalu tertulis sama — "0812 3456 7890" dan "+62 812-3456-7890" orang yang sama.
+      const n = nomorHpSurvei(text);
+      if (n) return { ok: true, value: n };
+      return { ok: false, error: "Mohon tulis nomor HP yang valid, mis. 0812 3456 7890." };
+    }
     case "date": {
       // Terima dd-mm-yyyy / dd/mm/yyyy / yyyy-mm-dd → simpan seragam YYYY-MM-DD.
       const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -361,6 +388,9 @@ export function formatQuestion(q: QLite): string {
         tingkatWilayah(q.options) === "kabkota"
           ? "\n\nTulis nama kabupaten/kota Anda (mis. Sleman atau Kota Bandung)."
           : "\n\nTulis nama provinsi Anda (mis. Jawa Barat atau DKI Jakarta).";
+      break;
+    case "phone":
+      hint = "\n\nTulis nomor HP Anda (mis. 0812 3456 7890).";
       break;
     case "image":
       hint = "\n\nKirim foto/gambar.";
@@ -438,17 +468,23 @@ export function indeksPenyaringan(
 // hanya ada di sisi klien.
 //
 // Lompatan selalu MAJU, jadi penelusuran ini pasti berhenti.
+//
+// `saluran` (opsional): pertanyaan yang tidak berlaku bagi saluran responden ikut
+// dikeluarkan dari jalurnya, sama seperti di mesin chat. Tanpa itu responden WhatsApp
+// selalu terlihat "tidak lengkap" pada survei yang punya pertanyaan khusus Instagram.
 export function jalurPertanyaan(
   questions: readonly { id: string; options?: unknown }[],
   answers: readonly { questionId: string; value: string }[],
+  saluran?: Saluran,
 ): Set<number> {
   const nilai = new Map(answers.map((a) => [a.questionId, a.value]));
   const total = questions.length;
+  const lewati = (i: number) => (saluran ? langkahBerlaku(questions, i, saluran) : i);
   const jalur = new Set<number>();
-  for (let step = 0; step < total; ) {
+  for (let step = lewati(0); step < total; ) {
     jalur.add(step);
     const q = questions[step]!;
-    step = langkahBerikut(q.options, step, nilai.get(q.id) ?? "", total);
+    step = lewati(langkahBerikut(q.options, step, nilai.get(q.id) ?? "", total));
   }
   return jalur;
 }

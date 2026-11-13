@@ -145,14 +145,17 @@ model Question {
   id       String  @id @default(cuid())
   surveyId String
   survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  // text | rating | number | choice | multichoice | boolean | consent | date | image | wilayah
+  // text | rating | number | choice | multichoice | boolean | consent | date | image | wilayah | phone
   // wilayah = provinsi + kabupaten/kota menurut kode resmi Kepmendagri (lihat lib/wilayah.ts).
   // Di Flow ia jadi dua dropdown bertingkat; di mode chat responden mengetik nama wilayahnya.
+  // phone = nomor HP / e-wallet (mis. untuk imbalan), disimpan baku "62…" (lib/phone.ts nomorHpSurvei).
   type     String  @default("text")
   text     String
   order    Int     @default(0)
   required Boolean @default(true)
-  options  Json? // konfig per tipe: rating {min,max}, choice {choices:[...]}
+  // konfig per tipe: rating {min,max}, choice {choices:[...]}; plus saluran: "instagram" |
+  // "whatsapp" untuk pertanyaan yang hanya ditanyakan di satu saluran (lib/saluranPertanyaan.ts).
+  options  Json?
   answers  Answer[]
 }
 

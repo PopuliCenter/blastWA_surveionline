@@ -7,6 +7,7 @@ import { tabBertabrakan, teksPertanyaanGanda } from "../lib/salinSurvei.js";
 import { galatAturanDurasi, menitDari } from "../lib/asesmenDurasi.js";
 import { buildSurveyFlow } from "../lib/flowJson.js";
 import { PROVINSI } from "../lib/wilayah.js";
+import { SALURAN_PERTANYAAN, pertanyaanBerlaku } from "../lib/saluranPertanyaan.js";
 import { ALASAN_DITUTUP, DIHITUNG_KE_KUOTA } from "../services/kuotaSurvei.js";
 
 // Ditolak karena kuota penuh — BUKAN yang masuk setelah survei ditutup. OR dengan null:
@@ -29,12 +30,47 @@ export const questionSchema = z.object({
     // sudah didukung mesin survei, tapi sempat tidak masuk daftar ini — akibatnya setiap
     // survei yang memakainya ditolak saat disimpan, dan karena galat Zod dikirim sebagai
     // objek, layarnya hanya menampilkan "[object Object]" tanpa menyebut sebabnya.
-    .enum(["text", "rating", "number", "choice", "multichoice", "boolean", "image", "date", "consent", "wilayah"])
+    .enum([
+      "text",
+      "rating",
+      "number",
+      "choice",
+      "multichoice",
+      "boolean",
+      "image",
+      "date",
+      "consent",
+      "wilayah",
+      // Nomor HP / e-wallet, mis. untuk mengirim imbalan. Disimpan baku "62…".
+      "phone",
+    ])
     .default("text"),
   required: z.boolean().default(true),
   // rating {min,max,minLabel?,maxLabel?} | choice/multichoice {choices:[...]} | branches:[...]
   // mode flow: newScreen (mulai layar baru di sini) & screenTitle (judul seksi)
-  options: z.any().optional(),
+  // saluran: "semua" | "instagram" | "whatsapp" — ditanyakan ke saluran mana (lib/saluranPertanyaan.ts)
+  options: z
+    .any()
+    .optional()
+    // Isi options lain sengaja tetap bebas, tetapi `saluran` diperiksa: nilai salah ketik
+    // ("ig", "Instagram") akan dibaca mesin sebagai "semua", sehingga pertanyaan nomor HP
+    // yang dimaksudkan khusus Instagram diam-diam ikut ditanyakan ke responden WhatsApp.
+    .superRefine((o, ctx) => {
+      const s = o && typeof o === "object" ? (o as { saluran?: unknown }).saluran : undefined;
+      if (s === undefined || s === null || (SALURAN_PERTANYAAN as readonly unknown[]).includes(s)) return;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Pengaturan "Ditanyakan ke" harus semua, instagram, atau whatsapp.',
+      });
+    })
+    // "semua" adalah bawaan, jadi tidak ditulis: options yang hanya berisi nilai bawaan
+    // menambah derau pada data tanpa mengubah perilaku apa pun.
+    .transform((o) => {
+      if (!o || typeof o !== "object" || !("saluran" in o)) return o;
+      const { saluran, ...lain } = o as { saluran?: unknown };
+      if (saluran === "instagram" || saluran === "whatsapp") return o;
+      return Object.keys(lain).length ? lain : undefined;
+    }),
 });
 
 export const surveySchema = z.object({
@@ -340,7 +376,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/surveys/:id/kuota", async (req) => {
     const id = (req.params as { id: string }).id;
-    const [survey, kuota, perProvinsi, terisiGlobal, jmlWilayah, penolakConsent, ditolakKuota] = await Promise.all([
+    const [survey, kuota, perProvinsi, terisiGlobal, wilayah, penolakConsent, ditolakKuota] = await Promise.all([
       prisma.survey.findUnique({
         where: { id },
         select: { targetResponden: true, questionProvinsiId: true },
@@ -359,7 +395,7 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       // impor — responden organik tak pernah terhitung, dan kuota provinsinya diam-diam
       // tak pernah penuh. Dilaporkan agar layar bisa memperingatkan, bukan dibiarkan
       // ketahuan belakangan saat datanya sudah timpang.
-      prisma.question.count({ where: { surveyId: id, type: "wilayah" } }),
+      prisma.question.findMany({ where: { surveyId: id, type: "wilayah" }, select: { options: true } }),
       // Ditampilkan, bukan sekadar dikecualikan diam-diam: selisih antara "respons selesai"
       // dan "terhitung kuota" harus bisa dijelaskan ke klien tanpa membuka database.
       // Penolak consent yang masuk setelah survei ditutup sudah terhitung di tab "Ditolak".
@@ -387,8 +423,15 @@ export async function surveyRoutes(app: FastifyInstance): Promise<void> {
       // Provinsi bisa diketahui lewat pertanyaan bertipe wilayah ATAU pertanyaan lain yang
       // ditunjuk survei. Dilaporkan sebagai satu jawaban supaya layar tidak memperingatkan
       // survei yang sebenarnya sudah punya sumber provinsi.
-      punyaPertanyaanWilayah: jmlWilayah > 0,
-      sumberProvinsi: jmlWilayah > 0 ? "wilayah" : survey?.questionProvinsiId ? "pertanyaan" : null,
+      punyaPertanyaanWilayah: wilayah.length > 0,
+      sumberProvinsi: wilayah.length > 0 ? "wilayah" : survey?.questionProvinsiId ? "pertanyaan" : null,
+      // Saluran yang respondennya tidak pernah ditanya provinsinya: pertanyaan Wilayah yang ada
+      // hanya untuk saluran lain (mis. "Instagram saja"), dan tak ada pertanyaan lain yang
+      // ditunjuk sebagai sumber provinsi. Responden saluran ini masuk "tanpa provinsi".
+      saluranTanpaSumberProvinsi:
+        wilayah.length && !survey?.questionProvinsiId
+          ? (["whatsapp", "instagram"] as const).filter((sal) => !wilayah.some((q) => pertanyaanBerlaku(q, sal)))
+          : [],
       teksPertanyaanProvinsi: survey?.questionProvinsiId
         ? ((await prisma.question.findUnique({
             where: { id: survey.questionProvinsiId },

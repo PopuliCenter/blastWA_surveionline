@@ -240,6 +240,44 @@ describe("barisUntukCsv", () => {
   });
 });
 
+describe("kolom jawaban Nomor HP di CSV", () => {
+  it("dikenali dari TIPE pertanyaan (bukan judul) dan dipaksa teks; kolom lain tidak", () => {
+    const survey = {
+      title: "S",
+      questions: [
+        { text: "Kota?", type: "text" },
+        // Judulnya sengaja tidak menyebut "nomor": yang menentukan tipenya.
+        { text: "Ke mana imbalan dikirim?", type: "phone", options: { saluran: "instagram" } },
+        { text: "Umur?", type: "number" },
+      ],
+    };
+    const { header, rows, kolomNomor } = buildResponseRows(survey, [
+      {
+        phone: "ig:8123",
+        answers: [
+          { question: "Kota?", value: "Bandung" },
+          { question: "Ke mana imbalan dikirim?", value: "6281234567890" },
+          { question: "Umur?", value: "41" },
+        ],
+      },
+      { phone: "628777", answers: [{ question: "Kota?", value: "Solo" }] },
+    ]);
+    expect(kolomNomor).toEqual([header.indexOf("Ke mana imbalan dikirim?")]);
+    const csv = barisUntukCsv(header, rows, kolomNomor);
+    const iNomor = header.indexOf("Ke mana imbalan dikirim?");
+    const iUmur = header.indexOf("Umur?");
+    expect(csv[0][iNomor]).toBe("\t6281234567890");
+    expect(csv[0][iUmur]).toBe("41");
+    // Responden WhatsApp yang tidak ditanya: sel tetap kosong, bukan tab.
+    expect(csv[1][iNomor]).toBe("");
+  });
+
+  it("survei tanpa pertanyaan Nomor HP: tidak ada kolom yang dipaksa teks selain yang lama", () => {
+    const { kolomNomor } = buildResponseRows({ title: "S", questions: [{ text: "Q1", type: "text" }] }, []);
+    expect(kolomNomor).toEqual([]);
+  });
+});
+
 describe("buildResponseRows — respons yang ditolak kuota", () => {
   const surveiKuota = { title: "Survei Kuota", questions: [{ text: "Puas?" }] };
   const diterima = {

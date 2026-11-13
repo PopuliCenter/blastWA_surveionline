@@ -6,6 +6,7 @@ import {
   splitScreens,
   fieldName,
   flowSupported,
+  pertanyaanTakBerlakuDiFormulir,
   type FlowQuestion,
 } from "../src/lib/flowJson.js";
 
@@ -297,5 +298,89 @@ describe("parseFlowAnswers", () => {
     const resp = { [fieldName("a")]: "Ya", flow_token: "resp_x" };
     expect(flowOutOfSync(resp, qs)).toBe(false);
     expect(parseFlowAnswers(resp, qs)).toEqual([{ questionId: "a", value: "Ya" }]);
+  });
+});
+
+describe("pertanyaan khusus Instagram & tipe phone di Flow", () => {
+  const IG = { saluran: "instagram" };
+
+  it("pertanyaan 'Instagram saja' tidak masuk formulir; 'semua' dan 'whatsapp' tetap masuk", () => {
+    const flow = buildSurveyFlow({
+      questions: [q("a", "text"), q("hp", "phone", IG), q("c", "text", { saluran: "whatsapp" }), q("d", "boolean")],
+    });
+    const nama = [
+      ...findByType(flow, "TextArea"),
+      ...findByType(flow, "TextInput"),
+      ...findByType(flow, "RadioButtonsGroup"),
+    ].map((c: any) => c.name);
+    expect(nama).toEqual(expect.arrayContaining([fieldName("a"), fieldName("c"), fieldName("d")]));
+    expect(nama).not.toContain(fieldName("hp"));
+    expect(JSON.stringify(flow)).not.toContain(fieldName("hp"));
+    // Penomoran tetap urut tanpa lubang (1, 2, 3).
+    const teks = findByType(flow, "TextBody").map((t: any) => t.text);
+    expect(teks).toEqual(["1. T?", "2. T?", "3. T?"]);
+  });
+
+  it("survei tanpa options.saluran menghasilkan Flow yang sama persis seperti sebelumnya", () => {
+    const lama = [q("a", "text"), q("b", "boolean", { branches: [{ value: "Tidak", goto: "end" }] }), q("c", "rating")];
+    const semua = lama.map((x) => ({ ...x, options: { ...(x.options ?? {}), saluran: "semua" } }));
+    expect(buildSurveyFlow({ questions: semua })).toEqual(buildSurveyFlow({ questions: lama }));
+  });
+
+  it("tipe phone di formulir WhatsApp → TextInput input-type phone", () => {
+    const flow = buildSurveyFlow({ questions: [q("hp", "phone")] });
+    const inp = findByType(flow, "TextInput");
+    expect(inp).toEqual([expect.objectContaining({ name: fieldName("hp"), "input-type": "phone", required: true })]);
+  });
+
+  it("balasan tanpa jawaban pertanyaan khusus IG: tidak dianggap tak sinkron, jawaban lain utuh", () => {
+    const qs = [q("a", "text"), q("hp", "phone", IG), q("c", "boolean")];
+    const resp = { [fieldName("a")]: "Siti", [fieldName("c")]: "Ya", flow_token: "resp_x" };
+    expect(flowOutOfSync(resp, qs)).toBe(false);
+    expect(parseFlowAnswers(resp, qs)).toEqual([
+      { questionId: "a", value: "Siti" },
+      { questionId: "c", value: "Ya" },
+    ]);
+  });
+
+  it("formulir lama yang masih memuat pertanyaan kini khusus IG: jawabannya tetap tersimpan dan dilaporkan", () => {
+    const qs = [q("a", "text"), q("hp", "phone", IG)];
+    const resp = { [fieldName("a")]: "Siti", [fieldName("hp")]: "0812 3456 7890", flow_token: "resp_x" };
+    expect(parseFlowAnswers(resp, qs)).toEqual([
+      { questionId: "a", value: "Siti" },
+      { questionId: "hp", value: "6281234567890" },
+    ]);
+    expect(pertanyaanTakBerlakuDiFormulir(resp, qs)).toEqual(["hp"]);
+    expect(pertanyaanTakBerlakuDiFormulir({ [fieldName("a")]: "Siti" }, qs)).toEqual([]);
+  });
+
+  it("penanda layar baru milik pertanyaan khusus IG pindah ke pertanyaan berikutnya", () => {
+    const qs = [
+      q("a", "text"),
+      q("hp", "phone", { ...IG, newScreen: true, screenTitle: "Data Imbalan" }),
+      q("c", "text"),
+      q("d", "text"),
+    ];
+    const layar = splitScreens(qs, 10);
+    expect(layar.map((l) => l.map((x) => x.id))).toEqual([["a"], ["c", "d"]]);
+    expect(layar[1]![0]!.options?.screenTitle).toBe("Data Imbalan");
+    expect(qs[2]!.options).toBeNull(); // objek pertanyaan asli tidak diubah
+  });
+
+  it("jalur cadangan by-urutan menghitung pertanyaan formulir saja (tanpa yang khusus IG)", () => {
+    const qs = [q("a", "boolean"), q("hp", "phone", IG), q("c", "rating", { min: 1, max: 5 })];
+    const resp = { q_lama1: "Ya", q_lama2: "4", flow_token: "resp_x" };
+    expect(parseFlowAnswers(resp, qs)).toEqual([
+      { questionId: "a", value: "Ya" },
+      { questionId: "c", value: "4" },
+    ]);
+  });
+
+  it("jawaban phone dari Flow divalidasi & dinormalkan seperti di chat; yang tak sah dianggap kosong", () => {
+    const qs = [q("hp", "phone")];
+    expect(parseFlowAnswers({ [fieldName("hp")]: "0812-3456-7890" }, qs)).toEqual([
+      { questionId: "hp", value: "6281234567890" },
+    ]);
+    expect(parseFlowAnswers({ [fieldName("hp")]: "0812" }, qs)).toEqual([]);
   });
 });

@@ -30,7 +30,7 @@ import {
 import { findAutoResponse } from "./autoResponder.js";
 import { tentukanJalur, type AsalTercatat } from "../lib/jalurRespons.js";
 import { enqueueSheetLokasi, enqueueSheetSync } from "../queue/sheetQueue.js";
-import { parseFlowAnswers, flowOutOfSync } from "../lib/flowJson.js";
+import { parseFlowAnswers, flowOutOfSync, fieldName, pertanyaanTakBerlakuDiFormulir } from "../lib/flowJson.js";
 import { logError } from "../lib/errorLog.js";
 import {
   BERLAKU_PERMINTAAN_MS,
@@ -47,7 +47,10 @@ import {
   validateAnswer,
   formatQuestion,
   closingText,
-  nextStepWithBranch,
+  langkahBerikutUntuk,
+  langkahBerlaku,
+  adaPertanyaanBerlaku,
+  pertanyaanBerlaku,
   isFlowAbandoned,
   BLAST_REPLY_WINDOW_MS,
   shouldStartSurveyFromBlast,
@@ -357,7 +360,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
       // Formulir masih ditunggu. Bila responden mengirim kata kunci pemicu lagi
       // (formulir tak jadi diisi / chat dihapus / pesan hilang), kirim ulang formulirnya.
       const again = await findTriggeredSurvey(ev.text ?? "");
-      if (again && again.questions.length) {
+      if (again && adaPertanyaanBerlaku(again.questions, saluranDari(phone))) {
         // Buang respons menggantung yang BELUM berisi jawaban agar tak menumpuk.
         await prisma.surveyResponse.deleteMany({ where: { id: active.id, answers: { none: {} } } });
         // Formulir yang sama dikirim ulang: asal respons yang dibuang tadi ikut pindah. Kalau
@@ -414,8 +417,11 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
   }
 
   // 2) Pemicu kata kunci → mulai survei yang cocok (mis. responden ketik "isi survey")
+  // Survei yang tak satu pun pertanyaannya berlaku bagi saluran ini (semuanya "Instagram
+  // saja", misalnya) diperlakukan seperti survei tanpa pertanyaan: pesannya jatuh ke Auto
+  // Reply / Agen AI, bukan dibalas pembuka yang langsung disusul kata penutup.
   const triggered = await findTriggeredSurvey(ev.text ?? "");
-  if (triggered && triggered.questions.length) {
+  if (triggered && adaPertanyaanBerlaku(triggered.questions, saluranDari(phone))) {
     // Survei "sekali saja": tolak halus, jangan diamkan (responden perlu tahu alasannya).
     if (await alreadyCompleted(triggered, contact.id)) {
       await reply(ev.vendor, phone, ALREADY_DONE_TEXT, contact.id);
@@ -436,7 +442,7 @@ async function handleMessage(ev: NormalizedInbound): Promise<void> {
     orderBy: { createdAt: "desc" },
     include: { blast: { include: { survey: { include: { questions: { orderBy: { order: "asc" } } } } } } },
   });
-  if (recipient?.blast?.survey && recipient.blast.survey.questions.length) {
+  if (recipient?.blast?.survey && adaPertanyaanBerlaku(recipient.blast.survey.questions, saluranDari(phone))) {
     // Pernah selesai SEKALI saja — apa pun pengaturan boleh-ulang — cukup untuk berhenti
     // menawarkan otomatis. BUKAN alreadyCompleted(): helper itu mengembalikan false untuk
     // survei boleh-ulang, sehingga mesin menawarkan formulir lagi pada SETIAP pesan dalam
@@ -857,12 +863,23 @@ async function startSurvey(
     });
     return;
   }
-  // Fallback / mode chat
+  // Fallback / mode chat. Pertanyaan pertama = pertanyaan pertama yang BERLAKU bagi saluran
+  // ini (lib/saluranPertanyaan.ts) — survei yang dibuka pertanyaan "Instagram saja" dimulai
+  // dari pertanyaan kedua bagi responden WhatsApp. Pemanggil sudah memastikan ada.
+  const awal = langkahBerlaku(survey.questions, 0, saluran);
+  const pertama = survey.questions[awal];
+  if (!pertama) {
+    logError("backend", new Error("Survei tidak punya pertanyaan untuk saluran responden ini"), {
+      surveyId: survey.id,
+      saluran,
+    });
+    return;
+  }
   await prisma.surveyResponse.create({
     data: {
       surveyId: survey.id,
       contactId,
-      currentStep: 0,
+      currentStep: awal,
       ...(kodeProv ? { kodeProvinsi: kodeProv } : {}),
       ...(blastId ? { blastId } : {}),
       ...asal,
@@ -871,7 +888,7 @@ async function startSurvey(
     },
   });
   await habiskanIklan(contactId, kontak?.iklanPada);
-  const first = formatQuestion(survey.questions[0]!);
+  const first = formatQuestion(pertama);
   // Responden Instagram boleh mendapat pembuka sendiri: di sana survei selalu chatbot, dan
   // petunjuk menjawabnya perlu lebih rinci daripada deskripsi untuk formulir WhatsApp.
   const pembuka =
@@ -1054,7 +1071,43 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
     );
   }
 
+  // Pertanyaan yang sudah diubah ke saluran lain tetapi Flow-nya belum diterbitkan ulang:
+  // jawabannya tetap disimpan (parseFlowAnswers), tetapi formulirnya tidak lagi cocok dengan
+  // pengaturan survei — operator perlu tahu.
+  const takBerlaku = pertanyaanTakBerlakuDiFormulir(flowResp, questions);
+  if (takBerlaku.length) {
+    const judul = new Map(questions.map((q) => [q.id, q.text]));
+    logError(
+      "backend",
+      new Error(
+        `Flow belum diterbitkan ulang: formulir survei "${surveyResponse.survey.title}" masih memuat pertanyaan ` +
+          `yang kini bukan untuk WhatsApp. Buat ulang Flow JSON dari survei ini lalu terbitkan ulang di Meta.`,
+      ),
+      {
+        surveyId: surveyResponse.surveyId,
+        responseId: surveyResponse.id,
+        pertanyaan: takBerlaku.map((id) => (judul.get(id) ?? id).slice(0, 60)),
+      },
+    );
+  }
+
   const semuaJawaban = parseFlowAnswers(flowResp, questions);
+
+  // Nomor HP di formulir tidak bisa dipaksa formatnya oleh Flow; nomor yang tidak sah dianggap
+  // tidak dijawab. Dicatat (tanpa nomornya) supaya operator tahu ada responden yang nomor
+  // imbalannya perlu ditanyakan ulang, alih-alih hanya melihat sel kosong.
+  const nomorDitolak = questions.filter(
+    (q) =>
+      q.type === "phone" &&
+      String(flowResp[fieldName(q.id)] ?? "").trim() !== "" &&
+      !semuaJawaban.some((a) => a.questionId === q.id),
+  );
+  if (nomorDitolak.length)
+    logError("backend", new Error("Nomor HP di formulir Flow tidak sah dan tidak disimpan"), {
+      surveyId: surveyResponse.surveyId,
+      responseId: surveyResponse.id,
+      pertanyaan: nomorDitolak.map((q) => q.text.slice(0, 60)),
+    });
 
   // Percabangan ditegakkan DI SERVER, bukan hanya di Flow.
   //
@@ -1089,8 +1142,18 @@ async function handleFlowReply(ev: NormalizedInbound, contactId: string, phone: 
   // Sumbernya bisa pertanyaan bertipe "wilayah", atau pertanyaan lain yang ditunjuk survei
   // lewat questionProvinsiId — instrumen yang sudah berjalan memakai tipe "choice" berisi
   // nama provinsi, dan tanpa penunjuk itu responden baru tidak pernah distempel.
+  //
+  // Pertanyaan wilayah yang tidak berlaku bagi saluran ini (mis. "Instagram saja") tidak ada di
+  // formulir, jadi tidak dipilih sebagai sumbernya.
+  // Wilayah dari formulir lama (lihat takBerlaku di atas) tetap dipakai bila memang terjawab.
   const idProvinsi =
-    questions.find((q) => q.type === "wilayah")?.id ?? surveyResponse.survey.questionProvinsiId ?? null;
+    questions.find(
+      (q) =>
+        q.type === "wilayah" &&
+        (pertanyaanBerlaku(q, saluranDari(phone)) || answers.some((a) => a.questionId === q.id)),
+    )?.id ??
+    surveyResponse.survey.questionProvinsiId ??
+    null;
   if (idProvinsi) {
     const jawab = answers.find((a) => a.questionId === idProvinsi);
     if (jawab) await stempelProvinsi(surveyResponse.id, kodeProvinsiDari(jawab.value));
@@ -1190,7 +1253,7 @@ async function advanceSurvey(
       // dihemat — biarkan pemeriksaan terkunci di titik selesai yang memutuskan. Di sana
       // currentStep dicatat sampai akhir, sehingga respons yang jawabannya lengkap tidak
       // salah tergolong "dihentikan di tengah" dan tetap bisa dipulihkan.
-      const masihLanjut = Boolean(questions[nextStepWithBranch(current, step, savedValue, questions.length)]);
+      const masihLanjut = Boolean(questions[langkahBerikutUntuk(questions, step, savedValue, saluranDari(phone))]);
       const cek = kode && masihLanjut ? await bolehMulaiSurvei(survei.id, kode) : null;
       if (cek && !cek.boleh) {
         // false = respons ini sudah diputuskan pesan lain yang diproses bersamaan.
@@ -1203,8 +1266,10 @@ async function advanceSurvey(
       await prisma.surveyResponse.update({ where: { id: responseId }, data: { consentDitolak: true } });
   }
 
-  // Skip logic: pertanyaan berikutnya bisa dilompati / survei diakhiri sesuai jawaban.
-  const nextStep = nextStepWithBranch(current, step, savedValue, questions.length);
+  // Skip logic: pertanyaan berikutnya bisa dilompati / survei diakhiri sesuai jawaban. Pertanyaan
+  // yang tidak berlaku bagi saluran responden ikut dilewati, termasuk yang dituju percabangan;
+  // tidak ada lagi yang berlaku = survei selesai.
+  const nextStep = langkahBerikutUntuk(questions, step, savedValue, saluranDari(phone));
   const next = questions[nextStep];
   if (next) {
     await prisma.surveyResponse.update({ where: { id: responseId }, data: { currentStep: nextStep } });

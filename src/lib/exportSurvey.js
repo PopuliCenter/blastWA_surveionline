@@ -241,7 +241,12 @@ export function buildResponseRows(survey, semuaRespons, opts = {}) {
       ...questions.map((q) => clean(wilayah.has(q) ? bersihkanKodeWilayah(map[q] ?? "") : (map[q] ?? ""))),
     ];
   });
-  return { header, rows };
+  // Indeks kolom jawaban bertipe Nomor HP — dikenali dari TIPE pertanyaannya, bukan dari
+  // judul kolom: judulnya teks bebas pembuat survei dan bisa saja sama dengan kolom lain.
+  // Kolom pertanyaan selalu berada paling belakang, berurutan sesuai survey.questions.
+  const awalPertanyaan = header.length - questions.length;
+  const kolomNomor = (survey.questions || []).flatMap((q, i) => (q.type === "phone" ? [awalPertanyaan + i] : []));
+  return { header, rows, kolomNomor };
 }
 
 // Nama file = judul survei + tanggal_jam (mudah dilacak, tak saling menimpa). MURNI (date bisa di-inject).
@@ -266,9 +271,13 @@ const KOLOM_TEKS_CSV = ["ID Iklan", "Username IG"];
 // awalannya memang berbahaya, supaya nama biasa tetap bersih.
 const KOLOM_TEKS_BILA_RUMUS = ["Nama"];
 const AWALAN_RUMUS = /^[=+\-@]/;
-export function barisUntukCsv(header, rows) {
+// `kolomNomor`: indeks kolom jawaban Nomor HP (dari buildResponseRows). "6281234567890" di CSV
+// dibaca Excel sebagai angka: tampil 6,28123E+12 dan nomor yang lebih panjang dari 15 digit
+// kehilangan digit belakangnya — nomor imbalan yang rusak sama dengan imbalan tak terkirim.
+export function barisUntukCsv(header, rows, kolomNomor = []) {
   const indeks = (daftar) => new Set(daftar.map((j) => header.indexOf(j)).filter((i) => i >= 0));
   const selalu = indeks(KOLOM_TEKS_CSV);
+  kolomNomor.forEach((i) => selalu.add(i));
   const bilaRumus = indeks(KOLOM_TEKS_BILA_RUMUS);
   return rows.map((baris) =>
     baris.map((v, k) => (v && (selalu.has(k) || (bilaRumus.has(k) && AWALAN_RUMUS.test(String(v)))) ? `\t${v}` : v)),
@@ -278,8 +287,8 @@ export function barisUntukCsv(header, rows) {
 // Ekspor respons survei → unduh file .xlsx/.csv.
 export async function exportResponses(survey, responses, format, opts = {}) {
   const XLSX = await import("xlsx");
-  const { header, rows } = buildResponseRows(survey, responses, opts);
-  const ws = XLSX.utils.aoa_to_sheet([header, ...(format === "csv" ? barisUntukCsv(header, rows) : rows)]);
+  const { header, rows, kolomNomor } = buildResponseRows(survey, responses, opts);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...(format === "csv" ? barisUntukCsv(header, rows, kolomNomor) : rows)]);
   ws["!cols"] = header.map((h) => ({ wch: Math.max(12, Math.min(40, h.length + 2)) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Respons");

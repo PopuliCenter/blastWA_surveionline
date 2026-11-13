@@ -75,3 +75,30 @@ export function buildContactFacts(surveys: SurveyFact[]): string {
 
   return ["FAKTA TENTANG PENGIRIM PESAN INI — pakai ini, jangan mengarang:", ...baris, ...penutup, ...kuota].join("\n");
 }
+
+// ===== Penyamaran nomor sebelum riwayat dikirim ke penyedia AI =====
+//
+// Kebijakan privasi menjanjikan bahwa nomor telepon TIDAK ikut dikirim ke penyedia AI. Janji
+// itu dulu benar dengan sendirinya — riwayat hanya berisi isi pesan, bukan nomor pengirim.
+// Sejak survei bisa menanyakan nomor HP / e-wallet untuk imbalan (pertanyaan tipe "phone"),
+// nomornya ikut tertulis di ISI pesan, dan riwayat percakapan yang dikirim ke AI akan
+// membawanya. Deret 8 digit atau lebih — boleh berselang spasi, titik, strip, atau kurung,
+// seperti orang biasa menulis nomor HP — diganti "[nomor]".
+//
+// Tanggal (17-08-2026) dan nominal berpemisah ribuan (15.000.000) juga 8 digit, tetapi
+// bukan nomor dan berguna bagi AI untuk memahami percakapan — jawaban soal pengeluaran
+// misalnya — jadi dibiarkan. Kecuali bila bentuknya nomor HP Indonesia (diawali 08 / 628 /
+// +628): "081.234.567.890" lolos sebagai ribuan, padahal validator nomor HP menerimanya.
+// Pemisahnya boleh sampai empat karakter, supaya "0812 - 3456 - 7890" tetap satu deret.
+const DERET_NOMOR = /\+?\d(?:[\s.\-()–—/]{0,4}\d){7,}/g;
+const TANGGAL = /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$|^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/;
+const RIBUAN = /^\d{1,3}(?:\.\d{3})+$/;
+const AWALAN_HP = /^(?:0|\+?62)8/;
+
+export function samarkanNomor(teks: string): string {
+  return teks.replace(DERET_NOMOR, (m) => {
+    const t = m.trim();
+    if (AWALAN_HP.test(t.replace(/[\s.\-()–—/]/g, ""))) return "[nomor]";
+    return TANGGAL.test(t) || RIBUAN.test(t) ? m : "[nomor]";
+  });
+}

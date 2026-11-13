@@ -22,6 +22,7 @@
  */
 import { prisma } from "../db.js";
 import { saringJawaban, jalurPertanyaan } from "../lib/surveyLogic.js";
+import { saluranDari } from "../lib/saluranKontak.js";
 import {
   periksaRespons,
   jawabanSeragam,
@@ -82,7 +83,9 @@ async function main(): Promise<void> {
 
     for (const r of responses) {
       const { diterima, ditolak } = saringJawaban(s.questions, r.answers);
-      const jalur = jalurPertanyaan(s.questions, r.answers);
+      // Menurut saluran responden: pertanyaan "Instagram saja" tidak pernah ditanyakan ke
+      // responden WhatsApp, jadi tidak boleh membuatnya tampak tidak lengkap (dan sebaliknya).
+      const jalur = jalurPertanyaan(s.questions, r.answers, saluranDari(r.contact?.phone));
       const menit =
         r.completedAt && r.startedAt && r.completedAt >= r.startedAt
           ? (r.completedAt.getTime() - r.startedAt.getTime()) / 60000

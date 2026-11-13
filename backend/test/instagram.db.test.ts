@@ -636,4 +636,147 @@ describe.skipIf(!URL_UJI)("survei lewat DM Instagram", () => {
       await app.close();
     });
   });
+
+  describe("pertanyaan khusus Instagram (nomor HP / e-wallet untuk imbalan)", () => {
+    const IG = { saluran: "instagram" };
+    // Nama → [IG] Nomor HP → Kota → [IG] Nomor e-wallet. Pertanyaan khusus IG di tengah DAN
+    // di akhir: bagi responden WhatsApp survei harus selesai setelah "Kota".
+    async function surveiImbalan(opsi: { mode: "chat" | "flow"; igDiAwal?: boolean }) {
+      const kata = `uji imbalan ${Math.random().toString(36).slice(2, 7)}`;
+      const daftar = [
+        ...(opsi.igDiAwal ? [{ text: "Bersedia dihubungi untuk imbalan?", type: "boolean", options: IG }] : []),
+        { text: "Nama Anda?", type: "text" },
+        { text: "Nomor HP Anda?", type: "phone", options: IG },
+        { text: "Kota Anda?", type: "text" },
+        { text: "Nomor e-wallet (GoPay/DANA/OVO)?", type: "phone", options: IG },
+      ];
+      const s = await prisma.survey.create({
+        data: {
+          title: `uji-imbalan-${idUnik()}`,
+          status: "active",
+          mode: opsi.mode,
+          flowId: opsi.mode === "flow" ? "123" : null,
+          triggerEnabled: true,
+          triggerKeywords: [kata],
+          closingMessage: "Penutup imbalan",
+          questions: {
+            create: daftar.map((x, order) => ({ order, required: true, ...x })),
+          },
+        },
+        include: { questions: { orderBy: { order: "asc" } } },
+      });
+      surveiDibuat.push(s.id);
+      return { s, kata };
+    }
+    const jawaban = async (surveyId: string) => {
+      const r = await prisma.surveyResponse.findFirstOrThrow({
+        where: { surveyId },
+        include: { answers: { include: { question: { select: { text: true } } } } },
+      });
+      return { r, isi: Object.fromEntries(r.answers.map((a) => [a.question.text, a.value])) };
+    };
+
+    it("responden Instagram ditanya nomor HP & e-wallet; jawabannya tersimpan ternormalisasi", async () => {
+      const { s, kata } = await surveiImbalan({ mode: "flow" });
+      const igsid = igsidBaru();
+      await kirim("instagram", igsid, kata);
+      expect(terkirim.at(-1)!.text).toContain("Nama Anda?");
+      await kirim("instagram", igsid, "Siti");
+      expect(terkirim.at(-1)!.text).toContain("Nomor HP Anda?");
+      expect(terkirim.at(-1)!.text).toContain("Tulis nomor HP Anda");
+      // Nomor yang tidak sah ditolak dan pertanyaannya diulang, survei tidak maju.
+      await kirim("instagram", igsid, "0812");
+      expect(terkirim.at(-1)!.text).toContain("Mohon tulis nomor HP yang valid");
+      expect(terkirim.at(-1)!.text).toContain("Nomor HP Anda?");
+      await kirim("instagram", igsid, "0812 3456 7890");
+      expect(terkirim.at(-1)!.text).toContain("Kota Anda?");
+      await kirim("instagram", igsid, "Bandung");
+      expect(terkirim.at(-1)!.text).toContain("Nomor e-wallet");
+      await kirim("instagram", igsid, "+62 857-1111-2222");
+      expect(terkirim.at(-1)!.text).toContain("Penutup imbalan");
+
+      const { r, isi } = await jawaban(s.id);
+      expect(r).toMatchObject({ saluran: "instagram", metode: "chatbot", ditolakKuotaPada: null });
+      expect(r.completedAt).not.toBeNull();
+      expect(isi).toEqual({
+        "Nama Anda?": "Siti",
+        "Nomor HP Anda?": "6281234567890",
+        "Kota Anda?": "Bandung",
+        "Nomor e-wallet (GoPay/DANA/OVO)?": "6285711112222",
+      });
+    });
+
+    it("responden WhatsApp chatbot tidak ditanya pertanyaan khusus IG dan surveinya selesai normal", async () => {
+      const { s, kata } = await surveiImbalan({ mode: "chat" });
+      const nomor = nomorBaru();
+      await kirim("meta", nomor, kata);
+      expect(terkirim.at(-1)!.text).toContain("Nama Anda?");
+      await kirim("meta", nomor, "Budi");
+      // Langsung ke Kota — "Nomor HP Anda?" dilewati.
+      expect(terkirim.at(-1)!.text).toContain("Kota Anda?");
+      await kirim("meta", nomor, "Solo");
+      // Pertanyaan terakhir khusus IG → selesai di sini, dengan kata penutup.
+      expect(terkirim.at(-1)!.text).toBe("Penutup imbalan");
+      expect(terkirim.some((t) => t.text?.includes("Nomor"))).toBe(false);
+
+      const { r, isi } = await jawaban(s.id);
+      expect(r).toMatchObject({ saluran: "whatsapp", metode: "chatbot", currentStep: s.questions.length });
+      expect(r.completedAt).not.toBeNull();
+      expect(r.ditolakKuotaPada).toBeNull();
+      expect(isi).toEqual({ "Nama Anda?": "Budi", "Kota Anda?": "Solo" });
+    });
+
+    it("pertanyaan PERTAMA khusus IG: responden WhatsApp dibuka dengan pertanyaan berlaku pertama", async () => {
+      const { s, kata } = await surveiImbalan({ mode: "chat", igDiAwal: true });
+      const nomor = nomorBaru();
+      await kirim("meta", nomor, kata);
+      expect(terkirim.at(-1)!.text).toContain("Nama Anda?");
+      expect(terkirim.at(-1)!.text).not.toContain("Bersedia dihubungi");
+      const r0 = await prisma.surveyResponse.findFirstOrThrow({ where: { surveyId: s.id } });
+      expect(r0.currentStep).toBe(1);
+      await kirim("meta", nomor, "Ani");
+      await kirim("meta", nomor, "Medan");
+      const { r, isi } = await jawaban(s.id);
+      expect(r.completedAt).not.toBeNull();
+      expect(isi).toEqual({ "Nama Anda?": "Ani", "Kota Anda?": "Medan" });
+
+      // Responden Instagram tetap dibuka dengan pertanyaan khusus IG itu.
+      const igsid = igsidBaru();
+      await kirim("instagram", igsid, kata);
+      expect(terkirim.at(-1)!.text).toContain("Bersedia dihubungi");
+    });
+
+    it("survei Form WhatsApp: formulir tanpa pertanyaan khusus IG, balasannya diterima utuh", async () => {
+      const { s, kata } = await surveiImbalan({ mode: "flow" });
+      const { buildSurveyFlow, fieldName } = await import("../src/lib/flowJson.js");
+      const flow = JSON.stringify(buildSurveyFlow({ title: s.title, questions: s.questions as any }));
+      const [nama, hp, kota, ewallet] = s.questions;
+      expect(flow).toContain(fieldName(nama!.id));
+      expect(flow).toContain(fieldName(kota!.id));
+      expect(flow).not.toContain(fieldName(hp!.id));
+      expect(flow).not.toContain(fieldName(ewallet!.id));
+
+      const nomor = nomorBaru();
+      await kirim("meta", nomor, kata);
+      const formulir = terkirim.at(-1)!;
+      expect(formulir.flow).toMatch(/^resp_/);
+      await engine.handleInboundEvents([
+        {
+          vendor: "meta",
+          kind: "message",
+          from: nomor,
+          interactiveType: "nfm_reply",
+          flowResponse: { flow_token: formulir.flow, [fieldName(nama!.id)]: "Dewi", [fieldName(kota!.id)]: "Bogor" },
+          messageId: idUnik(),
+          timestamp: new Date().toISOString(),
+          raw: {},
+        },
+      ]);
+      const { r, isi } = await jawaban(s.id);
+      expect(r).toMatchObject({ saluran: "whatsapp", metode: "form", ditolakKuotaPada: null });
+      expect(r.completedAt).not.toBeNull();
+      expect(isi).toEqual({ "Nama Anda?": "Dewi", "Kota Anda?": "Bogor" });
+      expect(terkirim.at(-1)!.text).toBe("Penutup imbalan");
+    });
+  });
 });

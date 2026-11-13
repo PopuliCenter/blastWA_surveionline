@@ -157,6 +157,16 @@ export function SurveyKuotaModal({ survey, onClose }) {
             </div>
           ) : null}
 
+          {adaKuotaProvinsi && d.saluranTanpaSumberProvinsi?.length ? (
+            <Notice kind="warning">
+              Pertanyaan Wilayah survei ini <strong>tidak ditanyakan</strong> ke responden{" "}
+              {d.saluranTanpaSumberProvinsi.map((s) => (s === "instagram" ? "Instagram" : "WhatsApp")).join(" dan ")},
+              karena diatur hanya untuk saluran lain. Responden itu tidak terhitung ke provinsi mana pun dan kuota
+              provinsinya tidak pernah penuh. Ubah pengaturan &quot;Ditanyakan ke&quot; pertanyaan Wilayah menjadi Semua
+              saluran bila kuota provinsi juga berlaku untuk mereka.
+            </Notice>
+          ) : null}
+
           {adaKuotaProvinsi && !d.sumberProvinsi ? (
             <Notice kind="warning">
               Survei ini <strong>belum punya sumber provinsi</strong> — tidak ada pertanyaan bertipe Wilayah, dan

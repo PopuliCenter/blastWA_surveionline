@@ -25,6 +25,7 @@ export function formatQuestion(q, idx, total) {
   else if (q.type === "consent") text += "\n\n_Balas: Ya (setuju) / Tidak_";
   else if (q.type === "date") text += "\n\n_Balas tanggal, format DD-MM-YYYY (mis. 17-08-2026)_";
   else if (q.type === "number") text += "\n\n_Balas dengan angka_";
+  else if (q.type === "phone") text += "\n\n_Tulis nomor HP Anda (mis. 0812 3456 7890)_";
   else if (q.type === "image") text += "\n\n_Kirim foto sebagai simulasi (ketik nama file)_";
   if (!q.required) text += "\n\n_Opsional — ketik *lewati* untuk melewati_";
   return text;
@@ -104,6 +105,16 @@ export function validateAnswer(q, answer) {
       }
       return { ok: false, err: "Format tanggal salah. Contoh: 17-08-2026." };
     }
+    case "phone": {
+      // Cermin nomorHpSurvei di backend/src/lib/phone.ts: angka dengan pemisah lazim,
+      // dibakukan ke 62…, 10–15 digit.
+      if (!/^\+?[\d\s.\-()]+$/.test(a)) return { ok: false, err: "Mohon tulis nomor HP yang valid, mis. 0812 3456 7890." };
+      let n = a.replace(/[^\d]/g, "");
+      if (n.startsWith("0")) n = "62" + n.slice(1);
+      else if (n.startsWith("8")) n = "62" + n;
+      if (!/^62[1-9]\d{7,12}$/.test(n)) return { ok: false, err: "Mohon tulis nomor HP yang valid, mis. 0812 3456 7890." };
+      return { ok: true, saved: n };
+    }
     case "image":
       if (!a) return { ok: false, err: "Ketik nama file gambar sebagai simulasi." };
       return { ok: true, saved: `[gambar] ${a}` };
@@ -153,6 +164,7 @@ export function inputPlaceholder(q) {
   if (q.type === "choice") return "Nomor atau teks pilihan…";
   if (q.type === "multichoice") return "Nomor pilihan, mis. 1,3…";
   if (q.type === "image") return "Nama file gambar (simulasi)…";
+  if (q.type === "phone") return "Nomor HP, mis. 0812 3456 7890…";
   // Pratinjau ini mensimulasikan mode chat dan sengaja TIDAK memuat 514 kab/kota ke bundel
   // frontend. Pencocokan ke daftar resmi Kepmendagri dilakukan di server saat survei jalan;
   // di Flow, pertanyaan ini muncul sebagai dua dropdown bertingkat, bukan ketikan.

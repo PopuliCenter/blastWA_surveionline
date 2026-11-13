@@ -411,7 +411,10 @@ export default function Reports() {
                     onChange={(e) => setCtQ(e.target.value)}
                     options={[
                       { value: "", label: "Pilih pertanyaan…" },
-                      ...questions.map((q) => ({ value: q.text, label: q.text.slice(0, 40) })),
+                      // Nomor HP tidak ditabulasi: tiap nilainya unik dan merupakan data pribadi.
+                      ...questions
+                        .filter((q) => q.type !== "phone")
+                        .map((q) => ({ value: q.text, label: q.text.slice(0, 40) })),
                     ]}
                     style={{ marginBottom: 0, minWidth: 200 }}
                   />
@@ -479,6 +482,16 @@ const thStyle = {
 const tdStyle = { padding: "7px 12px", borderBottom: `1px solid ${theme.border}`, color: theme.text };
 
 function QuestionBreakdown({ q, values, total }) {
+  // Nomor HP / e-wallet (mis. untuk imbalan) adalah data pribadi, dan Laporan dibagikan lebih
+  // luas daripada berkas ekspor. Cukup jumlah yang mengisi — nomornya ada di ekspor.
+  if (q.type === "phone") {
+    return (
+      <div style={{ color: theme.textMuted, fontSize: 12.5 }}>
+        {total} responden mengisi nomor. Isinya tidak ditampilkan di Laporan karena merupakan data pribadi — lihat
+        ekspor bila diperlukan untuk mengirim imbalan.
+      </div>
+    );
+  }
   if (q.type === "rating" || q.type === "number") {
     const nums = values.map(Number).filter((n) => Number.isFinite(n));
     const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;

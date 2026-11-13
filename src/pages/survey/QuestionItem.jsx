@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { Button, Badge, Input, Textarea, Select, Toggle, theme } from "../../lib/ui";
-import { TYPE_LABEL, QTYPE_OPTIONS, HAS_CHOICES, qSummary } from "./constants";
+import { Button, Badge, Input, Textarea, Select, Toggle, Notice, theme } from "../../lib/ui";
+import {
+  TYPE_LABEL,
+  QTYPE_OPTIONS,
+  HAS_CHOICES,
+  qSummary,
+  SALURAN_OPTIONS,
+  saluranDari,
+  labelSaluran,
+  denganSaluran,
+} from "./constants";
 import { cabangTakBerlaku, indeksTujuan } from "./daftarPertanyaan";
 
 // Kunci tujuan percabangan selama formulir sunting terbuka: ID pertanyaan, bukan urutannya.
@@ -35,7 +44,28 @@ function draftDari(q, allQuestions) {
     newScreen: q.options?.newScreen === true,
     screenTitle: q.options?.screenTitle ?? "",
     tingkat: q.options?.tingkat === "kabkota" ? "kabkota" : "provinsi",
+    saluran: saluranDari(q),
   };
+}
+
+const NAMA_SALURAN = { instagram: "Instagram", whatsapp: "WhatsApp" };
+const SALURAN_LAIN = { instagram: "WhatsApp", whatsapp: "Instagram" };
+
+// Penjelasan pilihan "Ditanyakan ke", ditampilkan di bawah pemilihnya. Di mode Flow,
+// formulir yang sudah terbit di Meta tidak ikut berubah sendiri — isinya tetap yang lama
+// sampai Flow JSON dibuat ulang dan diterbitkan lagi.
+function petunjukSaluran(saluran, flowMode) {
+  if (saluran === "instagram")
+    return `Responden WhatsApp melewati pertanyaan ini — tidak dikirim di chatbot dan tidak ada di formulir Flow. Cocok untuk nomor HP/e-wallet imbalan, karena nomor responden WhatsApp sudah diketahui.${flowMode ? " Bila Flow sudah terbit, buat ulang Flow JSON lalu terbitkan ulang di Meta." : ""}`;
+  if (saluran === "whatsapp") return "Responden Instagram melewati pertanyaan ini.";
+  return "Ditanyakan ke responden WhatsApp maupun Instagram.";
+}
+
+// Pertanyaan yang menjadi sumber provinsi kuota tetapi hanya ditanyakan di satu saluran:
+// responden saluran lain tidak pernah menjawabnya, jadi provinsinya hanya bisa diketahui dari
+// atribut kontak hasil impor — kuota provinsi diam-diam tidak menghitung mereka.
+function catatanKuotaSaluran(saluran) {
+  return `Pertanyaan ini sumber provinsi untuk kuota, tetapi responden ${SALURAN_LAIN[saluran]} tidak ditanya. Provinsi mereka hanya bisa diketahui dari atribut kontak hasil impor, jadi kuota per provinsi tidak akan menghitung mereka dengan benar.`;
 }
 
 // Satu pertanyaan: mode lihat (bisa naik/turun, gandakan, edit, hapus) & mode edit inline.
@@ -56,6 +86,9 @@ export function QuestionItem({
   qtypeOptions = QTYPE_OPTIONS,
   allQuestions = [],
   flowMode = false,
+  // Pertanyaan ini ditunjuk survei sebagai sumber provinsi kuota (questionProvinsiId), selain
+  // tipe Wilayah yang selalu menjadi sumbernya.
+  sumberProvinsiDitunjuk = false,
 }) {
   const [editing, setEditing] = useState(mulaiEdit);
   const [d, setD] = useState(() => (mulaiEdit ? draftDari(q, allQuestions) : null));
@@ -121,6 +154,8 @@ export function QuestionItem({
     // Penanda seksi (mode Flow) — dipertahankan lintas edit, jangan sampai ikut terhapus.
     if (d.newScreen) options = { ...(options || {}), newScreen: true };
     if (d.screenTitle?.trim()) options = { ...(options || {}), screenTitle: d.screenTitle.trim() };
+    // Saluran tempat pertanyaan ditanyakan — "semua" tidak ditulis (bawaan).
+    options = denganSaluran(options, d.saluran);
     onChange({ ...q, text: d.text.trim(), type: d.type, required: d.required, options });
     tutupSunting();
   };
@@ -169,6 +204,41 @@ export function QuestionItem({
             <Toggle checked={d.required} onChange={(v) => setDk("required", v)} label="Wajib" />
           </div>
         </div>
+        <Select
+          label="Ditanyakan ke"
+          value={d.saluran}
+          onChange={(e) => setDk("saluran", e.target.value)}
+          options={SALURAN_OPTIONS}
+          hint={petunjukSaluran(d.saluran, flowMode)}
+        />
+        {d.saluran !== "semua" && (d.type === "wilayah" || sumberProvinsiDitunjuk) ? (
+          <Notice kind="warning">{catatanKuotaSaluran(d.saluran)}</Notice>
+        ) : null}
+        {d.type === "phone" ? (
+          <div
+            style={{
+              background: theme.primarySoft,
+              color: theme.primary,
+              borderRadius: 9,
+              padding: "10px 13px",
+              fontSize: 12.5,
+              marginBottom: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            Jawaban diterima dalam bentuk 08…, 62…, atau +62…, lalu disimpan seragam sebagai 62… (mis. 6281234567890).
+            Nomor ini data pribadi: isinya tidak ditampilkan di Laporan — hanya jumlah yang mengisi. Kebijakan privasi
+            menjanjikan nomor imbalan dihapus paling lambat 30 hari setelah survei selesai — dari jawaban survei,
+            riwayat Chat, dan Google Sheets — dan sistem belum menghapusnya otomatis. Pakai hanya untuk survei yang
+            memang menjanjikan imbalan.
+            {d.saluran === "semua" ? (
+              <div style={{ marginTop: 7 }}>
+                Nomor responden WhatsApp sudah diketahui. Bila nomor ini hanya untuk imbalan, pilih{" "}
+                <strong>Hanya Instagram</strong> supaya responden WhatsApp tidak ditanya dua kali.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {d.type === "rating" ? (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -366,6 +436,14 @@ export function QuestionItem({
           <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>{qSummary(q)}</span>
         ) : null}
         {!q.required ? <span style={{ color: theme.textMuted, fontSize: 11.5, marginLeft: 6 }}>• opsional</span> : null}
+        {labelSaluran(q) ? (
+          <span style={{ marginLeft: 6 }} title={`Hanya ditanyakan ke responden ${NAMA_SALURAN[saluranDari(q)]}`}>
+            <Badge tone="purple">{labelSaluran(q)}</Badge>
+          </span>
+        ) : null}
+        {labelSaluran(q) && (q.type === "wilayah" || sumberProvinsiDitunjuk) ? (
+          <div style={{ color: theme.yellow, fontSize: 11.5, marginTop: 4 }}>{catatanKuotaSaluran(saluranDari(q))}</div>
+        ) : null}
         {tidakBerlaku.length ? (
           <div style={{ color: theme.red, fontSize: 11.5, marginTop: 4 }}>
             Percabangan &ldquo;{tidakBerlaku[0].value}&rdquo; menuju pertanyaan di atasnya dan tidak akan berlaku — buka

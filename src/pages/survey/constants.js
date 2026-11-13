@@ -9,6 +9,7 @@ export const TYPE_LABEL = {
   consent: "Persetujuan",
   image: "Gambar",
   wilayah: "Wilayah",
+  phone: "Nomor HP",
 };
 export const QTYPE_OPTIONS = [
   { value: "text", label: "Teks bebas" },
@@ -21,7 +22,29 @@ export const QTYPE_OPTIONS = [
   { value: "consent", label: "Persetujuan / informed consent" },
   { value: "image", label: "Gambar / foto" },
   { value: "wilayah", label: "Wilayah (provinsi → kabupaten/kota)" },
+  { value: "phone", label: "Nomor HP / e-wallet" },
 ];
+
+// Saluran tempat pertanyaan ditanyakan (options.saluran). Kembar SALURAN_PERTANYAAN di
+// backend/src/lib/saluranPertanyaan.ts — server menolak nilai lain. "semua" tidak disimpan
+// (bawaan), jadi survei lama tanpa kunci ini berlaku di kedua saluran.
+export const SALURAN_OPTIONS = [
+  { value: "semua", label: "Semua saluran" },
+  { value: "instagram", label: "Hanya Instagram" },
+  { value: "whatsapp", label: "Hanya WhatsApp" },
+];
+export const saluranDari = (q) =>
+  q?.options?.saluran === "instagram" || q?.options?.saluran === "whatsapp" ? q.options.saluran : "semua";
+// Lencana ringkas di daftar pertanyaan; "" = berlaku di semua saluran (tanpa lencana).
+export const labelSaluran = (q) => ({ instagram: "IG saja", whatsapp: "WA saja" })[saluranDari(q)] ?? "";
+
+// options dengan saluran terpasang — kuncinya dibuang bila "semua", dan options yang jadi
+// kosong dikembalikan undefined (sama dengan pertanyaan tanpa pengaturan apa pun).
+export function denganSaluran(options, saluran) {
+  const { saluran: _lama, ...lain } = options || {};
+  const hasil = saluran === "instagram" || saluran === "whatsapp" ? { ...lain, saluran } : lain;
+  return Object.keys(hasil).length ? hasil : undefined;
+}
 // Tipe yang memakai daftar pilihan (choices).
 export const HAS_CHOICES = (t) => t === "choice" || t === "multichoice";
 
